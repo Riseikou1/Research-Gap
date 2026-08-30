@@ -1,0 +1,8 @@
+# Core model validation.
+pydantic>=2.0.0,<3
+
+# Loads local development configuration without overriding exported variables.
+python-dotenv>=1.0.0,<2
+
+# Used only by --decomposer openai; the deterministic default needs no API key.
+openai>=2.0.0,<4
