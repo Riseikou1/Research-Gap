@@ -1,7 +1,151 @@
-__pycache__/
-.pytest_cache/
-.venv/
-venv/
+# ============================================================
+# Research GAP - .gitignore
+# ============================================================
+
+
+# -------------------------
+# Secrets / Environment
+# -------------------------
 .env
-data/cache/
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+secrets.json
+credentials.json
+
+
+# -------------------------
+# Python virtual environments
+# -------------------------
+venv/
+.venv/
+env/
+ENV/
+
+
+# -------------------------
+# Python cache / compiled files
+# -------------------------
+__pycache__/
 *.py[cod]
+*$py.class
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.coverage
+coverage.xml
+htmlcov/
+
+
+# -------------------------
+# Build / packaging
+# -------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+
+# -------------------------
+# Jupyter
+# -------------------------
+.ipynb_checkpoints/
+
+
+# -------------------------
+# IDE / Editors
+# -------------------------
+.vscode/
+.idea/
+.cursor/
+
+
+# -------------------------
+# OS garbage
+# -------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+logs/
+
+
+# -------------------------
+# Temporary files
+# -------------------------
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+
+# -------------------------
+# Local databases / caches
+# -------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+.cache/
+cache/
+
+
+# -------------------------
+# ML / model artifacts
+# -------------------------
+models/
+checkpoints/
+weights/
+
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+
+
+# -------------------------
+# Vector databases / embeddings
+# -------------------------
+chroma/
+chroma_db/
+vector_store/
+faiss_index/
+
+*.faiss
+
+
+# -------------------------
+# Generated / downloaded datasets
+# -------------------------
+data/
+datasets/
+downloads/
+
+
+# -------------------------
+# Application output
+# -------------------------
+outputs/
+results/
+runs/
+
+
+# -------------------------
+# OpenAI / local config
+# -------------------------
+config.local.*
