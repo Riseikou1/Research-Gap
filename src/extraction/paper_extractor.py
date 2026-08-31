@@ -16,32 +16,23 @@ class PaperExtractionError(RuntimeError):
     """Raised when a paper cannot be converted into structured evidence."""
 
 
-class _Claim(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
-
-    value: str = Field(min_length=1)
-    evidence_text: str | None = None
-    source: str
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
-class _Limitation(_Claim):
+class _LimitationClaim(EvidenceItem):
     author_stated: bool
 
 
 class _ExtractionResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    research_objective: _Claim | None = None
-    population_or_setting: list[_Claim] = Field(default_factory=list)
-    method_or_intervention: list[_Claim] = Field(default_factory=list)
-    comparison_or_baseline: list[_Claim] = Field(default_factory=list)
-    datasets: list[_Claim] = Field(default_factory=list)
-    sample_size: _Claim | None = None
-    evaluation_metrics: list[_Claim] = Field(default_factory=list)
-    main_findings: list[_Claim] = Field(default_factory=list)
-    limitations: list[_Limitation] = Field(default_factory=list)
-    future_work: list[_Claim] = Field(default_factory=list)
+    research_objective: EvidenceItem | None = None
+    population_or_setting: list[EvidenceItem] = Field(default_factory=list)
+    method_or_intervention: list[EvidenceItem] = Field(default_factory=list)
+    comparison_or_baseline: list[EvidenceItem] = Field(default_factory=list)
+    datasets: list[EvidenceItem] = Field(default_factory=list)
+    sample_size: EvidenceItem | None = None
+    evaluation_metrics: list[EvidenceItem] = Field(default_factory=list)
+    main_findings: list[EvidenceItem] = Field(default_factory=list)
+    limitations: list[_LimitationClaim] = Field(default_factory=list)
+    future_work: list[EvidenceItem] = Field(default_factory=list)
     extraction_confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -89,7 +80,11 @@ class PaperExtractor:
         abstract = paper.abstract.strip() if paper.abstract else None
         if not title:
             raise PaperExtractionError("Paper title is required for evidence extraction.")
-        source = f"Title:\n{title}\n\nAbstract:\n{abstract or '[not available]'}"
+        
+        source = f"Title:\n{title}"
+        if abstract:
+            source += f"\n\nAbstract:\n{abstract}"        
+            
         try:
             response = self.client.responses.parse(
                 model=self.model, reasoning={"effort": "low"}, store=False,
@@ -119,30 +114,30 @@ class PaperExtractor:
             except PaperExtractionError as exc:
                 self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
         return results
-
-
-def _claim(value: _Claim) -> EvidenceItem:
-    return EvidenceItem(value=value.value, evidence_text=value.evidence_text,
-                        source=value.source, confidence=value.confidence)
-
+    
 
 def _to_evidence(paper: Paper, payload: _ExtractionResult) -> PaperEvidence:
-    def claims(values: list[_Claim]) -> list[EvidenceItem]:
-        return [_claim(item) for item in values if item.source in ("title", "abstract")]
-
     limitations = [
-        LimitationEvidence(**_claim(item).model_dump(), author_stated=True)
-        for item in payload.limitations
-        if item.author_stated and item.source in ("title", "abstract")
+        LimitationEvidence(
+            value=item.value,
+            evidence_text=item.evidence_text,
+            source=item.source,
+            confidence=item.confidence,
+        ) for item in payload.limitations if item.author_stated
     ]
+
     return PaperEvidence(
-        paper_id=paper.id, title=paper.title,
-        research_objective=_claim(payload.research_objective) if payload.research_objective and payload.research_objective.source in ("title", "abstract") else None,
-        population_or_setting=claims(payload.population_or_setting),
-        method_or_intervention=claims(payload.method_or_intervention),
-        comparison_or_baseline=claims(payload.comparison_or_baseline),
-        datasets=claims(payload.datasets), sample_size=_claim(payload.sample_size) if payload.sample_size and payload.sample_size.source in ("title", "abstract") else None,
-        evaluation_metrics=claims(payload.evaluation_metrics), main_findings=claims(payload.main_findings),
-        limitations=limitations, future_work=claims(payload.future_work),
+        paper_id=paper.id,
+        title=paper.title,
+        research_objective=payload.research_objective,
+        population_or_setting=payload.population_or_setting,
+        method_or_intervention=payload.method_or_intervention,
+        comparison_or_baseline=payload.comparison_or_baseline,
+        datasets=payload.datasets,
+        sample_size=payload.sample_size,
+        evaluation_metrics=payload.evaluation_metrics,
+        main_findings=payload.main_findings,
+        limitations=limitations,
+        future_work=payload.future_work,
         extraction_confidence=payload.extraction_confidence,
     )

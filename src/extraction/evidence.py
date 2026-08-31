@@ -16,7 +16,7 @@ class EvidenceItem(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
 
     value: str = Field(min_length=1)
-    evidence_text: str | None = None
+    evidence_text: str = Field(min_length = 1)
     source: EvidenceSource
     confidence: float = Field(ge=0.0, le=1.0)
 
