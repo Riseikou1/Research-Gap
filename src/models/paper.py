@@ -87,6 +87,11 @@ class Paper(BaseModel):
         ge=0.0,
         le=1.0,
     )
+    constraint_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
     final_score: float | None = Field(
         default=None,
         ge=0.0,

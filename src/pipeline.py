@@ -1,4 +1,4 @@
-"""Application service orchestrating Milestone 3 retrieval and reranking."""
+"""Application service orchestrating retrieval through Milestone 5 analysis."""
 
 from __future__ import annotations
 
@@ -8,6 +8,11 @@ from typing import Literal
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
 from src.models.query import SearchQuery
+from src.analysis.clustering import LandscapeAnalyzer
+from src.analysis.gap_candidates import GapCandidateGenerator
+from src.analysis.models import GapCandidate, IdeaAssessment
+from src.analysis.verification import GapVerifier
+from src.models.landscape import LiteratureLandscape
 from src.extraction.evidence import PaperEvidence
 from src.extraction.paper_extractor import PaperExtractor
 from src.query.base import QueryDecomposer, QueryGenerator
@@ -32,8 +37,20 @@ class ResearchResult:
     ranking_mode: Literal["hybrid", "lexical_only"] = "lexical_only"
     evidence: list[PaperEvidence] = field(default_factory=list)
     extraction_failures: list[str] = field(default_factory=list)
+    gaps: list[GapCandidate] = field(default_factory=list)
+    analysis_notices: list[str] = field(default_factory=list)
+    landscape: LiteratureLandscape | None = None
+    idea_assessment: IdeaAssessment | None = None
 
     def to_dict(self) -> dict[str, object]:
+        gap_payloads = []
+        for item in self.gaps:
+            payload = item.model_dump(mode="json")
+            # This legacy/internal field is not a novelty probability and is
+            # intentionally omitted from user-facing JSON.
+            payload.pop("confidence", None)
+            payload.pop("idea_relevance", None)
+            gap_payloads.append(payload)
         return {
             "idea": self.idea.model_dump(mode="json"),
             "queries": [query.model_dump(mode="json") for query in self.queries],
@@ -46,6 +63,10 @@ class ResearchResult:
             "ranking_mode": self.ranking_mode,
             "evidence": [item.model_dump(mode="json") for item in self.evidence],
             "extraction_failures": list(self.extraction_failures),
+            "gaps": gap_payloads,
+            "analysis_notices": list(self.analysis_notices),
+            "landscape": self.landscape.model_dump(mode="json") if self.landscape else None,
+            "idea_assessment": self.idea_assessment.model_dump(mode="json") if self.idea_assessment else None,
         }
 
 
@@ -62,6 +83,9 @@ class ResearchPipeline:
         llm_generator: QueryGenerator | None = None,
         query_planner: QueryPlanner | None = None,
         extractor: PaperExtractor | None = None,
+        gap_generator: GapCandidateGenerator | None = None,
+        gap_verifier: GapVerifier | None = None,
+        landscape_analyzer: LandscapeAnalyzer | None = None,
         evidence_limit: int = 10,
     ) -> None:
         self.decomposer = decomposer
@@ -73,6 +97,9 @@ class ResearchPipeline:
         self.llm_generator = llm_generator
         self.query_planner = query_planner or QueryPlanner()
         self.extractor = extractor
+        self.gap_generator = gap_generator
+        self.gap_verifier = gap_verifier
+        self.landscape_analyzer = landscape_analyzer or LandscapeAnalyzer()
         self.evidence_limit = evidence_limit
 
     def run(self, idea_text: str, *, top_k: int = 20) -> ResearchResult:
@@ -93,7 +120,7 @@ class ResearchPipeline:
             )
             raise PipelineError(f"all retrieval routes failed: {details}")
 
-        ranking = self.reranker.rerank(idea.original_text, retrieval.papers)
+        ranking = self.reranker.rerank(idea, retrieval.papers)
         notices: list[str] = []
         if ranking.notice:
             notices.append(ranking.notice)
@@ -103,9 +130,29 @@ class ResearchPipeline:
         selected = ranking.papers[:top_k]
         evidence: list[PaperEvidence] = []
         extraction_failures: list[str] = []
+        gaps: list[GapCandidate] = []
+        analysis_notices: list[str] = []
+        landscape: LiteratureLandscape | None = None
+        idea_assessment: IdeaAssessment | None = None
         if self.extractor:
             evidence = self.extractor.extract_many(selected, limit=self.evidence_limit)
             extraction_failures = [str(error) for error in self.extractor.failures]
+            landscape = self.landscape_analyzer.analyze(evidence, selected)
+            if self.gap_verifier:
+                # The complete idea is a first-class Milestone-6 subject. It
+                # is assessed before candidate generation and even when the
+                # generator later returns no narrower hypotheses.
+                idea_assessment = self.gap_verifier.assess_idea(idea, landscape, evidence)
+            if self.gap_generator:
+                gaps = self.gap_generator.generate(idea, landscape, evidence)
+                analysis_notices.extend(self.gap_generator.notices)
+                if self.gap_verifier:
+                    gaps = self.gap_verifier.verify_many(idea, gaps, evidence)
+                    analysis_notices.extend(self.gap_verifier.notices)
+                else:
+                    if gaps:
+                        analysis_notices.append("verification_skipped: candidate gaps require targeted counterexample verification")
+                    analysis_notices.append("idea_assessment_skipped: direct idea verification requires a verifier")
 
         return ResearchResult(
             idea=idea,
@@ -117,4 +164,8 @@ class ResearchPipeline:
             ranking_mode=ranking.mode,
             evidence=evidence,
             extraction_failures=extraction_failures,
+            gaps=gaps,
+            analysis_notices=analysis_notices,
+            landscape=landscape,
+            idea_assessment=idea_assessment,
         )

@@ -148,9 +148,9 @@ Create files and folders only when their milestone begins. Do not add empty arch
 | 1. Basic OpenAlex retrieval | Complete | CLI retrieves and normalizes papers |
 | 2. Query decomposition and deterministic multi-query retrieval | Complete | Structured facets, deterministic queries, merged results |
 | 3. Hybrid query expansion, retrieval and reranking | Complete | Typed hybrid retrieval with lexical + semantic reranking |
-| 4. Structured evidence extraction | Next | Methods, datasets, populations, findings, limitations |
-| 5. Literature comparison and clustering | Planned | Research landscape and comparable paper groups |
-| 6. Gap candidate generation and verification | Planned | Evidence-backed, qualified gap hypotheses |
+| 4. Structured evidence extraction | Complete | Methods, datasets, populations, findings, limitations |
+| 5. Literature comparison and clustering | Complete | Research landscape and comparable paper groups |
+| 6. Gap candidate generation and verification | Implemented; live smoke blocked | Evidence-backed, qualified gap hypotheses |
 | 7. Evaluation harness | Planned | Retrieval and report-quality measurements |
 | 8. Local API and persistence | Planned | FastAPI plus PostgreSQL/pgvector if justified |
 | 9. Web interface | Planned | Interactive application and evidence views |
@@ -775,9 +775,26 @@ Every candidate gap must include supporting and potentially contradicting papers
 
 search specifically for counterexamples before accepting a gap. Final labels should be qualified,
 
-for example `well studied`, `partially studied`, `weak evidence of a gap`, or `insufficient search
+using the user-facing decisions `Well studied`, `Uncertain`, or `Promising gap`—not a fake numeric
+novelty percentage.
 
-coverage`—not a fake numeric novelty percentage.
+### Implemented Milestone 6 architecture
+
+Milestones 4 and 5 remain the source of structured evidence and the deterministic
+`LiteratureLandscape`. Milestone 6 adds a deterministic `GapCandidateGenerator` that consumes the
+research idea, landscape, and `PaperEvidence`; candidates retain their triggering pattern,
+landscape observations, evidence roles, and supporting paper IDs. Known invalid evidence
+equivalences are rejected by centralized semantic guardrails, and near-duplicate candidates are
+consolidated before verification.
+
+`GapVerifier` creates at most three candidate-specific counterexample queries, executes them
+through the existing bounded OpenAlex retrieval/normalization stack, ranks results against the
+candidate statement, and inspects structured title/abstract evidence. It preserves potential and
+confirmed contradictions, retrieval/extraction failures, query provenance, coverage notes, and
+one of the three qualified categorical assessments. Verification failures are never interpreted as
+evidence that no counterexample exists. The CLI `--show-gaps` runs generation and verification;
+`--show-landscape` remains the existing Milestone-5 view. The required live smoke test remains
+blocked when the configured provider cannot establish a connection.
 
 ## 13. Milestone 7 — evaluation harness
 

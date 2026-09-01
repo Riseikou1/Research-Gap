@@ -310,11 +310,11 @@ def _parse_work(
     doi = _optional_string(work.get("doi"))
     year = _optional_year(work.get("publication_year"))
     primary_location = work.get("primary_location")
-    source_value = location.get("source")
     abstract_value = work.get("abstract_inverted_index")
 
     title = (_optional_string(work.get("display_name")) or _optional_string(work.get("title")) or "Untitled")
     location = (primary_location if isinstance(primary_location, Mapping) else {})
+    source_value = location.get("source")
     source = (source_value if isinstance(source_value, Mapping) else {})
     abstract_index = (abstract_value if isinstance(abstract_value, Mapping) else None)
 

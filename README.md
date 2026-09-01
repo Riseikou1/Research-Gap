@@ -33,11 +33,28 @@ Useful options:
 python main.py "your idea" --limit 10 --json
 python main.py "your idea" --decomposer openai
 python main.py "your idea" --query-generator openai --show-queries
+python main.py "your idea" --show-gaps --show-evidence
 ```
 
 `--query-generator openai` adds up to three validated LLM expansions to the original and
 deterministic baseline; it never replaces them. `--limit` controls displayed top results. The
 internal unique candidate pool defaults to 100.
+`--show-gaps` runs the complete Milestone-6 path: structured evidence extraction, the deterministic
+Milestone-5 landscape, pattern-grounded candidate generation, candidate consolidation, and targeted
+direct-idea and counterexample verification. Each displayed candidate includes its trigger pattern, landscape
+basis, supporting evidence, verification queries, counterexamples (if confirmed), and a qualified
+assessment. Verification queries use the existing OpenAlex normalization/retrieval boundary and
+are bounded to three queries and ten results per query.
+
+The user-facing labels are `well_studied`, `uncertain`, and `promising_gap`. `well_studied` requires
+a direct match to the important idea facets. `uncertain` covers failures, sparse coverage, and
+contextual/partial matches. `promising_gap` is reserved for a grounded positive signal after
+successful targeted verification finds no direct match; it is not a probability of novelty. Generic
+landscape buckets such as `other` and `unknown` are never used as scientific entities or query
+terms. Title/abstract evidence cannot establish global novelty, and absence from the analyzed top
+papers is never treated as proof that no work exists.
+`--show-landscape` prints the deterministic Milestone-5 literature landscape: normalized feature
+frequencies, observed combinations, evidence coverage, and conservatively comparable conflicts.
 
 ## Semantic behavior and fallback
 
@@ -65,6 +82,7 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_RETRIEVAL_WORKERS` | `4` | Maximum concurrent routes |
 | `RESEARCH_GAP_LEXICAL_WEIGHT` | `0.4` | Normalized lexical fusion weight |
 | `RESEARCH_GAP_SEMANTIC_WEIGHT` | `0.6` | Normalized semantic fusion weight |
+| `RESEARCH_GAP_CONSTRAINT_WEIGHT` | `0.15` | Maximum topicality-gated constraint boost |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Swappable embedding model |
 | `OPENAI_EXTRACTION_MODEL` | `OPENAI_MODEL` | Structured evidence extraction model |
 | `RESEARCH_GAP_EVIDENCE_LIMIT` | `10` | Maximum ranked papers sent to extraction |

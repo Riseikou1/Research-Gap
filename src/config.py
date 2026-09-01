@@ -70,6 +70,7 @@ class RankingSettings:
     embedding_batch_size: int
     lexical_weight: float
     semantic_weight: float
+    constraint_weight: float
     semantic_fallback: str
 
 
@@ -98,8 +99,11 @@ class Settings:
 
         lexical = number("RESEARCH_GAP_LEXICAL_WEIGHT", 0.4)
         semantic = number("RESEARCH_GAP_SEMANTIC_WEIGHT", 0.6)
+        constraint_weight = number("RESEARCH_GAP_CONSTRAINT_WEIGHT", 0.15)
         if lexical == 0 and semantic == 0:
             raise ConfigurationError("weights cannot both be zero")
+        if not 0 <= constraint_weight <= 1:
+            raise ConfigurationError("RESEARCH_GAP_CONSTRAINT_WEIGHT must be between 0 and 1")
         return cls(
             openai_api_key=openai_api_key(), openai_model=openai_model(),
             extraction_model=openai_extraction_model(),
@@ -116,6 +120,7 @@ class Settings:
                 embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
                 embedding_batch_size=integer("RESEARCH_GAP_EMBEDDING_BATCH_SIZE", 100),
                 lexical_weight=lexical, semantic_weight=semantic,
+                constraint_weight=constraint_weight,
                 semantic_fallback=os.getenv("RESEARCH_GAP_SEMANTIC_FALLBACK", "lexical"),
             ),
             evidence_limit=integer("RESEARCH_GAP_EVIDENCE_LIMIT", 10),

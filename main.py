@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import argparse
 import json
 import logging
@@ -9,6 +11,8 @@ import sys
 from typing import Any
 
 from src.config import ConfigurationError, Settings
+from src.analysis.gap_candidates import GapCandidateGenerator, is_concrete_entity
+from src.analysis.verification import GapVerifier
 from src.extraction.paper_extractor import PaperExtractor
 from src.models.paper import Paper
 from src.models.query import SearchQuery
@@ -32,6 +36,7 @@ from src.ranking.semantic import (
 )
 from src.retrieval.multi_query import MultiQueryRetriever
 from src.retrieval.openalex import OpenAlexRetriever
+from src.reporting.landscape import format_landscape
 
 
 MIN_PAPER_LIMIT = 1
@@ -88,6 +93,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Extract and display structured evidence for the top papers",
     )
+    parser.add_argument(
+        "--show-gaps",
+        action="store_true",
+        help="Extract evidence and display cautious candidate research gaps",
+    )
+    parser.add_argument(
+        "--show-landscape",
+        action="store_true",
+        help="Extract evidence and display the deterministic literature landscape",
+    )
     return parser
 
 
@@ -106,6 +121,8 @@ def build_decomposer(
 
 
 def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipeline:
+    show_gaps = getattr(args, "show_gaps", False)
+    show_landscape = getattr(args, "show_landscape", False)
     openalex = settings.openalex
     retriever = MultiQueryRetriever(
         OpenAlexRetriever(
@@ -133,6 +150,7 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         semantic_scorer,
         lexical_weight=settings.ranking.lexical_weight,
         semantic_weight=settings.ranking.semantic_weight,
+        constraint_weight=settings.ranking.constraint_weight,
     )
     llm_generator = (
         OpenAIQueryGenerator(
@@ -146,13 +164,20 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         api_key=settings.openai_api_key,
         model=settings.extraction_model,
         evidence_limit=settings.evidence_limit,
-    ) if args.show_evidence else None
+    ) if (args.show_evidence or show_gaps or show_landscape) else None
+    gap_generator = GapCandidateGenerator() if show_gaps else None
+    gap_verifier = GapVerifier(
+        retriever,
+        extractor,
+    ) if show_gaps and extractor is not None else None
     return ResearchPipeline(
         decomposer=build_decomposer(args.decomposer, settings),
         retriever=retriever,
         reranker=reranker,
         llm_generator=llm_generator,
         extractor=extractor,
+        gap_generator=gap_generator,
+        gap_verifier=gap_verifier,
         evidence_limit=settings.evidence_limit,
     )
 
@@ -199,7 +224,11 @@ def print_papers(papers: list[Paper], *, show_scores: bool = False) -> None:
         if show_scores:
             lexical = _format_score(paper.lexical_score)
             semantic = _format_score(paper.semantic_score)
-            print(f"   Lexical: {lexical} | Semantic: {semantic}")
+            constraint = _format_score(paper.constraint_score)
+            print(
+                f"   Lexical: {lexical} | Semantic: {semantic} | "
+                f"Constraint: {constraint}"
+            )
             routes = [
                 f"{item.mode.value}: {item.query.text} "
                 f"({item.query.source}/{item.query.strategy})"
@@ -240,6 +269,7 @@ def _paper_json(paper: Paper) -> dict[str, object]:
             "retrieval_modes": paper.retrieval_modes,
             "lexical_score": paper.lexical_score,
             "semantic_score": paper.semantic_score,
+            "constraint_score": paper.constraint_score,
             "final_score": paper.final_score,
             "ranking_mode": paper.ranking_mode,
         }
@@ -256,11 +286,13 @@ def print_evidence(result: ResearchResult) -> None:
         item = by_id.get(paper.id)
         if item is None:
             continue
-        print(f"\n{index}. {item.title}\n  Research objective: "
+        print(f"\n{index}. {item.title}\n  Study type: {item.study_type}\n"
+              "  Research objective: "
               f"{item.research_objective.value if item.research_objective else '—'}")
-        for label, values in (("Methods", item.method_or_intervention),
-                              ("Datasets", item.datasets),
-                              ("Baselines", item.comparison_or_baseline),
+        for label, values in (("Methods", [value for value in item.method_or_intervention if is_concrete_entity(value.value)]),
+                              ("Datasets", [value for value in item.datasets if is_concrete_entity(value.value)]),
+                              ("Sample size", [item.sample_size] if item.sample_size else []),
+                              ("Comparisons", [value for value in item.comparison_or_baseline if is_concrete_entity(value.value)]),
                               ("Metrics", item.evaluation_metrics),
                               ("Main findings", item.main_findings),
                               ("Author-stated limitations", item.limitations),
@@ -273,7 +305,100 @@ def print_evidence(result: ResearchResult) -> None:
         print(f"Warning: {failure}", file=sys.stderr)
 
 
+def print_gaps(result: ResearchResult) -> None:
+    print_idea_assessment(result)
+    print("\nCandidate Research Gap Assessments")
+    print("==================================")
+    if not result.gaps:
+        print("No evidence-backed candidate gaps were identified.")
+    for index, gap in enumerate(result.gaps, start=1):
+        print(f"\n{index}. {gap.title}")
+        label = gap.final_label or (gap.verification.label if gap.verification else "uncertain")
+        print(f"   Assessment: {label.replace('_', ' ').capitalize()}")
+        print(f"   Pattern: {gap.pattern_type}")
+        print(f"   Hypothesis: {gap.description}")
+        print(f"   Rationale: {gap.rationale}")
+        if gap.landscape_basis:
+            print("   Landscape basis:")
+            for basis in gap.landscape_basis:
+                print(f"   - {basis.dimension}={basis.value}: {basis.count}/{basis.total}")
+        if gap.supporting_evidence:
+            print("   Supporting evidence:")
+            for item in gap.supporting_evidence[:5]:
+                print(f"   - {item.paper_id} ({item.role}, {item.evidence_type}): {item.value}")
+        verification = gap.verification
+        if verification:
+            print("   Verification searches:")
+            for item in verification.verification_queries:
+                print(f"   - {item.query}")
+            print(f"   Searched papers: {len(verification.searched_paper_ids)}")
+            if verification.contradicting_paper_ids:
+                print("   Counterexamples:")
+                for paper_id in verification.contradicting_paper_ids:
+                    print(f"   - {paper_id} (confirmed contradiction)")
+            elif verification.potential_contradiction_paper_ids:
+                print("   Potential counterexamples (not confirmed):")
+                for paper_id in verification.potential_contradiction_paper_ids:
+                    print(f"   - {paper_id}")
+            else:
+                print("   Counterexamples: none found after targeted verification")
+            print("   Verification: " + verification.reason)
+            for note in verification.coverage_notes:
+                print(f"   Coverage: {note}")
+            for failure in verification.failures:
+                print(f"   Verification failure: {failure.provider}: {failure.error}")
+    print(
+        "\nGlobal qualification\n--------------------\n"
+        "These assessments describe retrieved and verified evidence only; they do not prove global novelty."
+    )
+
+
+def print_idea_assessment(result: ResearchResult) -> None:
+    assessment = result.idea_assessment
+    print("\nResearch Idea Assessment")
+    print("========================")
+    if assessment is None:
+        print("Assessment: Uncertain")
+        print("Rationale: Direct idea verification did not execute.")
+        return
+    print(f"Assessment: {assessment.label.replace('_', ' ').capitalize()}")
+    print(f"Rationale: {assessment.rationale}")
+    if assessment.counterexample_paper_ids:
+        print("Counterexamples / direct matches:")
+        for paper_id in assessment.counterexample_paper_ids:
+            print(f"- {paper_id}")
+            facets = assessment.matched_facets.get(paper_id, [])
+            if facets:
+                print(f"  matched: {', '.join(facets)}")
+    else:
+        print("Counterexamples / direct matches: none confirmed")
+    if assessment.partial_match_paper_ids:
+        print("Partial/contextual support:")
+        for paper_id in assessment.partial_match_paper_ids:
+            facets = assessment.matched_facets.get(paper_id, [])
+            suffix = f" (matched: {', '.join(facets)})" if facets else ""
+            print(f"- {paper_id}{suffix}")
+    if assessment.potential_match_paper_ids:
+        print("Potential matches:")
+        for paper_id in assessment.potential_match_paper_ids:
+            facets = assessment.matched_facets.get(paper_id, [])
+            suffix = f" (matched: {', '.join(facets)})" if facets else ""
+            print(f"- {paper_id}{suffix}")
+    if assessment.supporting_evidence:
+        print("Supporting evidence:")
+        for item in assessment.supporting_evidence[:8]:
+            print(f"- {item.paper_id} ({item.role}, {item.evidence_type}): {item.value}")
+    print("Verification searches:")
+    for item in assessment.verification_queries:
+        print(f"- {item.query}")
+    for note in assessment.coverage_notes:
+        print(f"Coverage: {note}")
+    for failure in assessment.failures:
+        print(f"Verification failure: {failure.provider}: {failure.error}")
+
+
 def main() -> int:
+    start = time.time()
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -314,12 +439,14 @@ def main() -> int:
     handle_retrieval_failures(result)
     for notice in result.notices:
         print(f"Notice: {notice}", file=sys.stderr)
+    for notice in result.analysis_notices:
+        print(f"Analysis notice: {notice}", file=sys.stderr)
 
     if args.json:
         payload: Any
         if args.show_queries:
             payload = result.to_dict()
-        elif args.show_evidence:
+        elif args.show_evidence or args.show_gaps or args.show_landscape:
             payload = result.to_dict()
         else:
             payload = [_paper_json(paper) for paper in result.papers]
@@ -336,6 +463,14 @@ def main() -> int:
     print_papers(result.papers, show_scores=args.show_scores)
     if args.show_evidence:
         print_evidence(result)
+    if args.show_gaps:
+        print_gaps(result)
+    if args.show_landscape:
+        print(f"\nRanked papers shown: {len(result.papers)}")
+        print(format_landscape(result.landscape) if result.landscape else "No literature landscape was generated.")
+
+
+    print(f"It took {time.time() - start}seconds.")
     return 0
 
 

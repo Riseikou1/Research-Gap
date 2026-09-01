@@ -133,6 +133,45 @@ class MultiQueryRetriever:
             requested_routes=len(requests),
         )
 
+    def retrieve_verification(
+        self,
+        queries: Sequence[SearchQuery],
+        *,
+        per_query_limit: int = 10,
+        limit: int | None = None,
+    ) -> MultiQueryResult:
+        """Run a bounded lexical search plan for one candidate hypothesis.
+
+        Verification intentionally uses the existing provider boundary and
+        normalization path, but does not add semantic routes or rank against
+        the original research idea.  The caller may apply candidate-specific
+        ranking after this targeted retrieval.
+        """
+
+        if not queries:
+            raise ValueError("at least one verification query is required")
+        if not 1 <= per_query_limit <= 100:
+            raise ValueError("per_query_limit must be between 1 and 100")
+        if limit is not None and not 1 <= limit <= self.max_candidates:
+            raise ValueError(f"limit must be between 1 and {self.max_candidates}")
+
+        ceiling = limit if limit is not None else self.max_candidates
+        requests = [
+            RetrievalRequest(
+                query=query,
+                mode=RetrievalMode.BROAD_LEXICAL,
+                limit=min(per_query_limit, 100),
+            )
+            for query in queries
+        ]
+        papers, failures = self._execute(requests)
+        unique = deduplicate_paper_models(papers)
+        return MultiQueryResult(
+            papers=unique[:ceiling],
+            failures=failures,
+            requested_routes=len(requests),
+        )
+
     def _build_requests(
         self,
         queries: Sequence[SearchQuery],

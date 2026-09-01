@@ -8,6 +8,7 @@ import main
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
 from src.models.query import SearchQuery
+from src.analysis.models import IdeaAssessment
 from src.pipeline import ResearchResult
 
 
@@ -79,6 +80,31 @@ class CliTest(unittest.TestCase):
         self.assertIn("deterministic/original", stdout.getvalue())
         self.assertIn("Lexical: 0.700 | Semantic: 0.900", stdout.getvalue())
         self.assertEqual(stderr.getvalue(), "")
+
+    def test_idea_assessment_prints_matched_facets_and_partial_matches(self) -> None:
+        result = ResearchResult(
+            idea=ResearchIdea(original_text="vision transformer plant disease few-shot field"),
+            queries=[],
+            candidate_count=2,
+            papers=[],
+            idea_assessment=IdeaAssessment(
+                label="uncertain",
+                rationale="Only partial matches were found.",
+                counterexample_paper_ids=["https://openalex.org/W1"],
+                partial_match_paper_ids=["https://openalex.org/W2"],
+                matched_facets={
+                    "https://openalex.org/W1": ["method", "problem", "constraint", "field setting"],
+                    "https://openalex.org/W2": ["method", "problem"],
+                },
+            ),
+        )
+        stdout = io.StringIO()
+        with patch("sys.stdout", stdout):
+            main.print_idea_assessment(result)
+        output = stdout.getvalue()
+        self.assertIn("matched: method, problem, constraint, field setting", output)
+        self.assertIn("Partial/contextual support:", output)
+        self.assertIn("https://openalex.org/W2", output)
 
 
 if __name__ == "__main__":

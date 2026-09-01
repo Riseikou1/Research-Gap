@@ -3,12 +3,12 @@ from types import SimpleNamespace
 
 from pydantic import ValidationError
 
-from src.extraction.evidence import EvidenceItem, PaperEvidence
+from src.extraction.evidence import EvidenceItem, PaperEvidence, canonical_evidence_key
 from src.extraction.paper_extractor import (
     PaperExtractor,
-    _Claim,
     _ExtractionResult,
-    _Limitation,
+    _LimitationClaim,
+    _MethodClaim,
 )
 from src.models.paper import Paper
 
@@ -25,7 +25,7 @@ class FakeResponses:
 
 class EvidenceTest(unittest.TestCase):
     def test_model_tracks_missing_fields_and_validates_confidence(self):
-        evidence = PaperEvidence(paper_id="p1", title="A paper", extraction_confidence=0.5)
+        evidence = PaperEvidence(paper_id="p1", title="A paper", study_type="other", extraction_confidence=0.5)
         self.assertIsNone(evidence.sample_size)
         self.assertIn("sample_size", evidence.missing_fields)
         with self.assertRaises(ValidationError):
@@ -33,16 +33,16 @@ class EvidenceTest(unittest.TestCase):
 
     def test_extracts_supported_claims_and_filters_generic_criticism(self):
         payload = _ExtractionResult(
-            method_or_intervention=[_Claim(value="LoRA", evidence_text="We use LoRA", source="abstract", confidence=.9)],
+            method_or_intervention=[_MethodClaim(value="LoRA", evidence_text="We use LoRA", source="abstract", confidence=.9, role="primary")],
             limitations=[
-                _Limitation(value="small cohort", evidence_text="A limitation is the small cohort", source="abstract", confidence=.8, author_stated=True),
-                _Limitation(value="unsupported criticism", evidence_text="text", source="abstract", confidence=.2, author_stated=False),
+                _LimitationClaim(value="small cohort", evidence_text="A limitation is the small cohort", source="abstract", confidence=.8, author_stated=True),
+                _LimitationClaim(value="unsupported criticism", evidence_text="text", source="abstract", confidence=.2, author_stated=False),
             ],
             extraction_confidence=.8,
         )
         responses = FakeResponses(payload)
         result = PaperExtractor(client=SimpleNamespace(responses=responses)).extract(
-            Paper(id="p1", title="A paper", abstract="We use LoRA.")
+            Paper(id="p1", title="A paper", abstract="We use LoRA. A limitation is the small cohort.")
         )
         self.assertEqual(result.method_or_intervention[0].value, "LoRA")
         self.assertEqual(len(result.limitations), 1)
@@ -56,6 +56,243 @@ class EvidenceTest(unittest.TestCase):
         results = extractor.extract_many(papers)
         self.assertEqual([item.paper_id for item in results], ["a"])
         self.assertEqual(len(responses.inputs), 1)
+
+    def test_method_roles_separate_primary_and_comparison_models(self):
+        claims = [
+            _MethodClaim(value="DeiT", evidence_text="DeiT", source="abstract", confidence=.9, role="primary"),
+            _MethodClaim(value="VGG19", evidence_text="VGG19", source="abstract", confidence=.9, role="comparison"),
+            _MethodClaim(value="data augmentation", evidence_text="data augmentation", source="abstract", confidence=.9, role="supporting"),
+        ]
+        payload = _ExtractionResult(method_or_intervention=claims, study_type="empirical", extraction_confidence=.9)
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        result = extractor.extract(Paper(id="p1", title="Models", abstract="DeiT, VGG19, and data augmentation."))
+        self.assertEqual([item.value for item in result.method_or_intervention], ["DeiT"])
+        self.assertEqual([item.value for item in result.comparison_or_baseline], ["VGG19"])
+
+    def test_generic_future_work_is_rejected_but_concrete_direction_survives(self):
+        payload = _ExtractionResult(
+            future_work=[
+                EvidenceItem(value="future work is discussed", evidence_text="future work is discussed", source="abstract", confidence=.9),
+                EvidenceItem(value="multilingual datasets", evidence_text="Future work will evaluate the model on multilingual datasets", source="abstract", confidence=.9),
+            ],
+            study_type="empirical",
+            extraction_confidence=.9,
+        )
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        result = extractor.extract(Paper(id="p1", title="Model", abstract="Future work is discussed. Future work will evaluate the model on multilingual datasets."))
+        self.assertEqual([item.value for item in result.future_work], ["multilingual datasets"])
+
+    def test_study_type_is_preserved(self):
+        payload = _ExtractionResult(study_type="survey", extraction_confidence=.9)
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        result = extractor.extract(Paper(id="p1", title="A survey", abstract="We survey prior work."))
+        self.assertEqual(result.study_type, "survey")
+
+    def test_explicit_constraints_are_preserved_separately_from_limitations(self):
+        payload = _ExtractionResult(
+            constraints=[EvidenceItem(
+                value="limited labeled data",
+                evidence_text="The method requires limited labeled data",
+                source="abstract",
+                confidence=.9,
+            )],
+            limitations=[_LimitationClaim(
+                value="poor field generalization",
+                evidence_text="A limitation is poor field generalization",
+                source="abstract",
+                confidence=.9,
+                author_stated=True,
+            )],
+            extraction_confidence=.9,
+        )
+        result = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload))).extract(
+            Paper(id="p1", title="A paper", abstract="The method requires limited labeled data. A limitation is poor field generalization.")
+        )
+        self.assertEqual([item.value for item in result.constraints], ["limited labeled data"])
+        self.assertEqual([item.value for item in result.limitations], ["poor field generalization"])
+
+    def test_data_efficient_deit_name_is_method_not_constraint(self):
+        payload = _ExtractionResult(
+            method_or_intervention=[_MethodClaim(
+                value="Data-efficient Image Transformers (DeiT)",
+                evidence_text="Data-efficient Image Transformers (DeiT)",
+                source="abstract",
+                confidence=.9,
+                role="primary",
+            )],
+            constraints=[EvidenceItem(
+                value="Data-efficient Image Transformers (DeiT)",
+                evidence_text="Data-efficient Image Transformers (DeiT)",
+                source="abstract",
+                confidence=.9,
+            )],
+            extraction_confidence=.9,
+        )
+        result = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload))).extract(
+            Paper(id="p1", title="DeiT", abstract="Data-efficient Image Transformers (DeiT).")
+        )
+        self.assertEqual([item.value for item in result.method_or_intervention], ["Data-efficient Image Transformers (DeiT)"])
+        self.assertEqual(result.constraints, [])
+
+    def test_explicit_limited_label_experiment_keeps_method_and_constraint(self):
+        payload = _ExtractionResult(
+            method_or_intervention=[_MethodClaim(
+                value="DeiT",
+                evidence_text="DeiT achieved strong performance",
+                source="abstract",
+                confidence=.9,
+                role="primary",
+            )],
+            constraints=[EvidenceItem(
+                value="small labeled training dataset",
+                evidence_text="Using a small labeled training dataset, DeiT achieved strong performance",
+                source="abstract",
+                confidence=.9,
+            )],
+            extraction_confidence=.9,
+        )
+        result = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload))).extract(
+            Paper(
+                id="p1",
+                title="DeiT",
+                abstract="Using a small labeled training dataset, DeiT achieved strong performance.",
+            )
+        )
+        self.assertEqual([item.value for item in result.method_or_intervention], ["DeiT"])
+        self.assertEqual([item.value for item in result.constraints], ["small labeled training dataset"])
+
+    def test_background_methods_are_not_comparisons(self):
+        payload = _ExtractionResult(
+            comparison_or_baseline=[
+                EvidenceItem(
+                    value="visual inspection",
+                    evidence_text="Traditional visual inspection is time-consuming.",
+                    source="abstract",
+                    confidence=.9,
+                ),
+                EvidenceItem(
+                    value="CNN models",
+                    evidence_text="GreenViT outperforms state-of-the-art CNN models.",
+                    source="abstract",
+                    confidence=.9,
+                ),
+            ],
+            extraction_confidence=.9,
+        )
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        result = extractor.extract(
+            Paper(
+                id="p1",
+                title="GreenViT",
+                abstract="Traditional visual inspection is time-consuming. GreenViT outperforms state-of-the-art CNN models.",
+            )
+        )
+        self.assertEqual([item.value for item in result.comparison_or_baseline], ["CNN models"])
+
+    def test_conservative_canonicalization_deduplicates_harmless_spelling(self):
+        self.assertEqual(
+            canonical_evidence_key("Method-Alpha"),
+            canonical_evidence_key("method_alpha"),
+        )
+
+        payload = _ExtractionResult(
+            comparison_or_baseline=[
+                EvidenceItem(
+                    value="Method-Alpha",
+                    evidence_text="Method-Alpha",
+                    source="abstract",
+                    confidence=.9,
+                ),
+                EvidenceItem(
+                    value="method_alpha",
+                    evidence_text="method_alpha",
+                    source="abstract",
+                    confidence=.9,
+                ),
+            ],
+            extraction_confidence=.9,
+        )
+
+        extractor = PaperExtractor(
+            client=SimpleNamespace(
+                responses=FakeResponses(payload)
+            )
+        )
+
+        result = extractor.extract(
+            Paper(
+                id="p1",
+                title="Methods",
+                abstract="Method-Alpha and method_alpha.",
+            )
+        )
+
+        self.assertEqual(
+            len(result.comparison_or_baseline),
+            1,
+        )
+        
+    def test_equal_head_to_head_methods_remain_primary(self):
+        values = ["Next-ViT", "ConvNeXt-ViT", "Swin Transformer"]
+        payload = _ExtractionResult(
+            method_or_intervention=[
+                _MethodClaim(value=value, evidence_text=value, source="abstract", confidence=.9, role="primary")
+                for value in values
+            ],
+            study_type="empirical",
+            extraction_confidence=.9,
+        )
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        result = extractor.extract(Paper(id="p1", title="Comparison", abstract=", ".join(values)))
+        self.assertEqual([item.value for item in result.method_or_intervention], values)
+        self.assertEqual(result.comparison_or_baseline, [])
+
+    def test_named_multi_component_proposed_method_remains_primary(self):
+        payload = _ExtractionResult(
+            method_or_intervention=[
+                _MethodClaim(
+                    value="PMF+FA",
+                    evidence_text="we call the overall method PMF+FA",
+                    source="abstract",
+                    confidence=.9,
+                    role="primary",
+                ),
+                _MethodClaim(
+                    value="feature attention module",
+                    evidence_text="feature attention module",
+                    source="abstract",
+                    confidence=.9,
+                    role="supporting",
+                ),
+            ],
+            study_type="empirical",
+            extraction_confidence=.9,
+        )
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        result = extractor.extract(
+            Paper(
+                id="p1",
+                title="PMF+FA",
+                abstract="We call the overall method PMF+FA with a feature attention module.",
+            )
+        )
+        self.assertEqual([item.value for item in result.method_or_intervention], ["PMF+FA"])
+
+    def test_unsupported_evidence_is_rejected_with_debug_logging(self):
+        payload = _ExtractionResult(
+            research_objective=EvidenceItem(
+                value="Unsupported objective",
+                evidence_text="not present in source",
+                source="abstract",
+                confidence=.9,
+            ),
+            extraction_confidence=.5,
+        )
+        extractor = PaperExtractor(client=SimpleNamespace(responses=FakeResponses(payload)))
+        with self.assertLogs("src.extraction.paper_extractor", level="DEBUG") as logs:
+            result = extractor.extract(Paper(id="p1", title="A paper", abstract="No objective."))
+        self.assertIsNone(result.research_objective)
+        self.assertTrue(any("p1" in message for message in logs.output))
 
 
 if __name__ == "__main__":
