@@ -156,6 +156,23 @@ Create files and folders only when their milestone begins. Do not add empty arch
 | 9. Web interface | Planned | Interactive application and evidence views |
 | 10. Citation graph and deployment | Planned | Graph exploration, packaging, monitoring |
 
+## 8. Milestone 7 — evaluation harness
+
+Milestone 7 is an offline-first measurement layer over the frozen Milestones 1–6 pipeline. It does
+not tune retrieval, ranking, extraction, landscape analysis, candidate generation, verification, or
+caching. Evaluation data lives separately from prompts, examples, normalization rules, and manual
+tuning decisions. Use `src.evaluation` for strict JSONL datasets and saved predictions, and run the
+CLI with `python -m src.evaluation.runner --dataset ... --evaluation-type ... --predictions ...`.
+
+The harness reports retrieval, pairwise deduplication, field-level extraction, evidence attribution,
+direct/candidate verification, counterexample discovery, performance, request/token metadata, and
+cache hit rates. It can export candidate contexts for later expert 1–5 ratings; it never invents
+human usefulness/correctness scores. Provider failures are recorded by case and stage. Token usage
+and cost remain unavailable when the provider does not expose reliable usage metadata, and pricing
+is supplied through `ModelPricing` rather than fetched at runtime. All reports carry a dataset
+version and schema version. Scores describe retrieved and verified evidence only and do not prove
+global novelty.
+
 ## 7. Milestone 1 — basic retrieval (complete)
 
 ### Current behavior
@@ -797,6 +814,29 @@ one of the three qualified categorical assessments. Verification failures are ne
 evidence that no counterexample exists. The CLI `--show-gaps` runs generation and verification;
 `--show-landscape` remains the existing Milestone-5 view. The required live smoke test remains
 blocked when the configured provider cannot establish a connection.
+
+### Milestone 6 known limitation
+
+Direct idea verification intentionally favors precision over recall.
+
+Semantically related expressions may remain unmatched when the available
+structured canonical values, explicit synonyms, and conservative lexical
+containment do not establish equivalence.
+
+Examples include differences such as environmental wording, task
+paraphrases, or closely related scientific outcome terminology.
+
+This can produce false-negative or `Uncertain` facet assessments.
+
+Do not solve this by adding domain-specific synonym tables, scientific
+regex ontologies, embedding thresholds, or additional LLM matching stages
+inside Milestone 6.
+
+The system must prefer `Uncertain` over unsupported confirmation.
+
+Milestone 6 is considered frozen unless a future regression violates a core
+invariant, crashes the pipeline, produces unsupported positive claims, or
+breaks same-paper verification.
 
 ## 13. Milestone 7 — evaluation harness
 

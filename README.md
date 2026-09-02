@@ -119,3 +119,30 @@ The suite uses fakes for OpenAlex, OpenAI Structured Outputs, and embeddings; it
 paid API calls. Retrieval metric helpers and the six Milestone 3 ablation identifiers are in
 `src/evaluation/`. A genuine manually judged evaluation set is still required before comparing
 production retrieval quality.
+
+## Milestone 7 evaluation harness
+
+The evaluation package measures the existing pipeline without changing its scientific behavior. It
+supports offline JSONL scoring for retrieval (Recall@10/50, MRR, graded NDCG@10), pairwise
+deduplication, structured evidence fields, claim attribution, conservative verification labels and
+counterexamples, plus performance/cache accounting. Human usefulness is supported through JSONL/CSV
+annotation exports and 1–5 ratings; ratings must come from actual expert review.
+
+Datasets use stable case IDs. An optional first row such as
+`{"_meta":{"dataset_version":"m7-v1"}}` records the benchmark version. Gold annotations remain
+separate from saved predictions:
+
+```bash
+python -m src.evaluation.runner \
+  --dataset data/evaluations/retrieval.jsonl \
+  --evaluation-type retrieval \
+  --predictions evaluation/results/retrieval_predictions.jsonl \
+  --output evaluation/results/retrieval_report.json
+```
+
+Metric computation is fully offline. Provider failures are recorded by case and stage rather than
+silently removed from denominators. Reports carry dataset/schema metadata, raw numeric JSON metrics,
+existing pipeline timings, provider request counters, token metadata when exposed, and cache hit
+rates. Do not place evaluation examples in production prompts or benchmark-specific normalization
+logic. Absence of direct evidence remains `uncertain` and never proves global novelty; assessments
+describe retrieved and verified evidence only.

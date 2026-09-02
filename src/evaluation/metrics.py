@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 
@@ -31,22 +31,74 @@ def evaluate_ranking(
     """
 
     relevant = {
-        normalized
+        _normalize_identifier(identifier): 1.0
         for identifier in relevant_ids
-        if (normalized := _normalize_identifier(identifier))
+        if _normalize_identifier(identifier)
     }
+
+    return evaluate_retrieval(ranked_ids, relevant)
+
+
+def evaluate_retrieval(
+    retrieved_ids: Sequence[str],
+    judgments: Mapping[str, int | float] | Iterable[object],
+) -> RetrievalMetrics:
+    """Score one ranked list against binary or graded relevance judgments.
+
+    ``judgments`` may be a mapping of paper ID to grade, an iterable of IDs,
+    or an iterable of objects exposing ``paper_id`` and ``relevance``.  IDs
+    are normalized and duplicate retrieved IDs count only once.
+    """
+
+    relevant = _relevance_map(judgments)
 
     if not relevant:
         raise ValueError("at least one judged relevant paper is required")
 
-    ranked = _unique_normalized_ids(ranked_ids)
+    ranked = _unique_normalized_ids(retrieved_ids)
 
+    positive = {identifier for identifier, grade in relevant.items() if grade > 0}
     return RetrievalMetrics(
-        recall_at_10=_recall_at(ranked, relevant, 10),
-        recall_at_50=_recall_at(ranked, relevant, 50),
-        mrr=_reciprocal_rank(ranked, relevant),
+        recall_at_10=_recall_at(ranked, positive, 10),
+        recall_at_50=_recall_at(ranked, positive, 50),
+        mrr=_reciprocal_rank(ranked, positive),
         ndcg_at_10=_ndcg_at(ranked, relevant, 10),
     )
+
+
+def _relevance_map(judgments: Mapping[str, int | float] | Iterable[object]) -> dict[str, float]:
+    if isinstance(judgments, Mapping):
+        pairs = judgments.items()
+    else:
+        pairs = []
+        for item in judgments:
+            if isinstance(item, str):
+                pairs.append((item, 1.0))
+            else:
+                paper_id = getattr(item, "paper_id", None)
+                relevance = getattr(item, "relevance", None)
+                if paper_id is None and isinstance(item, Mapping):
+                    paper_id = item.get("paper_id")
+                    relevance = item.get("relevance", 1.0)
+                if paper_id is None:
+                    raise TypeError("judgments must contain paper_id and relevance")
+                pairs.append((paper_id, relevance if relevance is not None else 1.0))
+
+    result: dict[str, float] = {}
+    for identifier, relevance in pairs:
+        normalized = _normalize_identifier(str(identifier))
+        if not normalized:
+            continue
+        try:
+            grade = float(relevance)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid relevance grade for {identifier!r}") from exc
+        if grade < 0:
+            raise ValueError("relevance grades must be non-negative")
+        result[normalized] = max(result.get(normalized, 0.0), grade)
+    if not result or not any(value > 0 for value in result.values()):
+        raise ValueError("at least one judged relevant paper is required")
+    return result
 
 
 def _normalize_identifier(identifier: str) -> str:
@@ -97,22 +149,23 @@ def _reciprocal_rank(
 
 def _ndcg_at(
     ranked: Sequence[str],
-    relevant: set[str],
+    relevant: Mapping[str, float],
     k: int,
 ) -> float:
-    """Return binary normalized discounted cumulative gain at top-k."""
+    """Return graded normalized discounted cumulative gain at top-k."""
 
     dcg = sum(
-        1.0 / math.log2(rank + 1)
+        (2.0 ** relevant[identifier] - 1.0) / math.log2(rank + 1)
         for rank, identifier in enumerate(ranked[:k], start=1)
-        if identifier in relevant
+        if identifier in relevant and relevant[identifier] > 0
     )
 
-    ideal_count = min(len(relevant), k)
-
     idcg = sum(
-        1.0 / math.log2(rank + 1)
-        for rank in range(1, ideal_count + 1)
+        (2.0 ** grade - 1.0) / math.log2(rank + 1)
+        for rank, grade in enumerate(
+            sorted((grade for grade in relevant.values() if grade > 0), reverse=True)[:k],
+            start=1,
+        )
     )
 
     return dcg / idcg if idcg else 0.0
