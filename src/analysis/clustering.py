@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
-from itertools import product
+from itertools import combinations, product
 from typing import Iterable, Sequence
 
 from src.extraction.evidence import PaperEvidence
@@ -51,47 +51,24 @@ _MISSING_FIELDS = (
     ("future_work", "future_work"),
 )
 
-# These are structural scientific combinations, not domain-specific concepts.
-_COMBINATION_SPECS = (
-    (
-        ("problem", "problems"),
-        ("method_family", "method_families"),
-    ),
-    (
-        ("method_family", "method_families"),
-        ("population_or_setting", "populations_or_settings"),
-    ),
-    (
-        ("method_family", "method_families"),
-        ("dataset", "datasets"),
-    ),
-    (
-        ("method_family", "method_families"),
-        ("dataset_type", "dataset_types"),
-    ),
-    (
-        ("method_family", "method_families"),
-        ("baseline", "baselines"),
-    ),
-    (
-        ("method_family", "method_families"),
-        ("constraint", "constraints"),
-    ),
-    (
-        ("problem", "problems"),
-        ("method_family", "method_families"),
-        ("population_or_setting", "populations_or_settings"),
-    ),
-    (
-        ("problem", "problems"),
-        ("method_family", "method_families"),
-        ("dataset", "datasets"),
-    ),
-    (
-        ("problem", "problems"),
-        ("method_family", "method_families"),
-        ("constraint", "constraints"),
-    ),
+# These are structural scientific dimensions, not domain-specific concepts.
+# A paper's feature record is the membership source; this list only bounds the
+# dimensions considered for higher-order landscape summaries.
+_COMBINATION_DIMENSIONS = (
+    ("problem", "problems"),
+    ("population_or_setting", "populations_or_settings"),
+    ("method", "methods"),
+    ("method_family", "method_families"),
+    ("dataset", "datasets"),
+    ("dataset_type", "dataset_types"),
+    ("baseline", "baselines"),
+    ("constraint", "constraints"),
+)
+
+_COMBINATION_SPECS = tuple(
+    tuple(selected)
+    for size in range(2, 6)
+    for selected in combinations(_COMBINATION_DIMENSIONS, size)
 )
 
 _SENTINELS = frozenset({

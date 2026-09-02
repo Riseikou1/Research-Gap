@@ -8,6 +8,7 @@ from .evidence import (
     canonical_evidence_key,
 )
 from .paper_extractor import PaperExtractionError, PaperExtractor
+from .store import EvidenceStore
 
 __all__ = [
     "EvidenceItem",
@@ -17,4 +18,5 @@ __all__ = [
     "canonical_evidence_key",
     "PaperExtractionError",
     "PaperExtractor",
+    "EvidenceStore",
 ]

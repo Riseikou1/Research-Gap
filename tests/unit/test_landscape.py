@@ -100,11 +100,13 @@ class LandscapeTest(unittest.TestCase):
         self.assertNotEqual(gamma, delta)
         self.assertNotEqual(gamma, "other")
 
-    def test_constraint_normalization_does_not_invent_limited_label_experiment(self):
-        self.assertEqual(
+    def test_constraint_normalization_preserves_unmapped_terminology(self):
+        self.assertNotEqual(
             normalize_constraint("limited labelled data"),
             normalize_constraint("limited labeled data"),
         )
+        self.assertTrue(normalize_constraint("limited labelled data"))
+        self.assertTrue(normalize_constraint("limited labeled data"))
 
         self.assertNotEqual(
             normalize_constraint("requires large labelled datasets"),
@@ -116,7 +118,10 @@ class LandscapeTest(unittest.TestCase):
         self.assertNotEqual(communication, "other")
 
     def test_metric_normalization_keeps_known_and_unknown_metrics(self):
-        self.assertEqual(normalize_metric("classification accuracy"), "accuracy")
+        self.assertEqual(
+            normalize_metric("classification accuracy"),
+            "classification accuracy",
+        )
         self.assertEqual(normalize_metric("inference time"), "inference time")
 
         unknown = normalize_metric("spectral distortion index")
@@ -157,7 +162,27 @@ class LandscapeTest(unittest.TestCase):
             features[1].populations_or_settings,
         )
 
-    def test_metrics_are_split_into_performance_and_efficiency(self):
+    def test_derived_dataset_type_keeps_dataset_role_separate_from_setting_role(self):
+        records = [
+            paper(
+                "method-paper",
+                method="value_x",
+                population="longitudinal cohort",
+            ),
+            paper(
+                "dataset-paper",
+                dataset="value_x longitudinal dataset",
+            ),
+        ]
+
+        features = to_paper_features(records)
+
+        self.assertIn("value x", features[0].methods)
+        self.assertNotIn("longitudinal", features[0].dataset_types)
+        self.assertIn("value x longitudinal", features[1].datasets)
+        self.assertEqual(features[1].dataset_types, [])
+
+    def test_metrics_are_preserved_without_vocab_taxonomy(self):
         evidence = paper("A", method="Method Alpha")
         evidence.evaluation_metrics = [
             claim("classification accuracy"),
@@ -166,9 +191,9 @@ class LandscapeTest(unittest.TestCase):
 
         features = to_paper_features([evidence])[0]
 
-        self.assertIn("accuracy", features.performance_metrics)
-        self.assertIn("inference time", features.efficiency_metrics)
-        self.assertIn("accuracy", features.metrics)
+        self.assertIn("classification accuracy", features.performance_metrics)
+        self.assertIn("inference time", features.performance_metrics)
+        self.assertIn("classification accuracy", features.metrics)
         self.assertIn("inference time", features.metrics)
 
     def test_explicit_study_type_is_preserved(self):

@@ -216,6 +216,8 @@ Create a `ResearchIdea` model with these fields:
 
   "intervention_or_method": ["string"],
 
+  "data_or_modality": ["string"],
+
   "comparison": ["string"],
 
   "outcomes": ["string"],
@@ -875,6 +877,8 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENALEX_API_KEY=
 OPENALEX_MAILTO=
 RESEARCH_GAP_CACHE_DIR=data/cache
+RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS=21600
+RESEARCH_GAP_EXTRACTION_BATCH_SIZE=3
 OPENALEX_CANDIDATE_LIMIT=20
 RESEARCH_GAP_MAX_CANDIDATES=100
 RESEARCH_GAP_LEXICAL_WEIGHT=0.4

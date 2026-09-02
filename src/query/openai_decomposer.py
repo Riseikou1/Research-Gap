@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from src.config import openai_api_key, openai_model
+from src.config import CACHE_DIR, openai_api_key, openai_model
 from src.models.idea import ResearchIdea
 from src.query.deterministic import clean_idea_text
 from src.query.openai_support import (
@@ -14,6 +15,7 @@ from src.query.openai_support import (
     format_provider_error,
     incomplete_reason,
 )
+from src.query.store import PlanningStore, normalize_idea_for_cache, planning_cache_key
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +38,28 @@ class _SynonymGroup(BaseModel):
     alternatives: list[str]
 
 
+class _CanonicalFacetValue(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        str_strip_whitespace=True,
+    )
+
+    value: str = Field(min_length=1)
+    canonical_value: str = Field(min_length=1)
+
+
+class _CanonicalFacetGroup(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        str_strip_whitespace=True,
+    )
+
+    facet: str = Field(min_length=1)
+    values: list[_CanonicalFacetValue]
+
+
 class _OpenAIResearchIdeaPayload(BaseModel):
     """
     Exact structured payload requested from OpenAI.
@@ -55,12 +79,14 @@ class _OpenAIResearchIdeaPayload(BaseModel):
     problem: list[str]
     population: list[str]
     intervention_or_method: list[str]
+    data_or_modality: list[str]
     comparison: list[str]
     outcomes: list[str]
     domain: list[str]
     constraints: list[str]
     keywords: list[str]
     synonyms: list[_SynonymGroup]
+    canonical_facets: list[_CanonicalFacetGroup]
 
 
 # ---------------------------------------------------------------------------
@@ -80,22 +106,37 @@ standard terminology equivalence. Do not invent missing research details.
 Facet definitions:
 - problem: research problem, task, question, or phenomenon being studied.
 - population: people, organisms, cohorts, user groups, or explicit study populations.
-- intervention_or_method: methods, models, algorithms, interventions, or techniques.
+- intervention_or_method: actual methods, algorithms, models, architectures,
+  interventions, training strategies, or experimental techniques.
+- data_or_modality: input/data modalities, measurement types, signal types,
+  sensing modalities, source data forms, or input representations.
 - comparison: explicit baselines, controls, alternative methods, or comparison groups.
 - outcomes: explicit desired or measured effects, improvements, or outcomes.
-- domain: application field, discipline, environment, or setting.
-- constraints: explicit restrictions, exclusions, resource limits, or conditions.
+- domain: broad application field or research domain; do not use it for a
+  specific input modality or an experimental condition.
+- constraints: explicit restrictions, exclusions, scarcity conditions,
+  deployment conditions, environmental variation, resource limits, or other
+  conditions on the study.
 - keywords: up to 12 retrieval-useful terms or phrases from the idea.
 - synonyms: only high-confidence standard abbreviations or terminology equivalents.
+- canonical_facets: for each non-empty facet, map every surface value to a
+  concise generic semantic identity. Equivalent surface forms share an
+  identity; preserve meaningful qualifiers and keep distinct requirements
+  separate. Never use a scientific ontology or invent an equivalence.
 
 Rules:
 1. Leave unknown facet lists empty.
 2. Do not assess novelty or whether a research gap exists.
 3. Do not invent datasets, populations, outcomes, comparisons, or constraints.
-4. Keep phrases concise while preserving technical terminology.
-5. Avoid duplicate or near-duplicate entries within a field.
-6. For synonyms, omit uncertain alternatives.
-7. Copy original_text exactly from the user input.
+4. A data source, signal, input representation, sensing modality, dataset form,
+   or measurement type must go in data_or_modality, never in
+   intervention_or_method or domain.
+5. Keep phrases concise while preserving technical terminology.
+6. Avoid duplicate or near-duplicate entries within a field.
+7. For synonyms, omit uncertain alternatives.
+8. Copy original_text exactly from the user input.
+9. Keep the original surface wording in every facet list; canonical_facets is
+   an additional matching aid, not a replacement for those values.
 """.strip()
 
 
@@ -138,6 +179,7 @@ class OpenAIDecomposer:
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
         max_output_tokens: int = 1600,
+        cache_path: str | Path | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
@@ -150,10 +192,16 @@ class OpenAIDecomposer:
 
         self.model = model or openai_model()
         self.max_output_tokens = max_output_tokens
+        self._metrics = {
+            "openai_decomposition_requests": 0,
+            "decomposition_cache_hits": 0,
+            "planning_cache_hits": 0,
+        }
 
         # Dependency injection keeps unit tests free of network/API usage.
         if client is not None:
             self.client = client
+            self.planning_store = PlanningStore(cache_path)
             return
 
         key = api_key or openai_api_key()
@@ -178,11 +226,34 @@ class OpenAIDecomposer:
             timeout=timeout_seconds,
             max_retries=max_retries,
         )
+        self.planning_store = PlanningStore(
+            cache_path if cache_path is not None else CACHE_DIR / "research_gap.sqlite3"
+        )
 
     def decompose(self, idea: str) -> ResearchIdea:
         cleaned = clean_idea_text(idea)
+        normalized = normalize_idea_for_cache(cleaned)
+        cache_key = planning_cache_key(
+            kind="decomposition",
+            input_value=normalized,
+            provider="openai",
+            model=self.model,
+            configuration={"max_output_tokens": self.max_output_tokens},
+        )
+
+        cached = self.planning_store.get(kind="decomposition", key=cache_key)
+        if cached is not None:
+            try:
+                result = ResearchIdea.model_validate(cached)
+            except (TypeError, ValueError):
+                result = None
+            if result is not None:
+                self._metrics["decomposition_cache_hits"] += 1
+                self._metrics["planning_cache_hits"] += 1
+                return result
 
         try:
+            self._metrics["openai_decomposition_requests"] += 1
             response = self.client.responses.parse(
                 model=self.model,
                 reasoning={"effort": "low"},
@@ -235,10 +306,23 @@ class OpenAIDecomposer:
                 f"{type(payload).__name__}."
             )
 
-        return _to_research_idea(
+        result = _to_research_idea(
             payload=payload,
             cleaned_original=cleaned,
         )
+        try:
+            self.planning_store.put(
+                kind="decomposition",
+                key=cache_key,
+                payload=result.model_dump(mode="json"),
+            )
+        except Exception:
+            # Cache failure must never change provider correctness.
+            pass
+        return result
+
+    def metrics_snapshot(self) -> dict[str, int]:
+        return dict(self._metrics)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +350,7 @@ def _to_research_idea(
         )
 
     synonyms = _normalize_synonyms(payload.synonyms)
+    canonical_facets = _normalize_canonical_facets(payload.canonical_facets)
 
     return ResearchIdea(
         original_text=cleaned_original,
@@ -274,6 +359,7 @@ def _to_research_idea(
         intervention_or_method=_normalize_values(
             payload.intervention_or_method
         ),
+        data_or_modality=_normalize_values(payload.data_or_modality),
         comparison=_normalize_values(payload.comparison),
         outcomes=_normalize_values(payload.outcomes),
         domain=_normalize_values(payload.domain),
@@ -283,6 +369,7 @@ def _to_research_idea(
             limit=12,
         ),
         synonyms=synonyms,
+        canonical_facets=canonical_facets,
     )
 
 
@@ -378,4 +465,30 @@ def _normalize_synonyms(
         canonical: alternatives
         for canonical, alternatives in result.items()
         if alternatives
+    }
+
+
+def _normalize_canonical_facets(
+    groups: list[_CanonicalFacetGroup],
+) -> dict[str, dict[str, str]]:
+    """Clean provider canonical identities without interpreting their meaning."""
+
+    result: dict[str, dict[str, str]] = {}
+
+    for group in groups:
+        facet = " ".join(group.facet.split()).strip(" ,.;")
+        if not facet:
+            continue
+
+        values = result.setdefault(facet, {})
+        for entry in group.values:
+            value = " ".join(entry.value.split()).strip(" ,.;")
+            canonical = " ".join(entry.canonical_value.split()).strip(" ,.;")
+            if value and canonical:
+                values[value] = canonical
+
+    return {
+        facet: values
+        for facet, values in result.items()
+        if values
     }

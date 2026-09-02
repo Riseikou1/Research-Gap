@@ -26,6 +26,7 @@ class EvidenceItem(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
 
     value: str = Field(min_length=1)
+    canonical_value: str | None = None
     evidence_text: str = Field(min_length=1)
     source: EvidenceSource
     confidence: float = Field(ge=0.0, le=1.0)
@@ -49,6 +50,7 @@ class PaperEvidence(BaseModel):
     population_or_setting: list[EvidenceItem] = Field(default_factory=list)
     method_or_intervention: list[EvidenceItem] = Field(default_factory=list)
     comparison_or_baseline: list[EvidenceItem] = Field(default_factory=list)
+    data_or_modality: list[EvidenceItem] = Field(default_factory=list)
     datasets: list[EvidenceItem] = Field(default_factory=list)
     sample_size: EvidenceItem | None = None
     evaluation_metrics: list[EvidenceItem] = Field(default_factory=list)
@@ -65,6 +67,7 @@ class PaperEvidence(BaseModel):
             "population_or_setting",
             "method_or_intervention",
             "comparison_or_baseline",
+            "data_or_modality",
             "datasets",
             "evaluation_metrics",
             "main_findings",
@@ -81,6 +84,7 @@ class PaperEvidence(BaseModel):
             ("population_or_setting", self.population_or_setting),
             ("method_or_intervention", self.method_or_intervention),
             ("comparison_or_baseline", self.comparison_or_baseline),
+            ("data_or_modality", self.data_or_modality),
             ("datasets", self.datasets),
             ("sample_size", self.sample_size),
             ("evaluation_metrics", self.evaluation_metrics),
@@ -98,7 +102,7 @@ def _deduplicate_items(items: list[EvidenceItem]) -> list[EvidenceItem]:
     seen: set[str] = set()
 
     for item in items:
-        key = canonical_evidence_key(item.value)
+        key = canonical_evidence_key(item.canonical_value or item.value)
         if key not in seen:
             seen.add(key)
             result.append(item)

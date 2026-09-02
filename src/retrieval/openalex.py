@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from datetime import date, datetime, timezone
 from typing import Any, BinaryIO
+import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -107,7 +109,16 @@ class OpenAlexRetriever:
             else request.limit
         )
 
-        payload = self._request(self._build_params(request, per_page=limit))
+        serialized_query, fallback_used = _serialize_provider_query(
+            request.query.text
+        )
+        payload = self._request(
+            self._build_params(
+                request,
+                per_page=limit,
+                serialized_query=serialized_query,
+            )
+        )
 
         raw_results = payload.get("results")
 
@@ -143,6 +154,8 @@ class OpenAlexRetriever:
                     provider_score=_optional_float(
                         raw_work.get("relevance_score")
                     ),
+                    serialized_query=serialized_query,
+                    fallback_used=fallback_used,
                 )
             ]
 
@@ -159,8 +172,18 @@ class OpenAlexRetriever:
 
         return papers[:limit]
 
-    def _build_params(self, request: RetrievalRequest, *, per_page: int) -> dict[str, str | int]:
+    def _build_params(
+        self,
+        request: RetrievalRequest,
+        *,
+        per_page: int,
+        serialized_query: str | None = None,
+    ) -> dict[str, str | int]:
         """Translate a retrieval request into OpenAlex API parameters."""
+
+        safe_query = serialized_query
+        if safe_query is None:
+            safe_query, _ = _serialize_provider_query(request.query.text)
 
         params: dict[str, str | int] = {
             "page": 1,
@@ -169,13 +192,11 @@ class OpenAlexRetriever:
         }
 
         if request.mode is RetrievalMode.BROAD_LEXICAL:
-            params["search"] = request.query.text
+            params["search"] = safe_query
 
         elif request.mode is RetrievalMode.TITLE_ABSTRACT:
             scoped_query = " ".join(
-                request.query.text
-                .replace(",", " ")
-                .split()
+                safe_query.split()
             )
 
             params["filter"] = (
@@ -183,7 +204,7 @@ class OpenAlexRetriever:
             )
 
         elif request.mode is RetrievalMode.SEMANTIC:
-            params["search.semantic"] = request.query.text
+            params["search.semantic"] = safe_query
 
         else:  # pragma: no cover
             raise ValueError(
@@ -274,6 +295,28 @@ class OpenAlexRetriever:
                 raise OpenAlexError("OpenAlex returned invalid JSON") from exc
 
         raise AssertionError("retry loop exhausted")
+
+
+def _serialize_provider_query(text: str) -> tuple[str, bool]:
+    """Convert arbitrary query text to provider-safe plain text.
+
+    The original query remains in ``SearchQuery`` provenance; this boundary
+    only removes syntax that could be interpreted as provider operators.
+    """
+
+    normalized = unicodedata.normalize("NFKC", text)
+    safe_chars = [
+        char
+        if char.isalnum() or char.isspace() or char == "-"
+        else " "
+        for char in normalized
+    ]
+    serialized = re.sub(r"\s+", " ", "".join(safe_chars)).strip()
+    if not serialized:
+        raise OpenAlexError(
+            "query has no provider-safe searchable terms"
+        )
+    return serialized, serialized != normalized.strip()
 
 
 def reconstruct_abstract(

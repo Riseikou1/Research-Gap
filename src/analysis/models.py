@@ -342,6 +342,11 @@ class GapCandidate(BaseModel):
         ge=0.0,
         le=1.0,
     )
+    idea_anchor_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+    )
 
     support_count: int = Field(
         default=0,

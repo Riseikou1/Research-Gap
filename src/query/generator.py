@@ -65,18 +65,24 @@ class DeterministicQueryGenerator:
         candidates: list[tuple[str, str]] = [
             (original, "original"),
             (
-                _combine(idea.intervention_or_method, idea.problem),
+                _combine(
+                    idea.intervention_or_method,
+                    [*idea.data_or_modality, *idea.problem],
+                ),
                 "method_problem",
             ),
             (
                 _combine(
-                    idea.problem,
+                    [*idea.problem, *idea.data_or_modality],
                     [*idea.population, *idea.domain],
                 ),
                 "problem_context",
             ),
             (
-                _combine(idea.intervention_or_method, idea.outcomes),
+                _combine(
+                    idea.intervention_or_method,
+                    [*idea.data_or_modality, *idea.outcomes],
+                ),
                 "method_outcome",
             ),
             (_synonym_query(idea.synonyms), "synonym_expansion"),

@@ -10,7 +10,8 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from itertools import combinations
+from dataclasses import dataclass, field
+from itertools import combinations, product as _product
 
 from src.extraction.evidence import EvidenceItem, PaperEvidence, canonical_evidence_key
 from src.models.idea import ResearchIdea
@@ -30,7 +31,6 @@ MIN_COVERAGE_PAPERS = 2
 MAX_CANDIDATES = 12
 
 _STOPWORDS = {
-    "a",
     "an",
     "and",
     "are",
@@ -93,15 +93,32 @@ _PATTERN_ALIASES: dict[str, GapPattern] = {
     "future_work": "repeated_future_work",
 }
 
-# Only combinations for which Milestone 5 actually records joint observations
-# may produce an "absent combination" hypothesis.
-_COMBINATION_PAIRS = (
-    ("problem", "method_family"),
-    ("method_family", "population_or_setting"),
-    ("method_family", "dataset"),
-    ("method_family", "dataset_type"),
-    ("method_family", "constraint"),
+# These feature identities are intentionally generic. They mirror the
+# structured PaperFeatures representation and bound candidate generation to
+# evidence dimensions already supported by the landscape.
+_COMBINATION_DIMENSIONS = (
+    "problem",
+    "population_or_setting",
+    "method",
+    "method_family",
+    "dataset",
+    "dataset_type",
+    "baseline",
+    "constraint",
 )
+
+_COMBINATION_FIELDS = {
+    "problem": "problems",
+    "population_or_setting": "populations_or_settings",
+    "method": "methods",
+    "method_family": "method_families",
+    "dataset": "datasets",
+    "dataset_type": "dataset_types",
+    "baseline": "baselines",
+    "constraint": "constraints",
+}
+
+_MAX_VALUES_PER_DIMENSION = 4
 
 _COMPARISON_LANGUAGE = re.compile(
     r"\b(?:"
@@ -151,23 +168,17 @@ def _tokens(text: str) -> set[str]:
 
 
 def _concept_key(text: str) -> str:
-    """Create a conservative comparison key.
+    """Create a conservative identity key without dropping phrase words."""
 
-    Do not rewrite domain words such as "field" into "realworld". Scientific
-    meaning is domain-dependent and this layer should not guess it.
-    """
-
-    return " ".join(
-        token
-        for token in canonical_evidence_key(text).split()
-        if token not in _STOPWORDS
-    )
+    # Stopword removal is useful for relevance scoring, but not for identity:
+    # Structured values must remain distinct even when they share a prefix.
+    return canonical_evidence_key(text)
 
 
 def is_concrete_entity(value: str) -> bool:
     """Reject placeholders while preserving arbitrary scientific entities."""
 
-    key = _concept_key(value)
+    key = canonical_evidence_key(value)
 
     if not key or key in _GENERIC_BUCKETS:
         return False
@@ -212,7 +223,7 @@ def validate_evidence_semantics(
         if field not in {"constraint", "constraints"}:
             return False
 
-        if normalize_constraint(evidence_text) != "limited labeled data":
+        if normalize_constraint(evidence.value) != normalize_constraint(claim_text):
             return False
 
     # A class count alone is not a sample size.
@@ -252,6 +263,431 @@ def validate_evidence_semantics(
     return True
 
 
+@dataclass(slots=True)
+class _RecordGenerationContext:
+    """Immutable-in-practice prepared state for one evidence record."""
+
+    record: PaperEvidence
+    fields: dict[str, tuple[EvidenceItem, ...]]
+    item_tokens: dict[int, frozenset[str]]
+    normalized_values: dict[tuple[int, str], str]
+    objective_problem: str
+    method_families: frozenset[str]
+    baseline_families: frozenset[str]
+    context_terms: frozenset[str]
+    full_terms: frozenset[str]
+
+
+@dataclass(slots=True)
+class _GenerationContext:
+    """Per-generate-call indexes; nothing is shared across analyses."""
+
+    idea: ResearchIdea
+    landscape: LiteratureLandscape
+    records: dict[str, PaperEvidence]
+    idea_problem_values: frozenset[str] = field(init=False)
+    idea_problem_normalized: frozenset[str] = field(init=False)
+    idea_basis_problem_normalized: frozenset[str] = field(init=False)
+    idea_method_families: frozenset[str] = field(init=False)
+    idea_comparison_families: frozenset[str] = field(init=False)
+    idea_constraint_values: frozenset[str] = field(init=False)
+    idea_dataset_values: frozenset[str] = field(init=False)
+    idea_terms: frozenset[str] = field(init=False)
+    idea_context_terms: frozenset[str] = field(init=False)
+    records_by_id: dict[str, _RecordGenerationContext] = field(init=False)
+    item_contexts: dict[int, _RecordGenerationContext] = field(init=False)
+    paper_dimension_values: tuple[tuple[str, dict[str, frozenset[str]]], ...] = field(init=False)
+    canonical_cache: dict[str, str] = field(default_factory=dict, init=False)
+    token_cache: dict[str, frozenset[str]] = field(default_factory=dict, init=False)
+    basis_match_cache: dict[tuple[str, str], bool] = field(default_factory=dict, init=False)
+    strong_context_cache: dict[tuple[str, str], bool] = field(default_factory=dict, init=False)
+    record_anchor_cache: dict[tuple[str, bool], bool] = field(default_factory=dict, init=False)
+    relevance_cache: dict[tuple[tuple[str, str], ...], bool] = field(default_factory=dict, init=False)
+    semantic_cache: dict[tuple[str, str, int], bool] = field(default_factory=dict, init=False)
+    normalization_cache: dict[tuple[str, str], str] = field(default_factory=dict, init=False)
+
+    def __post_init__(self) -> None:
+        idea = self.idea
+        self.idea_problem_values = frozenset(
+            value for value in _idea_problem_values(idea) if self.is_concrete(value)
+        )
+        self.idea_problem_normalized = frozenset(
+            normalized
+            for value in self.idea_problem_values
+            if (normalized := self.normalize_value("problem", value))
+        )
+        self.idea_basis_problem_normalized = frozenset(
+            normalized
+            for value in idea.problem
+            if (normalized := self.normalize_value("problem", value))
+        )
+        self.idea_method_families = frozenset(
+            normalized
+            for value in idea.intervention_or_method
+            if self.is_concrete(value)
+            and (normalized := self.normalize_value("method_family", value))
+        )
+        self.idea_comparison_families = frozenset(
+            normalized
+            for value in (*idea.intervention_or_method, *idea.comparison)
+            if (normalized := self.normalize_value("method_family", value))
+        )
+        self.idea_constraint_values = frozenset(
+            normalized
+            for value in idea.constraints
+            if (normalized := self.normalize_value("constraint", value))
+        )
+        self.idea_dataset_values = frozenset(
+            normalized
+            for value in (*idea.keywords, *idea.domain, *idea.population)
+            if (normalized := self.normalize_value("dataset", value))
+        )
+        self.idea_terms = frozenset(_tokens_uncached(_idea_text(idea)))
+        self.idea_context_terms = frozenset(
+            _tokens_uncached(
+                " ".join((*idea.problem, *idea.domain, *idea.population))
+            )
+        )
+
+        self.records_by_id = {
+            paper_id: self._prepare_record(record)
+            for paper_id, record in self.records.items()
+        }
+        self.item_contexts = {
+            item_id: prepared
+            for prepared in self.records_by_id.values()
+            for item_id in prepared.item_tokens
+        }
+        self.paper_dimension_values = tuple(
+            (
+                paper.paper_id,
+                {
+                    dimension: frozenset(
+                        self.concept_key(value)
+                        for value in getattr(paper, field_name, [])
+                        if self.is_concrete(value)
+                    )
+                    for dimension, field_name in _COMBINATION_FIELDS.items()
+                },
+            )
+            for paper in self.landscape.papers
+        )
+
+    def canonical(self, value: str) -> str:
+        cached = self.canonical_cache.get(value)
+        if cached is None:
+            cached = canonical_evidence_key(value)
+            self.canonical_cache[value] = cached
+        return cached
+
+    def concept_key(self, value: str) -> str:
+        return self.canonical(value)
+
+    def normalize_value(self, dimension: str, value: str) -> str:
+        kind = (
+            "method_family"
+            if dimension in {"method", "method_family", "baseline", "comparison"}
+            else dimension
+        )
+        key = (kind, value)
+        cached = self.normalization_cache.get(key)
+        if cached is not None:
+            return cached
+        if kind == "problem":
+            normalized = normalize_problem(value)
+        elif kind == "method_family":
+            normalized = normalize_method_family(value)
+        elif kind == "constraint":
+            normalized = normalize_constraint(value)
+        elif kind == "dataset":
+            normalized = normalize_dataset(value)
+        else:
+            normalized = self.canonical(value)
+        self.normalization_cache[key] = normalized
+        return normalized
+
+    def tokens(self, value: str) -> frozenset[str]:
+        cached = self.token_cache.get(value)
+        if cached is None:
+            cached = frozenset(_tokens_uncached(value, canonical=self.canonical(value)))
+            self.token_cache[value] = cached
+        return cached
+
+    def is_concrete(self, value: str) -> bool:
+        key = self.canonical(value)
+        if not key or key in _GENERIC_BUCKETS:
+            return False
+        words = key.split()
+        return not words or words[0] not in _GENERIC_PREFIXES
+
+    def _prepare_record(self, record: PaperEvidence) -> _RecordGenerationContext:
+        fields = {
+            dimension: tuple(_field_items(record, dimension))
+            for dimension in (
+                "problem",
+                "population_or_setting",
+                "method",
+                "method_family",
+                "constraint",
+                "limitation",
+                "future_work",
+                "finding",
+                "outcome",
+                "comparison",
+                "baseline",
+                "dataset",
+                "dataset_type",
+            )
+        }
+        all_items = {
+            id(item): item
+            for values in fields.values()
+            for item in values
+        }
+        item_tokens = {
+            item_id: self.tokens(f"{item.value} {item.evidence_text}")
+            for item_id, item in all_items.items()
+        }
+        normalized_values = {
+            (item_id, dimension): self.normalize_value(dimension, item.value)
+            for item_id, item in all_items.items()
+            for dimension in ("problem", "method", "method_family", "baseline", "comparison", "constraint", "dataset")
+        }
+        objective_problem = (
+            normalized_values.get((id(record.research_objective), "problem"), "")
+            if record.research_objective
+            else ""
+        )
+        method_families = frozenset(
+            normalized_values[(id(item), "method_family")]
+            for item in fields["method"]
+            if self.is_concrete(item.value)
+            and normalized_values[(id(item), "method_family")]
+        )
+        baseline_families = frozenset(
+            normalized_values[(id(item), "baseline")]
+            for item in fields["baseline"]
+            if self.is_concrete(item.value)
+            and normalized_values[(id(item), "baseline")]
+        )
+        context_source = " ".join(
+            (
+                f"{record.research_objective.value} {record.research_objective.evidence_text}"
+                if record.research_objective
+                else "",
+                *(
+                    f"{item.value} {item.evidence_text}"
+                    for item in fields["population_or_setting"]
+                ),
+            )
+        )
+        return _RecordGenerationContext(
+            record=record,
+            fields=fields,
+            item_tokens=item_tokens,
+            normalized_values=normalized_values,
+            objective_problem=objective_problem,
+            method_families=method_families,
+            baseline_families=baseline_families,
+            context_terms=frozenset(self.tokens(context_source)),
+            full_terms=frozenset(self.tokens(_record_text(record))),
+        )
+
+    def _normalize_item(self, item: EvidenceItem, dimension: str) -> str:
+        return self.normalize_value(dimension, item.value)
+
+    def item_tokens_for(self, item: EvidenceItem) -> frozenset[str]:
+        prepared = self.item_contexts.get(id(item))
+        if prepared is not None:
+            return prepared.item_tokens[id(item)]
+        return self.tokens(f"{item.value} {item.evidence_text}")
+
+    def normalized_item(self, item: EvidenceItem, dimension: str) -> str:
+        prepared = self.item_contexts.get(id(item))
+        if prepared is not None:
+            normalized = prepared.normalized_values.get((id(item), dimension))
+            if normalized is not None:
+                return normalized
+        return self._normalize_item(item, dimension)
+
+    def field_items(self, record: PaperEvidence, dimension: str) -> tuple[EvidenceItem, ...]:
+        prepared = self.records_by_id.get(record.paper_id)
+        return prepared.fields.get(dimension, ()) if prepared else tuple(_field_items(record, dimension))
+
+    def record_anchor(self, record: PaperEvidence, *, require_method_and_problem: bool = False) -> bool:
+        key = (record.paper_id, require_method_and_problem)
+        cached = self.record_anchor_cache.get(key)
+        if cached is not None:
+            return cached
+        prepared = self.records_by_id[record.paper_id]
+        problem_match = bool(
+            self.idea_problem_normalized
+            and prepared.objective_problem in self.idea_problem_normalized
+        )
+        method_match = bool(self.idea_method_families & prepared.method_families)
+        if require_method_and_problem:
+            result = problem_match and method_match if self.idea_problem_values and self.idea_method_families else False
+        else:
+            available_signals = []
+            if self.idea_problem_values:
+                available_signals.append(problem_match)
+            if self.idea_method_families:
+                available_signals.append(method_match)
+            if self.idea.population or self.idea.domain:
+                available_signals.append(bool(self.idea_context_terms & prepared.context_terms))
+            result = bool(prepared.full_terms & self.idea_terms) if not available_signals else any(available_signals)
+        self.record_anchor_cache[key] = result
+        return result
+
+    def basis_matches(self, item: LandscapeBasis) -> bool:
+        key = (item.dimension, self.concept_key(item.value))
+        cached = self.basis_match_cache.get(key)
+        if cached is not None:
+            return cached
+        dimension = item.dimension
+        target = self._normalize_basis(item.value, dimension)
+        if dimension in {"method", "method_family", "baseline"}:
+            result = bool(target and target in self.idea_comparison_families)
+        elif dimension == "problem":
+            result = bool(target and target in self.idea_basis_problem_normalized)
+        elif dimension == "constraint":
+            result = bool(target and target in self.idea_constraint_values)
+        elif dimension == "dataset":
+            result = bool(target and target in self.idea_dataset_values)
+        else:
+            terms = self.tokens(item.value)
+            result = bool(terms and terms <= self.idea_terms)
+        self.basis_match_cache[key] = result
+        return result
+
+    def _normalize_basis(self, value: str, dimension: str) -> str:
+        return self.normalize_value(dimension, value)
+
+    def item_matches_basis(self, dimension: str, basis_value: str, item: EvidenceItem) -> bool:
+        if dimension == "problem":
+            return self._normalize_basis(basis_value, dimension) == self.normalized_item(item, dimension)
+        if dimension in {"method", "method_family", "baseline", "comparison"}:
+            target = self._normalize_basis(basis_value, dimension)
+            observed = self.normalized_item(item, dimension)
+            return bool(target and observed and target == observed)
+        if dimension in {"constraint", "dataset"}:
+            target = self._normalize_basis(basis_value, dimension)
+            observed = self.normalized_item(item, dimension)
+            return bool(target and observed and target == observed)
+        target_terms = self.tokens(basis_value)
+        observed_terms = self.item_tokens_for(item)
+        return bool(target_terms) and (target_terms <= observed_terms or bool(target_terms & observed_terms))
+
+    def strong_context(self, item: LandscapeBasis) -> bool:
+        key = (item.dimension, self.concept_key(item.value))
+        cached = self.strong_context_cache.get(key)
+        if cached is not None:
+            return cached
+        relevant_ids = [
+            paper_id
+            for paper_id in item.paper_ids
+            if paper_id in self.records
+            and self.record_anchor(self.records[paper_id])
+        ]
+        result = len(relevant_ids) >= MIN_SUPPORT_PAPERS
+        if not result:
+            for paper_id in relevant_ids:
+                record = self.records[paper_id]
+                if any(self.item_matches_basis(item.dimension, item.value, claim) for claim in self.field_items(record, item.dimension)):
+                    if self.record_anchor(record, require_method_and_problem=True):
+                        result = True
+                        break
+                basis_terms = self.tokens(item.value)
+                if any(basis_terms & self.item_tokens_for(claim) for claim in (*record.limitations, *record.future_work)):
+                    result = True
+                    break
+        self.strong_context_cache[key] = result
+        return result
+
+    def candidate_relevant(self, basis: Sequence[LandscapeBasis]) -> bool:
+        key = tuple((item.dimension, self.concept_key(item.value)) for item in basis)
+        cached = self.relevance_cache.get(key)
+        if cached is not None:
+            return cached
+        if not basis:
+            result = True
+        else:
+            anchored = [item for item in basis if self.basis_matches(item)]
+            if not anchored:
+                result = len(basis) <= 1 and any(self.strong_context(item) for item in basis)
+            else:
+                result = all(self.strong_context(item) for item in basis if item not in anchored)
+        self.relevance_cache[key] = result
+        return result
+
+    def has_idea_context(self, paper_ids: Iterable[str]) -> bool:
+        if not self.idea_context_terms:
+            return True
+        return any(
+            paper_id in self.records
+            and bool(self.idea_context_terms & self.records_by_id[paper_id].context_terms)
+            for paper_id in paper_ids
+        )
+
+    def semantic_valid(self, claim_text: str, evidence_type: str, item: EvidenceItem) -> bool:
+        key = (self.canonical(claim_text), evidence_type, id(item))
+        cached = self.semantic_cache.get(key)
+        if cached is None:
+            cached = validate_evidence_semantics(
+                claim_text=claim_text,
+                evidence_type=evidence_type,
+                evidence=item,
+            )
+            self.semantic_cache[key] = cached
+        return cached
+
+    def observed_combination(self, basis: Sequence[LandscapeBasis]) -> bool:
+        if not basis:
+            return False
+        return self.observed_combination_keys(
+            tuple((item.dimension, self.concept_key(item.value)) for item in basis)
+        )
+
+    def observed_combination_keys(
+        self,
+        combination_key: Sequence[tuple[str, str]],
+    ) -> bool:
+        if not combination_key:
+            return False
+        return any(
+            all(
+                value in values.get(dimension, frozenset())
+                for dimension, value in combination_key
+            )
+            for _, values in self.paper_dimension_values
+        )
+
+
+def _tokens_uncached(text: str, *, canonical: str | None = None) -> set[str]:
+    normalized = canonical if canonical is not None else canonical_evidence_key(text)
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", normalized)
+        if token not in _STOPWORDS
+    }
+
+
+def _idea_text(idea: ResearchIdea) -> str:
+    return " ".join(
+        (
+            idea.original_text,
+            *idea.problem,
+            *idea.population,
+            *idea.intervention_or_method,
+            *idea.comparison,
+            *idea.outcomes,
+            *idea.domain,
+            *idea.constraints,
+            *idea.keywords,
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Candidate generator
 # ---------------------------------------------------------------------------
@@ -266,6 +702,13 @@ class GapCandidateGenerator:
 
         self.max_candidates = max_candidates
         self.notices: list[str] = []
+        self._metrics: dict[str, int] = {
+            "candidate_hypotheses_generated": 0,
+            "candidate_hypotheses_after_pruning": 0,
+        }
+
+    def metrics_snapshot(self) -> dict[str, int]:
+        return dict(self._metrics)
 
     def generate(
         self,
@@ -274,6 +717,10 @@ class GapCandidateGenerator:
         evidence: Sequence[PaperEvidence],
     ) -> list[GapCandidate]:
         self.notices = []
+        self._metrics = {
+            "candidate_hypotheses_generated": 0,
+            "candidate_hypotheses_after_pruning": 0,
+        }
 
         records = {
             item.paper_id: item
@@ -286,6 +733,12 @@ class GapCandidateGenerator:
             )
             return []
 
+        context = _GenerationContext(
+            idea=idea,
+            landscape=landscape,
+            records=records,
+        )
+
         candidates: list[GapCandidate] = []
 
         candidates.extend(
@@ -293,6 +746,7 @@ class GapCandidateGenerator:
                 landscape,
                 records,
                 idea,
+                context,
             )
         )
         candidates.extend(
@@ -301,6 +755,7 @@ class GapCandidateGenerator:
                 records,
                 idea,
                 "limitation",
+                context,
             )
         )
         candidates.extend(
@@ -309,6 +764,7 @@ class GapCandidateGenerator:
                 records,
                 idea,
                 "future_work",
+                context,
             )
         )
         candidates.extend(
@@ -316,6 +772,7 @@ class GapCandidateGenerator:
                 idea,
                 landscape,
                 records,
+                context,
             )
         )
         candidates.extend(
@@ -323,6 +780,7 @@ class GapCandidateGenerator:
                 idea,
                 landscape,
                 records,
+                context,
             )
         )
         candidates.extend(
@@ -330,10 +788,17 @@ class GapCandidateGenerator:
                 idea,
                 landscape,
                 records,
+                context,
             )
         )
 
+        self._metrics["candidate_hypotheses_generated"] = len(candidates)
         candidates = consolidate_candidates(candidates)
+        # Keep the generator's complete deterministic hypothesis set
+        # inspectable; dominance pruning is applied immediately before
+        # verification, where it can reduce expensive work without hiding
+        # valid landscape hypotheses from callers.
+        self._metrics["candidate_hypotheses_after_pruning"] = len(candidates)
 
         if len(candidates) > self.max_candidates:
             self.notices.append(
@@ -352,11 +817,12 @@ class GapCandidateGenerator:
         landscape: LiteratureLandscape,
         records: dict[str, PaperEvidence],
         idea: ResearchIdea,
+        context: _GenerationContext,
     ) -> list[GapCandidate]:
         result: list[GapCandidate] = []
 
         for conflict in landscape.conflicts:
-            if not is_concrete_entity(conflict.topic):
+            if not context.is_concrete(conflict.topic):
                 self.notices.append(
                     f"invalid_entity: skipped conflict candidate "
                     f"for {conflict.topic}"
@@ -370,6 +836,7 @@ class GapCandidateGenerator:
                 records,
                 role="direct_support",
                 claim_text=conflict.topic,
+                context=context,
             )
 
             candidate = self._build(
@@ -401,6 +868,7 @@ class GapCandidateGenerator:
                 ],
                 idea=idea,
                 records=records,
+                context=context,
             )
 
             if candidate:
@@ -418,6 +886,7 @@ class GapCandidateGenerator:
         records: dict[str, PaperEvidence],
         idea: ResearchIdea,
         dimension: str,
+        context: _GenerationContext,
     ) -> list[GapCandidate]:
         frequencies = [
             item
@@ -428,7 +897,7 @@ class GapCandidateGenerator:
         grouped: dict[str, list] = defaultdict(list)
 
         for item in frequencies:
-            key = _concept_key(item.value)
+            key = context.concept_key(item.value)
 
             if key:
                 grouped[key].append(item)
@@ -436,7 +905,7 @@ class GapCandidateGenerator:
         result: list[GapCandidate] = []
 
         for key, items in grouped.items():
-            if not is_concrete_entity(key):
+            if not context.is_concrete(key):
                 self.notices.append(
                     f"invalid_entity: skipped repeated "
                     f"{dimension} candidate for {key}"
@@ -484,6 +953,7 @@ class GapCandidateGenerator:
                 records,
                 role="direct_support",
                 claim_text=value,
+                context=context,
             )
 
             candidate = self._build(
@@ -511,6 +981,7 @@ class GapCandidateGenerator:
                 ],
                 idea=idea,
                 records=records,
+                context=context,
             )
 
             if candidate:
@@ -527,103 +998,168 @@ class GapCandidateGenerator:
         idea: ResearchIdea,
         landscape: LiteratureLandscape,
         records: dict[str, PaperEvidence],
+        context: _GenerationContext,
     ) -> list[GapCandidate]:
-        result: list[GapCandidate] = []
-
         frequencies_by_dimension = {
-            dimension: [
-                item
-                for item in landscape.frequencies
-                if item.dimension == dimension
-                and item.count >= 1
-                and is_concrete_entity(item.value)
-            ]
-            for dimension_pair in _COMBINATION_PAIRS
-            for dimension in dimension_pair
+            dimension: sorted(
+                (
+                    item
+                    for item in landscape.frequencies
+                    if item.dimension == dimension
+                    and item.count >= 1
+                    and context.is_concrete(item.value)
+                ),
+                key=lambda item: (
+                    -int(context.basis_matches(self._basis(item, landscape.total_papers))),
+                    -item.count,
+                    item.value.casefold(),
+                ),
+            )[:_MAX_VALUES_PER_DIMENSION]
+            for dimension in _COMBINATION_DIMENSIONS
         }
 
-        for left_dimension, right_dimension in _COMBINATION_PAIRS:
-            left_items = frequencies_by_dimension.get(
-                left_dimension,
-                [],
-            )
-            right_items = frequencies_by_dimension.get(
-                right_dimension,
-                [],
-            )
+        available_dimensions = [
+            dimension
+            for dimension in _COMBINATION_DIMENSIONS
+            if frequencies_by_dimension[dimension]
+        ]
+        if (
+            "method_family" in available_dimensions
+            and "method" in available_dimensions
+        ):
+            # The family is the comparison-oriented normalized identity used
+            # by the landscape. Do not emit a second candidate for its raw
+            # method representation.
+            available_dimensions.remove("method")
 
-            if not left_items or not right_items:
+        idea_dimensions = {
+            dimension
+            for dimension in available_dimensions
+            if any(
+                context.basis_matches(item)
+                for item in frequencies_by_dimension[dimension]
+            )
+        }
+
+        # Try informative higher-order combinations first, then retain
+        # pairwise candidates as useful lower-order fallbacks.
+        dimension_sets = [
+            selected
+            for size in range(
+                min(5, len(available_dimensions)),
+                1,
+                -1,
+            )
+            for selected in combinations(available_dimensions, size)
+            if len(set(selected) & idea_dimensions) >= min(2, size)
+        ]
+
+        ranked_candidates: list[tuple[tuple[object, ...], GapCandidate]] = []
+        seen_combinations: set[tuple[tuple[str, str], ...]] = set()
+        candidate_budget = self.max_candidates * 8
+
+        for dimensions in dimension_sets:
+            if {
+                "method",
+                "method_family",
+            }.issubset(dimensions):
+                # These two fields are alternative representations of the
+                # same extracted method claim, not an informative joint
+                # hypothesis.
                 continue
+            value_lists = [frequencies_by_dimension[dimension] for dimension in dimensions]
 
-            observed = _observed_pairs(
-                landscape,
-                left_dimension,
-                right_dimension,
-            )
+            # The cartesian product is deliberately bounded per dimension.
+            # Only combinations structurally anchored in the decomposed idea
+            # are allowed through the relevance check below.
+            for selected_items in _product(*value_lists):
+                combination_key = tuple(
+                    (item.dimension, context.concept_key(item.value))
+                    for item in selected_items
+                )
 
-            for left in left_items:
-                for right in right_items:
-                    pair_key = (
-                        _concept_key(left.value),
-                        _concept_key(right.value),
-                    )
+                if combination_key in seen_combinations:
+                    continue
 
-                    if pair_key in observed:
-                        continue
+                seen_combinations.add(combination_key)
 
-                    basis = [
-                        self._basis(left, landscape.total_papers),
-                        self._basis(right, landscape.total_papers),
-                    ]
+                # This is the correctness guard: membership is evaluated on
+                # one paper's structured dimensions, not independent counts.
+                if context.observed_combination_keys(combination_key):
+                    continue
 
-                    if not _candidate_is_relevant(
-                        idea,
-                        basis,
+                # Validate against the prepared feature records before
+                # constructing Pydantic basis models. This is logically the
+                # same relevance decision used by _build(), but most rejected
+                # products never need a model allocation.
+                if not context.candidate_relevant(selected_items):
+                    continue
+
+                basis = [
+                    self._basis(item, landscape.total_papers)
+                    for item in selected_items
+                ]
+
+                support = [
+                    evidence_item
+                    for item in selected_items
+                    for evidence_item in self._collect_basis_evidence(
+                        item,
                         records,
-                    ):
-                        continue
-
-                    support = (
-                        self._collect_basis_evidence(
-                            left,
-                            records,
-                            role="contextual_support",
-                        )
-                        + self._collect_basis_evidence(
-                            right,
-                            records,
-                            role="contextual_support",
-                        )
+                        role="contextual_support",
+                        context=context,
                     )
+                ]
 
-                    title, description = _combination_text(
-                        left_dimension,
-                        left.value,
-                        right_dimension,
-                        right.value,
+                title, description = _combination_text_for_basis(basis)
+                candidate = self._build(
+                    title=title,
+                    description=description,
+                    category="combination",
+                    rationale=(
+                        "Each component is represented in the analyzed "
+                        "landscape, but this complete structured "
+                        "combination was not observed within one analyzed "
+                        "paper. Targeted verification is required."
+                    ),
+                    pattern_type="combination_gap",
+                    support=support,
+                    basis=basis,
+                    idea=idea,
+                    records=records,
+                    context=context,
+                    already_validated=True,
+                )
+
+                if candidate:
+                    idea_matches = sum(
+                        context.basis_matches(item)
+                        for item in basis
                     )
-
-                    candidate = self._build(
-                        title=title,
-                        description=description,
-                        category="combination",
-                        rationale=(
-                            "Both components occur in the analyzed "
-                            "landscape, but their joint occurrence was not "
-                            "observed in the structured combinations. "
-                            "Targeted verification is required."
+                    rank = (
+                        -len(basis),
+                        -idea_matches,
+                        -sum(item.count for item in basis),
+                        tuple(
+                            (item.dimension, item.value.casefold())
+                            for item in basis
                         ),
-                        pattern_type="combination_gap",
-                        support=support,
-                        basis=basis,
-                        idea=idea,
-                        records=records,
                     )
+                    ranked_candidates.append((rank, candidate))
 
-                    if candidate:
-                        result.append(candidate)
+                    if len(ranked_candidates) >= candidate_budget:
+                        break
 
-        return result
+            if len(ranked_candidates) >= candidate_budget:
+                break
+
+        return [
+            candidate
+            for _, candidate in sorted(
+                ranked_candidates,
+                key=lambda item: item[0],
+            )
+        ]
 
     # ------------------------------------------------------------------
     # Narrow dataset / validation setting
@@ -634,6 +1170,7 @@ class GapCandidateGenerator:
         idea: ResearchIdea,
         landscape: LiteratureLandscape,
         records: dict[str, PaperEvidence],
+        context: _GenerationContext,
     ) -> list[GapCandidate]:
         available_datasets = (
             landscape.total_papers
@@ -655,7 +1192,7 @@ class GapCandidateGenerator:
             for item in landscape.frequencies
             if item.dimension == "dataset_type"
             and item.count >= MIN_SUPPORT_PAPERS
-            and is_concrete_entity(item.value)
+            and context.is_concrete(item.value)
         ]
 
         if not settings:
@@ -689,6 +1226,7 @@ class GapCandidateGenerator:
             records,
             role="contextual_support",
             claim_text=dominant.value,
+            context=context,
         )
 
         candidate = self._build(
@@ -715,6 +1253,7 @@ class GapCandidateGenerator:
             ],
             idea=idea,
             records=records,
+            context=context,
         )
 
         return [candidate] if candidate else []
@@ -728,6 +1267,7 @@ class GapCandidateGenerator:
         idea: ResearchIdea,
         landscape: LiteratureLandscape,
         records: dict[str, PaperEvidence],
+        context: _GenerationContext,
     ) -> list[GapCandidate]:
         available_baselines = (
             landscape.total_papers
@@ -745,18 +1285,18 @@ class GapCandidateGenerator:
             for item in landscape.frequencies
             if item.dimension == "method_family"
             and item.count >= MIN_SUPPORT_PAPERS
-            and is_concrete_entity(item.value)
+            and context.is_concrete(item.value)
         ]
 
         if len(methods) < 2:
             return []
 
-        observed_pairs = _observed_comparison_pairs(records)
+        observed_pairs = _observed_comparison_pairs(records, context=context)
         result: list[GapCandidate] = []
 
         for left, right in combinations(methods, 2):
-            left_key = _concept_key(left.value)
-            right_key = _concept_key(right.value)
+            left_key = context.concept_key(left.value)
+            right_key = context.concept_key(right.value)
 
             if not left_key or not right_key or left_key == right_key:
                 continue
@@ -766,16 +1306,21 @@ class GapCandidateGenerator:
             if pair in observed_pairs:
                 continue
 
+            if not _comparison_pair_is_justified(
+                idea,
+                left.value,
+                right.value,
+                records,
+                context=context,
+            ):
+                continue
+
             basis = [
                 self._basis(left, landscape.total_papers),
                 self._basis(right, landscape.total_papers),
             ]
 
-            if not _candidate_is_relevant(
-                idea,
-                basis,
-                records,
-            ):
+            if not context.candidate_relevant(basis):
                 continue
 
             if not (
@@ -783,11 +1328,13 @@ class GapCandidateGenerator:
                     left.paper_ids,
                     idea,
                     records,
+                    context=context,
                 )
                 and _has_idea_context(
                     right.paper_ids,
                     idea,
                     records,
+                    context=context,
                 )
             ):
                 continue
@@ -797,21 +1344,25 @@ class GapCandidateGenerator:
                     left,
                     records,
                     role="contextual_support",
+                    context=context,
                 )
                 + self._collect_basis_evidence(
                     right,
                     records,
                     role="contextual_support",
+                    context=context,
                 )
             )
 
             left_supported = _support_contains_family(
                 support,
                 left.value,
+                context=context,
             )
             right_supported = _support_contains_family(
                 support,
                 right.value,
+                context=context,
             )
 
             if not (left_supported and right_supported):
@@ -830,15 +1381,18 @@ class GapCandidateGenerator:
                 ),
                 category="comparison",
                 rationale=(
-                    "The candidate is based on repeated independent presence "
-                    "of both method families and absence of an observed "
-                    "explicit comparison between them."
+                    "The candidate is anchored by an explicit comparison "
+                    "request or compatible structured comparison evidence, "
+                    "while no observed matched comparison covers both "
+                    "method families."
                 ),
                 pattern_type="missing_comparison",
                 support=support,
                 basis=basis,
                 idea=idea,
                 records=records,
+                context=context,
+                already_validated=True,
             )
 
             if candidate:
@@ -871,6 +1425,7 @@ class GapCandidateGenerator:
         records: dict[str, PaperEvidence],
         *,
         role: str,
+        context: _GenerationContext,
     ) -> list[GapEvidence]:
         return cls._collect_evidence(
             item.paper_ids,
@@ -879,6 +1434,7 @@ class GapCandidateGenerator:
             records,
             role=role,
             claim_text=item.value,
+            context=context,
         )
 
     @staticmethod
@@ -890,6 +1446,7 @@ class GapCandidateGenerator:
         *,
         role: str,
         claim_text: str,
+        context: _GenerationContext,
     ) -> list[GapEvidence]:
         result: list[GapEvidence] = []
 
@@ -899,15 +1456,12 @@ class GapCandidateGenerator:
             if record is None:
                 continue
 
-            items = _field_items(
-                record,
-                evidence_type,
-            )
+            items = context.field_items(record, evidence_type)
 
             items = [
                 item
                 for item in items
-                if is_concrete_entity(item.value)
+                if context.is_concrete(item.value)
             ]
 
             matched = [
@@ -917,6 +1471,7 @@ class GapCandidateGenerator:
                     evidence_type,
                     value,
                     item,
+                    context=context,
                 )
             ]
 
@@ -931,11 +1486,7 @@ class GapCandidateGenerator:
                 matched = items[:1]
 
             for item in matched[:2]:
-                if not validate_evidence_semantics(
-                    claim_text=claim_text,
-                    evidence_type=evidence_type,
-                    evidence=item,
-                ):
+                if not context.semantic_valid(claim_text, evidence_type, item):
                     continue
 
                 result.append(
@@ -949,7 +1500,7 @@ class GapCandidateGenerator:
                     )
                 )
 
-        return _unique_evidence(result)
+        return _unique_evidence(result, context=context)
 
     @staticmethod
     def _build(
@@ -963,8 +1514,10 @@ class GapCandidateGenerator:
         basis: list[LandscapeBasis],
         idea: ResearchIdea,
         records: dict[str, PaperEvidence],
+        context: _GenerationContext,
+        already_validated: bool = False,
     ) -> GapCandidate | None:
-        support = _unique_evidence(support)
+        support = _unique_evidence(support, context=context)
 
         support_ids = list(
             dict.fromkeys(
@@ -976,21 +1529,30 @@ class GapCandidateGenerator:
         if len(support_ids) < MIN_SUPPORT_PAPERS:
             return None
 
-        if not _candidate_is_relevant(
+        if not already_validated and not _candidate_is_relevant(
             idea,
             basis,
             records,
+            context=context,
         ):
             return None
 
         candidate_terms = _tokens(
             f"{title} {description}"
         )
-        idea_terms = _idea_terms(idea)
+        idea_terms = context.idea_terms
 
         relevance = (
             len(candidate_terms & idea_terms)
             / max(1, len(candidate_terms))
+        )
+
+        idea_anchor_score = (
+            sum(
+                context.basis_matches(item)
+                for item in basis
+            )
+            / max(1, len(basis))
         )
 
         return GapCandidate(
@@ -1006,6 +1568,10 @@ class GapCandidateGenerator:
             idea_relevance=min(
                 1.0,
                 relevance,
+            ),
+            idea_anchor_score=min(
+                1.0,
+                idea_anchor_score,
             ),
         )
 
@@ -1036,10 +1602,9 @@ def _field_items(
         "comparison": record.comparison_or_baseline,
         "baseline": record.comparison_or_baseline,
         "dataset": record.datasets,
-        "dataset_type": [
-            *record.datasets,
-            *record.population_or_setting,
-        ],
+        # Derived dataset characteristics retain dataset-role provenance;
+        # population/setting claims must not be relabeled as dataset types.
+        "dataset_type": record.datasets,
     }
 
     return list(
@@ -1054,7 +1619,12 @@ def _item_matches_basis(
     dimension: str,
     basis_value: str,
     item: EvidenceItem,
+    *,
+    context: _GenerationContext | None = None,
 ) -> bool:
+    if context is not None:
+        return context.item_matches_basis(dimension, basis_value, item)
+
     if dimension == "problem":
         return (
             normalize_problem(basis_value)
@@ -1151,6 +1721,68 @@ def _observed_pairs(
     return result
 
 
+def _paper_dimension_values(
+    paper,
+    dimension: str,
+) -> set[str]:
+    field_name = _COMBINATION_FIELDS.get(dimension)
+    if field_name is None:
+        return set()
+
+    return {
+        _concept_key(value)
+        for value in getattr(paper, field_name, [])
+        if is_concrete_entity(value)
+    }
+
+
+def _combination_observed_in_papers(
+    landscape: LiteratureLandscape,
+    basis: Sequence[LandscapeBasis],
+) -> bool:
+    """Return whether every basis value occurs in the same paper.
+
+    `LandscapeBasis.count` deliberately is not used here: independent global
+    frequencies cannot establish a joint observation.
+    """
+
+    if not basis:
+        return False
+
+    return any(
+        all(
+            _concept_key(item.value)
+            in _paper_dimension_values(paper, item.dimension)
+            for item in basis
+        )
+        for paper in landscape.papers
+    )
+
+
+def _combination_text_for_basis(
+    basis: Sequence[LandscapeBasis],
+) -> tuple[str, str]:
+    if len(basis) == 2:
+        left, right = basis
+        return _combination_text(
+            left.dimension,
+            left.value,
+            right.dimension,
+            right.value,
+        )
+
+    values = [item.value for item in basis]
+    joined = " + ".join(values)
+    return (
+        f"Combination of {joined}",
+        (
+            "The analyzed landscape contains each component, but this "
+            "complete structured combination was not observed within one "
+            "paper."
+        ),
+    )
+
+
 def _combination_text(
     left_dimension: str,
     left_value: str,
@@ -1236,23 +1868,30 @@ def _combination_text(
 
 def _observed_comparison_pairs(
     records: dict[str, PaperEvidence],
+    *,
+    context: _GenerationContext | None = None,
 ) -> set[frozenset[str]]:
     observed: set[frozenset[str]] = set()
 
     for record in records.values():
-        methods = {
-            normalize_method_family(item.value)
-            for item in record.method_or_intervention
-            if is_concrete_entity(item.value)
-        }
-        methods.discard("")
+        if context is not None:
+            prepared = context.records_by_id[record.paper_id]
+            methods = prepared.method_families
+            baselines = prepared.baseline_families
+        else:
+            methods = {
+                normalize_method_family(item.value)
+                for item in record.method_or_intervention
+                if is_concrete_entity(item.value)
+            }
+            methods.discard("")
 
-        baselines = {
-            normalize_method_family(item.value)
-            for item in record.comparison_or_baseline
-            if is_concrete_entity(item.value)
-        }
-        baselines.discard("")
+            baselines = {
+                normalize_method_family(item.value)
+                for item in record.comparison_or_baseline
+                if is_concrete_entity(item.value)
+            }
+            baselines.discard("")
 
         for method in methods:
             for baseline in baselines:
@@ -1291,6 +1930,81 @@ def _observed_comparison_pairs(
     return observed
 
 
+def _comparison_pair_is_justified(
+    idea: ResearchIdea,
+    left: str,
+    right: str,
+    records: dict[str, PaperEvidence],
+    *,
+    context: _GenerationContext | None = None,
+) -> bool:
+    """Require a positive structural reason to consider a missing comparison."""
+
+    left_key = context._normalize_basis(left, "method_family") if context else normalize_method_family(left)
+    right_key = context._normalize_basis(right, "method_family") if context else normalize_method_family(right)
+
+    # An explicit comparison facet is the strongest generic signal. It must
+    # mention both alternatives; independent mention in the idea is not enough.
+    for requested in idea.comparison:
+        text = f"{requested}"
+        if (
+            _method_text_contains_family(text, left_key, context=context)
+            and _method_text_contains_family(text, right_key, context=context)
+        ):
+            return True
+
+    # A structured method/baseline relationship in the same paper is positive
+    # comparison evidence even when the pair is represented in separate fields.
+    for record in records.values():
+        if context:
+            prepared = context.records_by_id[record.paper_id]
+            methods = prepared.method_families
+            baselines = prepared.baseline_families
+        else:
+            methods = [
+                normalize_method_family(item.value)
+                for item in record.method_or_intervention
+                if is_concrete_entity(item.value)
+            ]
+            baselines = [
+                normalize_method_family(item.value)
+                for item in record.comparison_or_baseline
+                if is_concrete_entity(item.value)
+            ]
+        if (
+            (left_key in methods and right_key in baselines)
+            or (right_key in methods and left_key in baselines)
+        ):
+            return True
+
+        # Some extractors retain a single comparison claim containing both
+        # alternatives. Require comparison language in that claim instead of
+        # interpreting co-occurrence as a relationship.
+        for item in record.comparison_or_baseline:
+            text = f"{item.value} {item.evidence_text}"
+            if (
+                _COMPARISON_LANGUAGE.search(text)
+                and _method_text_contains_family(text, left_key, context=context)
+                and _method_text_contains_family(text, right_key, context=context)
+            ):
+                return True
+
+    return False
+
+
+def _method_text_contains_family(
+    text: str,
+    family: str,
+    *,
+    context: _GenerationContext | None = None,
+) -> bool:
+    """Match an already normalized method family by conservative phrase terms."""
+
+    if context is not None:
+        return bool(family and context.tokens(text) >= context.tokens(family))
+    return bool(family and _tokens(text) >= _tokens(family))
+
+
 def _record_indicates_comparison(
     record: PaperEvidence,
 ) -> bool:
@@ -1321,16 +2035,15 @@ def _record_indicates_comparison(
 def _support_contains_family(
     support: Sequence[GapEvidence],
     family: str,
+    *,
+    context: _GenerationContext | None = None,
 ) -> bool:
-    target = normalize_method_family(
-        family
-    )
+    target = context._normalize_basis(family, "method_family") if context else normalize_method_family(family)
 
     return any(
-        normalize_method_family(item.value)
-        == target
+        (context._normalize_basis(item.value, "method_family") if context else normalize_method_family(item.value)) == target
         for item in support
-        if is_concrete_entity(item.value)
+        if (context.is_concrete(item.value) if context else is_concrete_entity(item.value))
     )
 
 
@@ -1343,8 +2056,13 @@ def _candidate_is_relevant(
     idea: ResearchIdea,
     basis: Sequence[LandscapeBasis],
     records: dict[str, PaperEvidence],
+    *,
+    context: _GenerationContext | None = None,
 ) -> bool:
     """Require a candidate to remain anchored to the user's research idea."""
+
+    if context is not None:
+        return context.candidate_relevant(basis)
 
     if not basis:
         return True
@@ -1387,7 +2105,12 @@ def _candidate_is_relevant(
 def _basis_matches_idea(
     item: LandscapeBasis,
     idea: ResearchIdea,
+    *,
+    context: _GenerationContext | None = None,
 ) -> bool:
+    if context is not None:
+        return context.basis_matches(item)
+
     value = item.value
 
     if item.dimension in {
@@ -1769,7 +2492,12 @@ def _has_idea_context(
     paper_ids: Iterable[str],
     idea: ResearchIdea,
     records: dict[str, PaperEvidence],
+    *,
+    context: _GenerationContext | None = None,
 ) -> bool:
+    if context is not None:
+        return context.has_idea_context(paper_ids)
+
     context_terms = _tokens(
         " ".join(
             [
@@ -1800,6 +2528,8 @@ def _has_idea_context(
 
 def _unique_evidence(
     items: Iterable[GapEvidence],
+    *,
+    context: _GenerationContext | None = None,
 ) -> list[GapEvidence]:
     result: list[GapEvidence] = []
     seen: set[
@@ -1815,9 +2545,7 @@ def _unique_evidence(
         key = (
             item.paper_id,
             item.evidence_type,
-            canonical_evidence_key(
-                item.value
-            ),
+            context.canonical(item.value) if context else canonical_evidence_key(item.value),
             item.role,
         )
 
@@ -1917,6 +2645,149 @@ def consolidate_candidates(
     )
 
 
+def _candidate_components(
+    candidate: GapCandidate,
+) -> frozenset[tuple[str, str]]:
+    return frozenset(
+        (
+            item.dimension,
+            _concept_key(item.value),
+        )
+        for item in candidate.landscape_basis
+        if _concept_key(item.value)
+    )
+
+
+def candidate_priority(
+    candidate: GapCandidate,
+    idea: ResearchIdea,
+) -> tuple[object, ...]:
+    """Return a deterministic, vocabulary-independent verification priority."""
+
+    basis = candidate.landscape_basis
+    idea_matches = sum(_basis_matches_idea(item, idea) for item in basis)
+    idea_anchor_score = candidate.idea_anchor_score
+    if idea_anchor_score <= 0.0 and basis:
+        idea_anchor_score = idea_matches / len(basis)
+    idea_specificity = sum(
+        (1.0 - item.prevalence)
+        for item in basis
+        if _basis_matches_idea(item, idea)
+    )
+    specificity = sum(
+        1.0 - item.prevalence
+        for item in basis
+    ) / max(1, len(basis))
+    generic_components = sum(
+        not is_concrete_entity(item.value)
+        for item in basis
+    )
+
+    return (
+        -idea_anchor_score,
+        -idea_specificity,
+        generic_components,
+        -specificity,
+        -len(basis),
+        -idea_matches,
+        -len(candidate.supporting_paper_ids),
+        candidate.pattern_type,
+        candidate.id,
+    )
+
+
+def candidate_anchor_score(
+    candidate: GapCandidate,
+    idea: ResearchIdea,
+) -> float:
+    """Return the deterministic structured anchor score for a candidate."""
+
+    if candidate.idea_anchor_score > 0.0:
+        return candidate.idea_anchor_score
+
+    basis = candidate.landscape_basis
+    if not basis:
+        return 0.0
+
+    return sum(
+        _basis_matches_idea(item, idea)
+        for item in basis
+    ) / len(basis)
+
+
+def prune_redundant_candidates(
+    candidates: Sequence[GapCandidate],
+    idea: ResearchIdea,
+    *,
+    overlap_threshold: float = 0.75,
+) -> tuple[list[GapCandidate], int]:
+    """Remove nested/high-overlap hypotheses before expensive verification."""
+
+    ordered = sorted(
+        candidates,
+        key=lambda item: candidate_priority(item, idea),
+    )
+    kept: list[GapCandidate] = []
+
+    for candidate in ordered:
+        components = _candidate_components(candidate)
+        if not components:
+            kept.append(candidate)
+            continue
+
+        anchor_score = candidate.idea_anchor_score
+        if anchor_score <= 0.0:
+            anchor_score = sum(
+                _basis_matches_idea(item, idea)
+                for item in candidate.landscape_basis
+            ) / max(1, len(candidate.landscape_basis))
+
+        # A multi-component combination that has no structured relationship
+        # to the original idea is an incidental landscape observation, not a
+        # candidate worth paying for at verification time.
+        if len(components) > 1 and anchor_score <= 0.0:
+            continue
+
+        candidate_matches = sum(
+            _basis_matches_idea(item, idea)
+            for item in candidate.landscape_basis
+        )
+        dominated = False
+
+        for stronger in kept:
+            if (
+                stronger.category != candidate.category
+                or stronger.pattern_type != candidate.pattern_type
+            ):
+                continue
+
+            stronger_components = _candidate_components(stronger)
+            if not stronger_components:
+                continue
+
+            overlap = len(components & stronger_components) / max(
+                1,
+                len(components | stronger_components),
+            )
+            stronger_matches = sum(
+                _basis_matches_idea(item, idea)
+                for item in stronger.landscape_basis
+            )
+
+            nested = (
+                components < stronger_components
+                and stronger_matches >= candidate_matches
+            )
+            if nested or overlap >= overlap_threshold:
+                dominated = True
+                break
+
+        if not dominated:
+            kept.append(candidate)
+
+    return kept, len(candidates) - len(kept)
+
+
 def _same_candidate(
     left: GapCandidate,
     right: GapCandidate,
@@ -1926,6 +2797,21 @@ def _same_candidate(
         or left.pattern_type != right.pattern_type
     ):
         return False
+
+    left_basis = {
+        (item.dimension, _concept_key(item.value))
+        for item in left.landscape_basis
+    }
+    right_basis = {
+        (item.dimension, _concept_key(item.value))
+        for item in right.landscape_basis
+    }
+
+    # Distinct structured combinations must remain distinct even when they
+    # draw support from the same papers. Shared provenance alone is not
+    # semantic duplication.
+    if left_basis or right_basis:
+        return left_basis == right_basis
 
     left_terms = _tokens(
         f"{left.title} {left.description}"
@@ -2035,7 +2921,9 @@ def _unique_basis(
 
 __all__ = [
     "GapCandidateGenerator",
+    "candidate_priority",
     "consolidate_candidates",
     "is_concrete_entity",
+    "prune_redundant_candidates",
     "validate_evidence_semantics",
 ]

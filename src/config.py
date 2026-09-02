@@ -62,6 +62,7 @@ class OpenAlexSettings:
     max_workers: int
     timeout_seconds: float
     max_retries: int
+    retrieval_cache_ttl_seconds: float
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,8 @@ class Settings:
     openalex: OpenAlexSettings
     ranking: RankingSettings
     evidence_limit: int
+    extraction_workers: int
+    extraction_batch_size: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -104,6 +107,19 @@ class Settings:
             raise ConfigurationError("weights cannot both be zero")
         if not 0 <= constraint_weight <= 1:
             raise ConfigurationError("RESEARCH_GAP_CONSTRAINT_WEIGHT must be between 0 and 1")
+        extraction_workers = integer("RESEARCH_GAP_EXTRACTION_WORKERS", 4)
+        if extraction_workers <= 0:
+            raise ConfigurationError("RESEARCH_GAP_EXTRACTION_WORKERS must be positive")
+        extraction_batch_size = integer("RESEARCH_GAP_EXTRACTION_BATCH_SIZE", 3)
+        if extraction_batch_size <= 0:
+            raise ConfigurationError("RESEARCH_GAP_EXTRACTION_BATCH_SIZE must be positive")
+        retrieval_cache_ttl_seconds = number(
+            "RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS", 6 * 60 * 60
+        )
+        if retrieval_cache_ttl_seconds <= 0:
+            raise ConfigurationError(
+                "RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS must be positive"
+            )
         return cls(
             openai_api_key=openai_api_key(), openai_model=openai_model(),
             extraction_model=openai_extraction_model(),
@@ -115,6 +131,7 @@ class Settings:
                 max_workers=integer("RESEARCH_GAP_RETRIEVAL_WORKERS", 4),
                 timeout_seconds=number("OPENALEX_TIMEOUT_SECONDS", 20.0),
                 max_retries=integer("OPENALEX_MAX_RETRIES", 2),
+                retrieval_cache_ttl_seconds=retrieval_cache_ttl_seconds,
             ),
             ranking=RankingSettings(
                 embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
@@ -124,6 +141,8 @@ class Settings:
                 semantic_fallback=os.getenv("RESEARCH_GAP_SEMANTIC_FALLBACK", "lexical"),
             ),
             evidence_limit=integer("RESEARCH_GAP_EVIDENCE_LIMIT", 10),
+            extraction_workers=extraction_workers,
+            extraction_batch_size=extraction_batch_size,
         )
 
 
@@ -154,4 +173,9 @@ SEMANTIC_FALLBACK = "lexical"
 # Cache
 # ------------------------------------------------------------------
 
-CACHE_DIR = PROJECT_ROOT / "data" / "cache"
+CACHE_DIR = Path(
+    os.getenv(
+        "RESEARCH_GAP_CACHE_DIR",
+        str(PROJECT_ROOT / "data" / "cache"),
+    )
+).expanduser()

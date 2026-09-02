@@ -116,6 +116,36 @@ class UniquePaperClient:
 
 
 class MultiQueryRetrieverTest(unittest.TestCase):
+    def test_same_run_permanent_http400_failure_is_memoized(self):
+        class InvalidQueryClient:
+            provider_name = "fake"
+
+            def __init__(self):
+                self.calls = 0
+
+            def search(self, request):
+                self.calls += 1
+                raise OpenAlexError("HTTP 400: invalid query syntax")
+
+        client = InvalidQueryClient()
+        retriever = MultiQueryRetriever(client, max_candidates=20)
+        request = RetrievalRequest(
+            query=query("invalid query"),
+            mode=RetrievalMode.BROAD_LEXICAL,
+            limit=5,
+        )
+
+        with self.assertRaises(OpenAlexError):
+            retriever._search_cached(request)
+        with self.assertRaises(OpenAlexError):
+            retriever._search_cached(request)
+
+        self.assertEqual(client.calls, 1)
+        self.assertEqual(
+            retriever.metrics_snapshot()["retrieval_failure_cache_hits"],
+            1,
+        )
+
     def test_builds_expected_hybrid_routes(self) -> None:
         client = UniquePaperClient()
 

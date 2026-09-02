@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
+import os
 import logging
 import re
+from time import perf_counter
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
+from threading import RLock
 from typing import Any, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.config import openai_api_key, openai_extraction_model
+from src.config import CACHE_DIR
 from src.models.paper import Paper
 
 from .evidence import EvidenceItem, LimitationEvidence, PaperEvidence, StudyType, canonical_evidence_key
+from .store import EvidenceStore
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+# Increment when the structured extraction contract or its compatibility
+# assumptions change. Old cache rows remain harmless misses after a bump.
+EVIDENCE_SCHEMA_VERSION = 4
 
 
 class PaperExtractionError(RuntimeError):
@@ -50,6 +62,13 @@ class _ExtractionResult(BaseModel):
     comparison_or_baseline: list[EvidenceItem] = Field(
         default_factory=list,
         description="Methods or systems explicitly compared with or evaluated against the focal method.",
+    )
+    data_or_modality: list[EvidenceItem] = Field(
+        default_factory=list,
+        description=(
+            "Input data, measurements, signals, sensing modalities, source data, "
+            "or input representations explicitly used by the study."
+        ),
     )
     datasets: list[EvidenceItem] = Field(
         default_factory=list,
@@ -89,6 +108,19 @@ class _ExtractionResult(BaseModel):
     extraction_confidence: float = Field(ge=0.0, le=1.0)
 
 
+class _BatchPaperExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    paper_id: str = Field(min_length=1)
+    evidence: _ExtractionResult
+
+
+class _BatchExtractionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    papers: list[_BatchPaperExtraction]
+
+
 _INSTRUCTIONS = """
 Extract structured research evidence ONLY from the supplied title and abstract.
 
@@ -98,9 +130,34 @@ Do not invent evidence.
 
 For every claim:
 - value must be concise;
+- canonical_value must be a concise, facet-scoped normalized semantic concept
+  for the claim, not a summary of the whole sentence;
+- equivalent surface forms must use the same canonical_value, while distinct
+  concepts and meaningful qualifiers must remain distinct;
 - evidence_text must be copied directly from the title or abstract;
 - source must be exactly "title" or "abstract";
 - confidence describes extraction confidence, not scientific truth.
+
+CANONICAL CONCEPTS
+
+For every extracted claim, provide canonical_value using only the supplied
+title and abstract. Canonical values are generic semantic identities for
+matching and grouping, not a domain taxonomy. Preserve the claim's important
+qualifiers in value and evidence_text, but do not copy unrelated facet context
+into canonical_value. For example, a data identity should describe the core
+data or modality rather than its source/target role, label status, or sample
+count when those are separate claims. A problem identity should describe the
+core task and subject rather than repeating the method, modality, sampling
+regime, or other facet represented elsewhere. A constraint identity should
+describe the core restriction rather than the full experiment sentence.
+Use a short noun phrase, not a multi-clause summary.
+
+DATA OR MODALITY
+
+Extract input data, measurements, signals, sensing modalities, source data,
+or input representations explicitly used by the study into data_or_modality.
+Do not infer a modality merely because it is common for the method or domain.
+Do not put a modality in method_or_intervention or domain.
 
 METHODS
 
@@ -250,6 +307,16 @@ other.
 """.strip()
 
 
+_BATCH_INSTRUCTIONS = _INSTRUCTIONS + """
+
+The input contains several papers. Return exactly one `papers` item for each
+supplied paper identifier when possible. The paper_id must be copied exactly
+from the input. Never use evidence from one paper in another paper's item.
+If a paper cannot be extracted reliably, omit only that paper so it can be
+retried individually; valid sibling items must still be returned.
+"""
+
+
 _GENERIC_DATASET_VALUES = {
     "dataset",
     "datasets",
@@ -321,17 +388,49 @@ class PaperExtractor:
         model: str | None = None,
         max_output_tokens: int = 2400,
         evidence_limit: int = 10,
+        max_workers: int = max(1, (os.cpu_count() or 2) // 2),
+        cache_path: str | Path | None = None,
+        batch_size: int = 1,
+        max_batch_input_chars: int = 24000,
     ) -> None:
-        if max_output_tokens <= 0 or evidence_limit < 0:
-            raise ValueError("max_output_tokens must be positive and evidence_limit non-negative")
+        if (
+            max_output_tokens <= 0
+            or evidence_limit < 0
+            or max_workers <= 0
+            or batch_size <= 0
+            or max_batch_input_chars <= 0
+        ):
+            raise ValueError(
+                "max_output_tokens must be positive, evidence_limit non-negative, "
+                "max_workers and batch limits must be positive"
+            )
 
         self.model = model or openai_extraction_model()
         self.max_output_tokens = max_output_tokens
         self.evidence_limit = evidence_limit
+        self.max_workers = max_workers
+        self.batch_size = batch_size
+        self.max_batch_input_chars = max_batch_input_chars
         self.failures: list[PaperExtractionError] = []
+        self._cache_lock = RLock()
+        self._cache: dict[tuple[str, str, str, str], PaperEvidence] = {}
+        self._inflight: dict[tuple[str, str, str, str], Future[PaperEvidence]] = {}
+        self._metrics: dict[str, int] = {
+            "evidence_requested": 0,
+            "memory_cache_hits": 0,
+            "persistent_cache_hits": 0,
+            "new_evidence_extractions": 0,
+            "openai_extraction_requests": 0,
+        }
+        self._timings: dict[str, float] = {
+            "initial_evidence_extraction_api_wait": 0.0,
+        }
 
         if client is not None:
             self.client = client
+            # Unit-test fakes stay isolated by default. Supplying cache_path
+            # explicitly enables the same persistent behavior for them.
+            self.evidence_store = EvidenceStore(cache_path)
             return
 
         key = api_key or openai_api_key()
@@ -344,8 +443,47 @@ class PaperExtractor:
             raise PaperExtractionError("The OpenAI package is required for evidence extraction.") from exc
 
         self.client = OpenAI(api_key=key)
+        self.evidence_store = EvidenceStore(
+            cache_path if cache_path is not None else CACHE_DIR / "research_gap.sqlite3"
+        )
 
-    def extract(self, paper: Paper) -> PaperEvidence:
+    @staticmethod
+    def _cache_key(
+        paper: Paper,
+        model: str,
+    ) -> tuple[str, str, str, str]:
+        return (
+            paper.id,
+            EvidenceStore.content_hash(paper),
+            model,
+            str(EVIDENCE_SCHEMA_VERSION),
+        )
+
+    def metrics_snapshot(self) -> dict[str, int]:
+        """Return thread-safe cumulative work counters."""
+
+        with self._cache_lock:
+            return dict(self._metrics)
+
+    def timings_snapshot(self) -> dict[str, float]:
+        with self._cache_lock:
+            return dict(self._timings)
+
+    def get_or_extract(self, paper: Paper) -> PaperEvidence:
+        """Shared evidence access point for every pipeline stage."""
+
+        return self.extract(paper)
+
+    def get_many_or_extract(
+        self,
+        papers: Sequence[Paper],
+        limit: int | None = None,
+    ) -> list[PaperEvidence]:
+        """Get or extract papers in deterministic input order."""
+
+        return self.extract_many(papers, limit=limit)
+
+    def _extract_uncached(self, paper: Paper) -> PaperEvidence:
         title = paper.title.strip()
         abstract = paper.abstract.strip() if paper.abstract else None
 
@@ -357,7 +495,13 @@ class PaperExtractor:
             source += f"\n\nAbstract:\n{abstract}"
 
         try:
+            with self._cache_lock:
+                self._metrics["openai_extraction_requests"] += 1
+            started = perf_counter()
             response = self.client.responses.parse(
+                # Count provider requests, rather than papers, for work
+                # accounting. The existing one-paper request contract stays
+                # unchanged and remains the reliable fallback.
                 model=self.model,
                 reasoning={"effort": "low"},
                 store=False,
@@ -366,6 +510,10 @@ class PaperExtractor:
                 input=source,
                 text_format=_ExtractionResult,
             )
+            with self._cache_lock:
+                self._timings["initial_evidence_extraction_api_wait"] += (
+                    perf_counter() - started
+                )
 
             payload = getattr(response, "output_parsed", None)
             if not isinstance(payload, _ExtractionResult):
@@ -380,6 +528,199 @@ class PaperExtractor:
         except Exception as exc:
             raise PaperExtractionError(f"Evidence extraction failed: {exc}") from exc
 
+    def _extract_uncached_batch(
+        self,
+        papers: Sequence[Paper],
+    ) -> dict[str, PaperEvidence]:
+        """Extract a bounded batch and map results by unambiguous cache keys."""
+
+        inputs: list[str] = []
+        request_ids: dict[str, tuple[str, Paper]] = {}
+        for paper in papers:
+            cache_key = self._cache_key(paper, self.model)
+            request_id = f"{paper.id}::{cache_key[1]}"
+            title = paper.title.strip()
+            if not title:
+                raise PaperExtractionError(
+                    f"{paper.id}: Paper title is required for evidence extraction."
+                )
+            source = f"Paper ID: {request_id}\nTitle:\n{title}"
+            if paper.abstract:
+                source += f"\n\nAbstract:\n{paper.abstract.strip()}"
+            inputs.append(source)
+            request_ids[request_id] = (cache_key[1], paper)
+
+        try:
+            with self._cache_lock:
+                self._metrics["openai_extraction_requests"] += 1
+            started = perf_counter()
+            response = self.client.responses.parse(
+                model=self.model,
+                reasoning={"effort": "low"},
+                store=False,
+                max_output_tokens=self.max_output_tokens * len(papers),
+                instructions=_BATCH_INSTRUCTIONS,
+                input="\n\n--- NEXT PAPER ---\n\n".join(inputs),
+                text_format=_BatchExtractionResult,
+            )
+            with self._cache_lock:
+                self._timings["initial_evidence_extraction_api_wait"] += (
+                    perf_counter() - started
+                )
+            payload = getattr(response, "output_parsed", None)
+            if not isinstance(payload, _BatchExtractionResult):
+                raise PaperExtractionError(
+                    "OpenAI returned no parsed batch evidence payload."
+                )
+        except PaperExtractionError:
+            raise
+        except (ValidationError, TypeError, ValueError) as exc:
+            raise PaperExtractionError(f"Invalid batch evidence response: {exc}") from exc
+        except Exception as exc:
+            raise PaperExtractionError(f"Batch evidence extraction failed: {exc}") from exc
+
+        result: dict[str, PaperEvidence] = {}
+        seen_request_ids: set[str] = set()
+        for item in payload.papers:
+            mapping = request_ids.get(item.paper_id)
+            if mapping is None or item.paper_id in seen_request_ids:
+                continue
+            seen_request_ids.add(item.paper_id)
+            content_hash, paper = mapping
+            try:
+                result[content_hash] = _to_evidence(paper, item.evidence)
+            except (PaperExtractionError, TypeError, ValueError):
+                # Only this member is invalid; its sibling results remain
+                # eligible for completion and caching.
+                continue
+        return result
+
+    def _batch_item_input(self, paper: Paper) -> str:
+        request_id = f"{paper.id}::{EvidenceStore.content_hash(paper)}"
+        title = paper.title.strip()
+        source = f"Paper ID: {request_id}\nTitle:\n{title}"
+        if paper.abstract:
+            source += f"\n\nAbstract:\n{paper.abstract.strip()}"
+        return source
+
+    def _pack_batches(
+        self,
+        owners: Sequence[tuple[Paper, tuple[str, str, str, str], Future[PaperEvidence]]],
+    ) -> list[list[tuple[Paper, tuple[str, str, str, str], Future[PaperEvidence]]]]:
+        """Pack by both configured member count and estimated input size."""
+
+        batches: list[list[tuple[Paper, tuple[str, str, str, str], Future[PaperEvidence]]]] = []
+        current: list[tuple[Paper, tuple[str, str, str, str], Future[PaperEvidence]]] = []
+        current_chars = 0
+        separator_chars = len("\n\n--- NEXT PAPER ---\n\n")
+
+        for owner in owners:
+            item_chars = len(self._batch_item_input(owner[0]))
+            proposed = current_chars + (separator_chars if current else 0) + item_chars
+            if current and (
+                len(current) >= self.batch_size
+                or proposed > self.max_batch_input_chars
+            ):
+                batches.append(current)
+                current = []
+                current_chars = 0
+
+            current.append(owner)
+            current_chars += item_chars + (separator_chars if len(current) > 1 else 0)
+
+        if current:
+            batches.append(current)
+        return batches
+
+    def _reserve(
+        self,
+        paper: Paper,
+    ) -> tuple[tuple[str, str, str, str], PaperEvidence | None, Future[PaperEvidence] | None, bool]:
+        cache_key = self._cache_key(paper, self.model)
+        content_hash = cache_key[1]
+        with self._cache_lock:
+            self._metrics["evidence_requested"] += 1
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                self._metrics["memory_cache_hits"] += 1
+                return cache_key, cached, None, False
+
+            persistent = self.evidence_store.get(
+                paper_id=paper.id,
+                content_hash=content_hash,
+                model=self.model,
+                schema_version=EVIDENCE_SCHEMA_VERSION,
+            )
+            if persistent is not None:
+                self._cache[cache_key] = persistent
+                self._metrics["persistent_cache_hits"] += 1
+                return cache_key, persistent, None, False
+
+            pending = self._inflight.get(cache_key)
+            if pending is not None:
+                return cache_key, None, pending, False
+
+            pending = Future()
+            self._inflight[cache_key] = pending
+            return cache_key, None, pending, True
+
+    def _finish_success(
+        self,
+        cache_key: tuple[str, str, str, str],
+        result: PaperEvidence,
+        pending: Future[PaperEvidence],
+    ) -> None:
+        with self._cache_lock:
+            self._cache[cache_key] = result
+            self._metrics["new_evidence_extractions"] += 1
+            try:
+                self.evidence_store.put(
+                    result,
+                    content_hash=cache_key[1],
+                    model=self.model,
+                    schema_version=EVIDENCE_SCHEMA_VERSION,
+                )
+            except Exception as exc:
+                LOGGER.warning(
+                    "evidence cache write failed paper=%s error=%s",
+                    result.paper_id,
+                    exc,
+                )
+            self._inflight.pop(cache_key, None)
+        pending.set_result(result)
+
+    def _finish_failure(
+        self,
+        cache_key: tuple[str, str, str, str],
+        error: BaseException,
+        pending: Future[PaperEvidence],
+    ) -> None:
+        with self._cache_lock:
+            self._inflight.pop(cache_key, None)
+        pending.set_exception(error)
+
+    def extract(self, paper: Paper) -> PaperEvidence:
+        """Extract one paper, reusing completed or in-progress work safely."""
+
+        cache_key, cached, pending, is_owner = self._reserve(paper)
+        if cached is not None:
+            return cached
+
+        if not is_owner:
+            assert pending is not None
+            return pending.result()
+
+        try:
+            result = self._extract_uncached(paper)
+        except BaseException as exc:
+            assert pending is not None
+            self._finish_failure(cache_key, exc, pending)
+            raise
+        else:
+            assert pending is not None
+            self._finish_success(cache_key, result, pending)
+            return result
+
     def extract_many(
         self,
         papers: Sequence[Paper],
@@ -391,15 +732,86 @@ class PaperExtractor:
             raise ValueError("limit must be non-negative")
 
         selected = list(papers)[: self.evidence_limit if limit is None else limit]
+
+        if self.batch_size > 1 and len(selected) > 1:
+            return self._extract_many_batched(selected)
+
         results: list[PaperEvidence] = []
 
-        for paper in selected:
-            try:
-                results.append(self.extract(paper))
-            except PaperExtractionError as exc:
-                self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
+        with ThreadPoolExecutor(
+            max_workers=min(self.max_workers, len(selected) or 1),
+            thread_name_prefix="paper-extraction",
+        ) as executor:
+            futures = [executor.submit(self.extract, paper) for paper in selected]
+
+            for paper, future in zip(selected, futures):
+                try:
+                    results.append(future.result())
+                except PaperExtractionError as exc:
+                    self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
 
         return results
+
+    def _extract_many_batched(
+        self,
+        selected: Sequence[Paper],
+    ) -> list[PaperEvidence]:
+        entries: list[PaperEvidence | Future[PaperEvidence]] = []
+        owners: list[tuple[Paper, tuple[str, str, str, str], Future[PaperEvidence]]] = []
+
+        for paper in selected:
+            cache_key, cached, pending, is_owner = self._reserve(paper)
+            if cached is not None:
+                entries.append(cached)
+            else:
+                assert pending is not None
+                entries.append(pending)
+                if is_owner:
+                    owners.append((paper, cache_key, pending))
+
+        batches = self._pack_batches(owners)
+        if batches:
+            with ThreadPoolExecutor(
+                max_workers=min(self.max_workers, len(batches)),
+                thread_name_prefix="paper-extraction-batch",
+            ) as executor:
+                futures = [executor.submit(self._run_batch, batch) for batch in batches]
+                for future in futures:
+                    future.result()
+
+        results: list[PaperEvidence] = []
+        for paper, entry in zip(selected, entries):
+            try:
+                result = entry.result() if isinstance(entry, Future) else entry
+                results.append(result)
+            except PaperExtractionError as exc:
+                self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
+        return results
+
+    def _run_batch(
+        self,
+        batch: Sequence[tuple[Paper, tuple[str, str, str, str], Future[PaperEvidence]]],
+    ) -> None:
+        papers = [item[0] for item in batch]
+        try:
+            extracted = self._extract_uncached_batch(papers)
+        except BaseException:
+            extracted = {}
+
+        for paper, cache_key, pending in batch:
+            result = extracted.get(cache_key[1])
+            if result is not None:
+                self._finish_success(cache_key, result, pending)
+                continue
+
+            # A failed batch member is retried alone. Other valid members have
+            # already been completed and cached, so they are never re-extracted.
+            try:
+                result = self._extract_uncached(paper)
+            except BaseException as exc:
+                self._finish_failure(cache_key, exc, pending)
+            else:
+                self._finish_success(cache_key, result, pending)
 
 
 def _normalize(text: str) -> str:
@@ -435,7 +847,7 @@ def _clean_items(
         if not _is_supported(item, paper):
             continue
 
-        key = canonical_evidence_key(item.value)
+        key = canonical_evidence_key(item.canonical_value or item.value)
 
         if drop_generic_datasets and key in _GENERIC_DATASET_KEYS:
             continue
@@ -642,6 +1054,7 @@ def _to_evidence(
     limitations = [
         LimitationEvidence(
             value=item.value,
+            canonical_value=item.canonical_value,
             evidence_text=item.evidence_text,
             source=item.source,
             confidence=item.confidence,
@@ -700,6 +1113,10 @@ def _to_evidence(
         ),
         method_or_intervention=methods,
         comparison_or_baseline=comparisons,
+        data_or_modality=_clean_items(
+            payload.data_or_modality,
+            paper,
+        ),
         datasets=_clean_items(
             payload.datasets,
             paper,

@@ -70,6 +70,7 @@ def valid_payload() -> dict[str, Any]:
         "problem": ["RAG"],
         "population": [],
         "intervention_or_method": ["LoRA"],
+        "data_or_modality": [],
         "comparison": [],
         "outcomes": [],
         "domain": [],
@@ -82,6 +83,14 @@ def valid_payload() -> dict[str, Any]:
                     "retrieval augmented generation",
                 ],
             }
+        ],
+        "canonical_facets": [
+            {
+                "facet": "intervention_or_method",
+                "values": [
+                    {"value": "LoRA", "canonical_value": "low-rank adaptation"},
+                ],
+            },
         ],
     }
 
@@ -106,6 +115,11 @@ class OpenAIDecomposerTest(unittest.TestCase):
         self.assertEqual(
             result.intervention_or_method,
             ["LoRA"],
+        )
+
+        self.assertEqual(
+            result.data_or_modality,
+            [],
         )
 
         self.assertEqual(

@@ -1,15 +1,20 @@
 import unittest
+from tempfile import TemporaryDirectory
+from threading import Barrier, Lock
+from unittest.mock import patch
 from types import SimpleNamespace
 
 from pydantic import ValidationError
 
 from src.extraction.evidence import EvidenceItem, PaperEvidence, canonical_evidence_key
 from src.extraction.paper_extractor import (
+    EVIDENCE_SCHEMA_VERSION,
     PaperExtractor,
     _ExtractionResult,
     _LimitationClaim,
     _MethodClaim,
 )
+import src.extraction.paper_extractor as paper_extractor_module
 from src.models.paper import Paper
 
 
@@ -21,6 +26,35 @@ class FakeResponses:
     def parse(self, **kwargs):
         self.inputs.append(kwargs["input"])
         return SimpleNamespace(output_parsed=self.payload)
+
+
+class ConcurrentResponses:
+    def __init__(self, payload, *, barrier=None, failures=None):
+        self.payload = payload
+        self.barrier = barrier
+        self.failures = set(failures or ())
+        self.inputs = []
+        self.max_active = 0
+        self._active = 0
+        self._lock = Lock()
+
+    def parse(self, **kwargs):
+        source = kwargs["input"]
+        title = source.splitlines()[1]
+        with self._lock:
+            self.inputs.append(source)
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+
+        try:
+            if self.barrier is not None:
+                self.barrier.wait(timeout=2)
+            if title in self.failures:
+                raise RuntimeError("boom")
+            return SimpleNamespace(output_parsed=self.payload)
+        finally:
+            with self._lock:
+                self._active -= 1
 
 
 class EvidenceTest(unittest.TestCase):
@@ -56,6 +90,124 @@ class EvidenceTest(unittest.TestCase):
         results = extractor.extract_many(papers)
         self.assertEqual([item.paper_id for item in results], ["a"])
         self.assertEqual(len(responses.inputs), 1)
+
+    def test_extract_many_is_bounded_concurrent_and_preserves_input_order(self):
+        responses = ConcurrentResponses(
+            _ExtractionResult(extraction_confidence=.5),
+            barrier=Barrier(3),
+        )
+        extractor = PaperExtractor(
+            client=SimpleNamespace(responses=responses),
+            max_workers=3,
+        )
+        papers = [
+            Paper(id="a", title="A"),
+            Paper(id="b", title="B"),
+            Paper(id="c", title="C"),
+        ]
+
+        results = extractor.extract_many(papers)
+
+        self.assertEqual([item.paper_id for item in results], ["a", "b", "c"])
+        self.assertEqual(len(responses.inputs), 3)
+        self.assertGreaterEqual(responses.max_active, 2)
+
+    def test_duplicate_papers_share_one_in_flight_extraction(self):
+        responses = FakeResponses(_ExtractionResult(extraction_confidence=.5))
+        extractor = PaperExtractor(
+            client=SimpleNamespace(responses=responses),
+            max_workers=2,
+        )
+        duplicate = Paper(id="a", title="A")
+
+        results = extractor.extract_many([duplicate, duplicate])
+
+        self.assertEqual([item.paper_id for item in results], ["a", "a"])
+        self.assertEqual(len(responses.inputs), 1)
+
+    def test_cached_evidence_is_reused_but_changed_abstract_is_not(self):
+        responses = FakeResponses(_ExtractionResult(extraction_confidence=.5))
+        extractor = PaperExtractor(client=SimpleNamespace(responses=responses))
+        paper = Paper(id="a", title="A", abstract="First abstract")
+
+        first = extractor.extract_many([paper])[0]
+        second = extractor.extract_many([paper])[0]
+        paper.abstract = "Changed abstract"
+        third = extractor.extract(paper)
+
+        self.assertIs(first, second)
+        self.assertIsNot(second, third)
+        self.assertEqual(len(responses.inputs), 2)
+
+    def test_persistent_evidence_cache_reuses_across_instances_and_versions(self):
+        paper = Paper(id="a", title="A", abstract="Stable abstract")
+
+        with TemporaryDirectory() as directory:
+            first_responses = FakeResponses(_ExtractionResult(extraction_confidence=.5))
+            first = PaperExtractor(
+                client=SimpleNamespace(responses=first_responses),
+                cache_path=f"{directory}/evidence.sqlite3",
+                model="model-a",
+            )
+            first.extract(paper)
+
+            second_responses = FakeResponses(_ExtractionResult(extraction_confidence=.5))
+            second = PaperExtractor(
+                client=SimpleNamespace(responses=second_responses),
+                cache_path=f"{directory}/evidence.sqlite3",
+                model="model-a",
+            )
+            second.extract(paper)
+            self.assertEqual(second_responses.inputs, [])
+            self.assertEqual(second.metrics_snapshot()["persistent_cache_hits"], 1)
+
+            changed = paper.model_copy(update={"abstract": "Changed abstract"})
+            second.extract(changed)
+            self.assertEqual(len(second_responses.inputs), 1)
+
+            other_model = PaperExtractor(
+                client=SimpleNamespace(responses=FakeResponses(_ExtractionResult(extraction_confidence=.5))),
+                cache_path=f"{directory}/evidence.sqlite3",
+                model="model-b",
+            )
+            other_model.extract(paper)
+            self.assertEqual(other_model.metrics_snapshot()["persistent_cache_hits"], 0)
+
+            with patch.object(
+                paper_extractor_module,
+                "EVIDENCE_SCHEMA_VERSION",
+                EVIDENCE_SCHEMA_VERSION + 1,
+            ):
+                versioned_responses = FakeResponses(_ExtractionResult(extraction_confidence=.5))
+                versioned = PaperExtractor(
+                    client=SimpleNamespace(responses=versioned_responses),
+                    cache_path=f"{directory}/evidence.sqlite3",
+                    model="model-a",
+                )
+                versioned.extract(paper)
+                self.assertEqual(len(versioned_responses.inputs), 1)
+
+    def test_parallel_failures_are_recorded_without_dropping_successes(self):
+        responses = ConcurrentResponses(
+            _ExtractionResult(extraction_confidence=.5),
+            failures={"B"},
+        )
+        extractor = PaperExtractor(
+            client=SimpleNamespace(responses=responses),
+            max_workers=3,
+        )
+
+        results = extractor.extract_many(
+            [
+                Paper(id="a", title="A"),
+                Paper(id="b", title="B"),
+                Paper(id="c", title="C"),
+            ]
+        )
+
+        self.assertEqual([item.paper_id for item in results], ["a", "c"])
+        self.assertEqual(len(extractor.failures), 1)
+        self.assertIn("b: Evidence extraction failed: boom", str(extractor.failures[0]))
 
     def test_method_roles_separate_primary_and_comparison_models(self):
         claims = [

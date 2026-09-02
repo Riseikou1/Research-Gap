@@ -1,0 +1,285 @@
+Found 100 unique candidate papers.
+Showing top 20 ranked results for: graph neural networks for predicting battery degradation across different temperatures with limited labeled cycle data and transfer between battery chemistries (hybrid)
+
+1. Battery lifetime prediction across diverse ageing conditions with inter-cell deep learning
+   Authors: Han Zhang, Yuqi Li, Shun Zheng, Ziheng Lu, Xiaofan Gui, Wei Xu, Jiang Bian
+   Year: 2025
+   Final relevance: 1.000
+   Citations: 116
+   Link: https://doi.org/10.1038/s42256-024-00972-x
+   Abstract: Abstract Accurately predicting battery lifetime in early cycles holds tremendous value in real-world applications. However, this task poses significant challenges due to diverse factors influencing complex battery capacity degradation, such as cycling protocols, ambient temperatures and electrode materials. Moreover, cycling under specific conditions is both resource-intensive and time-consuming. Existing predictive models, primarily developed and validated within a restricted set of ageing conditions, thus raise doubts regarding their extensive applicability. Here we introduce BatLiNet, a deep learning framework tailored to predict battery lifetime reliably across a variety of ageing conditions. The distinctive design is integrating an inter-cell learning mechanism to predict the lifetime differences between two battery cells. This mechanism, when combined with conventional single-cell learning, enhances the stability of lifetime predictions for a target cell under varied ageing conditions. Our experimental results, derived from a broad spectrum of ageing conditions, demonstrate BatLiNet’s superior accuracy and robustness compared to existing models. BatLiNet also exhibits transferring capabilities across different battery chemistries, benefitting scenarios with limited resources. We expect this study could promote exploration of cross-cell insights and facilitate battery research across comprehensive ageing factors.
+
+2. Investigating explainable transfer learning for battery lifetime prediction under state transitions
+   Authors: Tianze Lin, Sihui Chen, Stephen J. Harris, Tianshou Zhao, Yang Liu, Jiayu Wan
+   Year: 2024
+   Final relevance: 0.944
+   Citations: 44
+   Link: https://doi.org/10.1016/j.esci.2024.100280
+   Abstract: Battery lifetime prediction at early cycles is crucial for researchers and manufacturers to examine product quality and promote technology development. Machine learning has been widely utilized to construct data-driven solutions for high-accuracy predictions. However, the internal mechanisms of batteries are sensitive to many factors, such as charging/discharging protocols, manufacturing/storage conditions, and usage patterns. These factors will induce state transitions, thereby decreasing the prediction accuracy of data-driven approaches. Transfer learning is a promising technique that overcomes this difficulty and achieves accurate predictions by jointly utilizing information from various sources. Hence, we develop two transfer learning methods, Bayesian Model Fusion and Weighted Orthogonal Matching Pursuit, to strategically combine prior knowledge with limited information from the target dataset to achieve superior prediction performance. From our results, our transfer learning methods reduce root-mean-squared error by 41% through adapting to the target domain. Furthermore, the transfer learning strategies identify the variations of impactful features across different sets of batteries and therefore disentangle the battery degradation mechanisms and the root cause of state transitions from the perspective of data mining. These findings suggest that the transfer learning strategies proposed in our work are capable of acquiring knowledge across multiple data sources for solving specialized issues.
+
+3. Rapid Assessing Cycle Life and Degradation Trajectory Based on Transfer Learning for Lithium-Ion Battery
+   Authors: Yuhao Zhu, Yunlong Shang, Xin Gu, Yue Wang, Chenghui Zhang
+   Year: 2024
+   Final relevance: 0.943
+   Citations: 8
+   Link: https://doi.org/10.1109/tte.2024.3483870
+   Abstract: Before the certain model lithium-ion battery is mass-produced, continuous testing is typically needed to assess the degradation end points and trajectory of cycle life, determining if it satisfies the reliability requirements for the target applications. However, the traditional testing method, which typically takes an amount of time such as one year or more, significantly hinders the development of the battery industry. How to rapidly obtain the battery life is The significant challenge lies in finding how to obtain the battery life. Hence, a rapid cycle life assessment framework with transfer learning (TL) is proposed, which substitutes prediction for continuous test to obtain the end points and corresponding degradation trajectories. In this framework, the features extracted from charge-discharge process and other information stream are taken as inputs, and the different capacity degradation percentage points (CDPPs) are used as outputs. The similarities and joint-properties can be found in different battery features by TL, to avoid time-consuming operations such as fine-tuning. The effectiveness is demonstrated by hundreds of thousands of samples from four different manufacturers, which are able to accurately get the life end points and degradation trajectory. Experimental results present that the life assessment time reduced by at least 83%. The end-of-life (EOL) point prediction error is less than 11.2%, and the similarity between the predicted degradation trajectory and the real value is more than 90%. More importantly, the proposed method is expected to enable rapid life assessment across various working conditions and different types.
+
+4. Deep transfer learning enabled online state-of-health estimation of lithium-ion batteries under small samples across different cathode materials, ambient temperature and charge-discharge protocols
+   Authors: Xiaopeng Li, Minghang Zhao, Shisheng Zhong, Junfu Li, Zhiquan Cui, Song Fu, Zhiqi Yan
+   Year: 2025
+   Final relevance: 0.856
+   Citations: 13
+   Link: https://doi.org/10.1016/j.jpowsour.2025.237503
+   Abstract: Abstract unavailable
+
+5. Transfer learning for battery smarter state estimation and ageing prognostics: Recent progress, challenges, and prospects
+   Authors: Kailong Liu, Qiao Peng, Yunhong Che, Yusheng Zheng, Kang Li, Remus Teodorescu, Widanalage Dhammika Widanage, Anup Barai
+   Year: 2022
+   Final relevance: 0.826
+   Citations: 164
+   Link: https://doi.org/10.1016/j.adapen.2022.100117
+   Abstract: With the advent of sustainable and clean energy transitions, lithium-ion batteries have become one of the most important energy storage sources for many applications. Battery management is of utmost importance for the safe, efficient, and long-lasting operation of lithium-ion batteries. However, the frequently changing load and operating conditions, the different cell chemistries and formats, and the complicated degradation patterns pose challenges for traditional battery management. The data-driven solutions that have emerged in recent years offer great opportunities to uncover the underlying data mapping within a battery system. In particular, transfer learning improves the performance of data-driven strategies by transferring existing knowledge from different but related domains, and if properly applied, would be a promising approach for smarter battery management. To this end, this paper presents a systematic review for the applications of transfer learning in the field of battery management for the first time, with particular focuses on battery state estimation and ageing prognostics. Specifically, the general issues faced by conventional battery management are identified and the applications of transfer learning to these issues are summarized. Then, the specific challenges of each topic are identified and the potential solutions based on transfer learning are explained, followed by a discussion of the state of the art in terms of principles, algorithm frameworks, advantages and disadvantages. Finally, future trends of data-driven battery management with transfer learning are discussed in terms of key challenges and promising opportunities.
+
+6. Gaussian process regression for forecasting battery state of health
+   Authors: Robert R. Richardson, Michael A. Osborne, David A. Howey
+   Year: 2017
+   Final relevance: 0.807
+   Citations: 713
+   Link: https://doi.org/10.1016/j.jpowsour.2017.05.004
+   Abstract: Accurately predicting the future capacity and remaining useful life of batteries is necessary to ensure reliable system operation and to minimise maintenance costs. The complex nature of battery degradation has meant that mechanistic modelling of capacity fade has thus far remained intractable; however, with the advent of cloud-connected devices, data from cells in various applications is becoming increasingly available, and the feasibility of data-driven methods for battery prognostics is increasing. Here we propose Gaussian process (GP) regression for forecasting battery state of health, and highlight various advantages of GPs over other data-driven and mechanistic approaches. GPs are a type of Bayesian non-parametric method, and hence can model complex systems whilst handling uncertainty in a principled manner. Prior information can be exploited by GPs in a variety of ways: explicit mean functions can be used if the functional form of the underlying degradation model is available, and multiple-output GPs can effectively exploit correlations between data from different cells. We demonstrate the predictive capability of GPs for short-term and long-term (remaining useful life) forecasting on a selection of capacity vs. cycle datasets from lithium-ion cells.
+
+7. FGNet: Feature Engineering-Guided Attentive Graph Neural Network for SOH Estimation of Lithium Battery
+   Authors: Tingting Luo, Zhengyi Bao, Zhiwei He, Mingyu Gao
+   Year: 2024
+   Final relevance: 0.794
+   Citations: 24
+   Link: https://doi.org/10.1109/tte.2024.3492135
+   Abstract: The precise estimation of the state-of-health (SOH) in lithium-ion battery (LIB) holds significant importance for ensuring the safe operation of electric vehicles (EVs). While existing methods predominantly center around conventional recurrent neural networks (RNNs), these approaches inherently encounter challenges in effectively extracting features and modeling ultra-long-term time-series data. In this article, we introduce a novel time-series prediction framework that integrates feature engineering with an attentive graph neural network (GNN) to enhance the accuracy and efficiency of SOH estimation for lithium batteries. Specifically, we begin by extracting health factors (HFs) from the original charge and discharge data of the battery. Subsequently, we identify 3-D features exhibiting strong correlations, which serve as the primary inputs for the network. Our proposed network, termed the feature engineering-guided attentive graph neural network (FGNet), is designed to comprehensively capture and model the intricate relationships between HFs and SOH output. This is achieved by embedding both the feature extraction module and the attention module within the GNN architecture. Extensive experiments are conducted using the Center for Advanced Life Cycle Engineering (CALCE) aging dataset and National Aeronautics and Space Administration (NASA) battery dataset. The results substantiate the superiority of our method over existing state-of-the-art methods, with a mean absolute error (MAE) consistently averaging below 2%.
+
+8. Transformer-based Graph Neural Networks for Battery Range Prediction in AIoT Battery-Swap Services
+   Authors: Zhao Li, Yang Liu, Chuan Zhou, Xuanwu Liu, Xuming Pan, Buqing Cao, Xindong Wu
+   Year: 2024
+   Final relevance: 0.790
+   Citations: 7
+   Link: https://doi.org/10.1109/icws62655.2024.00140
+   Abstract: The concept of the sharing economy has gained broad recognition, and within this context, Sharing E-Bike Battery (SEB) have emerged as a focal point of societal interest. Despite the popularity, a notable discrepancy remains between user expectations regarding the remaining battery range of SEBs and the reality, leading to a pronounced inclination among users to find an available SEB during emergency situations. In response to this challenge, the integration of Artificial Intelligence of Things (AIoT) and battery-swap services has surfaced as a viable solution. In this paper, we propose a novel structural Transformer-based model, referred to as the SEB-Transformer, designed specifically for predicting the battery range of SEBs. The scenario is conceptualized as a dynamic heterogeneous graph that encapsulates the interactions between users and bicycles, providing a comprehensive framework for analysis. Furthermore, we incorporate the graph structure into the SEB-Transformer to facilitate the estimation of the remaining e-bike battery range, in conjunction with mean structural similarity, enhancing the prediction accuracy. By employing the predictions made by our model, we are able to dynamically adjust the optimal cycling routes for users in real-time, while also considering the strategic locations of charging stations, thereby optimizing the user experience. Empirically our results on real-world datasets demonstrate the superiority of our model against nine competitive baselines. These innovations, powered by AIoT, not only bridge the gap between user expectations and the physical limitations of battery range but also significantly improve the operational efficiency and sustainability of SEB services. Through these advancements, the shared electric bicycle ecosystem is evolving, making strides towards a more reliable, user-friendly, and sustainable mode of transportation.
+
+9. Deep learning to estimate lithium-ion battery state of health without additional degradation experiments
+   Authors: Jiahuan Lu, Rui Xiong, Jinpeng Tian, Chenxu Wang, Fengchun Sun
+   Year: 2023
+   Final relevance: 0.780
+   Citations: 377
+   Link: https://doi.org/10.1038/s41467-023-38458-w
+   Abstract: State of health is a critical state which evaluates the degradation level of batteries. However, it cannot be measured directly but requires estimation. While accurate state of health estimation has progressed markedly, the time- and resource-consuming degradation experiments to generate target battery labels hinder the development of state of health estimation methods. In this article, we design a deep-learning framework to enable the estimation of battery state of health in the absence of target battery labels. This framework integrates a swarm of deep neural networks equipped with domain adaptation to produce accurate estimation. We employ 65 commercial batteries from 5 different manufacturers to generate 71,588 samples for cross-validation. The validation results indicate that the proposed framework can ensure absolute errors of less than 3% for 89.4% of samples (less than 5% for 98.9% of samples), with a maximum absolute error of less than 8.87% in the absence of target labels. This work emphasizes the power of deep learning in precluding degradation experiments and highlights the promise of rapid development of battery management algorithms for new-generation batteries using only previous experimental data.
+
+10. Towards Multiple-View Nested Graph Convolutional Networks for stable and robust lithium-ion battery forecasting
+   Authors: Thien Pham, Hung Nguyen Bui, Mao Nguyen, Trong Kim Le, Vu Duy Vinh, Phạm Hồng Quang, Tho Quan
+   Year: 2024
+   Final relevance: 0.773
+   Citations: 3
+   Link: https://doi.org/10.1016/j.egyr.2024.10.048
+   Abstract: Lithium-ion batteries (LIBs) have gained widespread usage in 5G and edge computing systems due to their simplicity, cost-effectiveness, lightweight nature, and ease of maintenance. However, these batteries consume a substantial amount of energy, making effective capacity management a critical demand. Consequently, numerous studies have concentrated on the state-of-health (SoH) prediction of LIBs to enable efficient power management and deployment. Recent research often employs sequence models to forecast SoH, leveraging the analysis of charging and discharging cycles from historical data. However, battery information inherently contains channel-wise data, which poses challenges in the representation using sequence models. Additionally, the presence of peak capacity in the cycles during the lifecycle suggests that the relationship from cycle-wise information may be more complex than linear temporal aggregation. In this paper, we propose a graph-based approach to deal with LIB SoH forecasting. Specifically, we present a novel model called the Multiview Nested Graph Convolutional Network (MvNGCN), which leverages two Graph Convolutional Network (GCN) models to capture features. Unlike the sequence-based approach, the GCN creates accurate and stable forecasting outputs. Experimental evaluation on public benchmarking datasets from NASA and CALCE demonstrates that MvNGCN offers significant performance improvements. We reduce the overall RMSE and MAPE losses at 7.91% and 16.78%, respectively on the NASA dataset compared to the baseline. Similarly, we also decrease 2.92% and 5.09% on the CALCE dataset. To enhance reproducibility, we have released our source code as an open repository available at https://github.com/bdachung/mvngcn (accessed: 23 September 2024).
+
+11. Graph neural network-based lithium-ion battery state of health estimation using partial discharging curve
+   Authors: Kate Qi Zhou, Yan Qin, Chau Yuen
+   Year: 2024
+   Final relevance: 0.764
+   Citations: 50
+   Link: https://doi.org/10.1016/j.est.2024.113502
+   Abstract: Abstract unavailable
+
+12. Lithium-Ion Battery State of Health Prediction with Graph Neural Network
+   Authors: Xing-Yan Yao, Guolin Chen, Michael Pecht
+   Year: 2022
+   Final relevance: 0.733
+   Citations: 0
+   Link: https://doi.org/10.2139/ssrn.4069774
+   Abstract: Abstract unavailable
+
+13. Multi-channel Stacked Graph Convolutional Neural Network with NSGAII Optimization for Early Lithium Battery Life Prediction
+   Authors: Xiaole Tang, Hao Lü, Yeonah Kang
+   Year: 2025
+   Final relevance: 0.726
+   Citations: 0
+   Link: https://doi.org/10.1007/978-981-96-6503-7_17
+   Abstract: Abstract unavailable
+
+14. State of health and remaining useful life prediction of lithium-ion batteries with conditional graph convolutional network
+   Authors: Yupeng Wei, Dazhong Wu
+   Year: 2023
+   Final relevance: 0.722
+   Citations: 79
+   Link: https://doi.org/10.1016/j.eswa.2023.122041
+   Abstract: Graph convolutional networks have been increasingly used to estimate the state of health and predict the remaining useful life of batteries. However, there are two issues with conventional graph convolutional networks. Firstly, they ignore the correlation between features and the state of health or remaining useful life. Secondly, they do not consider temporal relationships among features when projecting aggregated temporal features into another dimensional space. To address these issues, two types of undirected graphs are introduced to simultaneously consider the correlation among features and the correlation between features and the state of health or remaining useful life. A conditional graph convolution network is built to handle these graphs, incorporating a dual spectral graph convolutional operation to analyze the topological structures of these graphs. Additionally, the dilated convolutional operation is integrated with the proposed conditional graph convolution network to account for the temporal correlation among the aggregated features. Two battery datasets were used to evaluate the effectiveness of the presented method, resulting in a minimum mean absolute remaining useful life prediction error of 3.219. Moreover, the proposed method outperforms methods reported in the literature, such as Gaussian processes and other deep learning methods.
+
+15. One-shot battery degradation trajectory prediction with deep learning
+   Authors: Weihan Li, Neil Sengupta, Philipp Dechent, David A. Howey, Anuradha M. Annaswamy, Dirk Uwe Sauer
+   Year: 2021
+   Final relevance: 0.712
+   Citations: 228
+   Link: https://doi.org/10.1016/j.jpowsour.2021.230024
+   Abstract: The degradation of batteries is complex and dependent on several internal mechanisms. Variations arising from manufacturing uncertainties and real-world operating conditions make battery lifetime prediction challenging. Here, we introduce a deep learning-based battery health prognostics approach to predict the future degradation trajectory in one shot without iteration or feature extraction. We also predict the end-of-life point and the knee-point. The model correctly learns about intrinsic variability caused by manufacturing differences, and is able to make accurate cell-specific predictions from just 100 cycles of data, and the performance improves over time as more data become available. Validation in an embedded device is demonstrated with the best-case median prediction error over the lifetime being 1.1% with normal data and 1.3% with noisy data. Compared to state-of-the-art approaches, the one-shot approach shows an increase in accuracy as well as in computing speed by up to 15 times. This work further highlights the effectiveness of data-driven approaches in the domain of health prognostics.
+
+16. Hybrid Neural Networks for Enhanced Predictions of Remaining Useful Life in Lithium-Ion Batteries
+   Authors: Alireza Rastegarpanah, M. Salman Asif, Rustam Stolkin
+   Year: 2024
+   Final relevance: 0.701
+   Citations: 24
+   Link: https://doi.org/10.3390/batteries10030106
+   Abstract: With the proliferation of electric vehicles (EVs) and the consequential increase in EV battery circulation, the need for accurate assessments of battery health and remaining useful life (RUL) is paramount, driven by environmentally friendly and sustainable goals. This study addresses this pressing concern by employing data-driven methods, specifically harnessing deep learning techniques to enhance RUL estimation for lithium-ion batteries (LIB). Leveraging the Toyota Research Institute Dataset, consisting of 124 lithium-ion batteries cycled to failure and encompassing key metrics such as capacity, temperature, resistance, and discharge time, our analysis substantially improves RUL prediction accuracy. Notably, the convolutional long short-term memory deep neural network (CLDNN) model and the transformer LSTM (temporal transformer) model have emerged as standout remaining useful life (RUL) predictors. The CLDNN model, in particular, achieved a remarkable mean absolute error (MAE) of 84.012 and a mean absolute percentage error (MAPE) of 25.676. Similarly, the temporal transformer model exhibited a notable performance, with an MAE of 85.134 and a MAPE of 28.7932. These impressive results were achieved by applying Bayesian hyperparameter optimization, further enhancing the accuracy of predictive methods. These models were bench-marked against existing approaches, demonstrating superior results with an improvement in MAPE ranging from 4.01% to 7.12%.
+
+17. A Data-Driven Approach With Uncertainty Quantification for Predicting Future Capacities and Remaining Useful Life of Lithium-ion Battery
+   Authors: Kailong Liu, Yunlong Shang, Quan Ouyang, Widanalage Dhammika Widanage
+   Year: 2020
+   Final relevance: 0.698
+   Citations: 820
+   Link: https://doi.org/10.1109/tie.2020.2973876
+   Abstract: Predicting future capacities and remaining useful life (RUL) with uncertainty quantification is a key but challenging issue in the applications of battery health diagnosis and management. This article applies advanced machine-learning techniques to achieve effective future capacities and RUL prediction for lithium-ion (Li-ion) batteries with reliable uncertainty management. To be specific, after using the empirical mode decomposition (EMD) method, the original battery capacity data is decomposed into some intrinsic mode functions (IMFs) and a residual. Then, the long short-term memory (LSTM) submodel is applied to estimate the residual while the Gaussian process regression (GPR) submodel is utilized to fit the IMFs with the uncertainty level. Consequently, both the long-term dependence of capacity and uncertainty quantification caused by the capacity regenerations can be captured directly and simultaneously. Experimental aging data from different batteries are deployed to evaluate the performance of proposed LSTM+GPR model in comparison with the solo GPR, solo LSTM, GPR+EMD, and LSTM+EMD models. Illustrative results demonstrate the combined LSTM+GPR model outperforms other counterparts and is capable of achieving accurate results for both 1-step and multistep ahead capacity predictions. Even predicting the RUL at the early battery cycle stage, the proposed data-driven approach still presents good adaptability and reliable uncertainty quantification for battery health diagnosis.
+
+18. Spatio-temporal degradation model with graph neural network and structured state space model for remaining useful life prediction
+   Authors: Xia Wu, Zhiwen Liu, Lei Wang
+   Year: 2024
+   Final relevance: 0.691
+   Citations: 36
+   Link: https://doi.org/10.1016/j.ress.2024.110770
+   Abstract: Abstract unavailable
+
+19. Correlation based-graph neural network for health prognosis of non-fully charged and discharged lithium-ion batteries
+   Authors: Wu Wei, Zhen Chen, Weijie Liu, Ershun Pan
+   Year: 2024
+   Final relevance: 0.687
+   Citations: 21
+   Link: https://doi.org/10.1016/j.jpowsour.2024.235984
+   Abstract: Abstract unavailable
+Timing
+======
+argument_parsing             0.00s
+settings_load                0.00s
+pipeline_build               0.43s
+pipeline_run                 1.68s
+reporting                    0.00s
+total                        2.11s
+
+Pipeline stages
+===============
+planning                     0.00s
+initial_retrieval            0.05s
+ranking_embeddings           1.22s
+evidence_lookup_extraction     0.01s
+initial_evidence_extraction_api_wait     0.00s
+landscape                    0.02s
+direct_verification          0.37s
+candidate_generation         0.01s
+candidate_verification       0.00s
+direct_verification_retrieval     0.00s
+direct_verification_evidence_extraction     0.00s
+candidate_verification_retrieval     0.00s
+candidate_verification_evidence_extraction     0.00s
+
+Work accounting
+===============
+retrieved_papers                                100
+unique_scholarly_works                          100
+candidate_hypotheses_generated                    0
+candidate_hypotheses_after_pruning                0
+candidate_hypotheses_verified                     0
+candidate_hypotheses_displayed                    0
+evidence_requested                               30
+memory_cache_hits                                 0
+memory_evidence_cache_hits                        0
+persistent_cache_hits                            20
+persistent_evidence_cache_hits                   20
+new_evidence_extractions                          0
+openai_extraction_requests                        0
+verification_queries_executed                     1
+verification_queries_planned                      3
+verification_queries_cache_hits                   0
+verification_queries_skipped_redundant            0
+verification_candidates_early_stopped             1
+verification_candidates_reused                    0
+candidate_verification_results_reused_exact        0
+candidate_verification_results_reused_nonidentical        0
+observed_candidates_rejected_preverification        0
+candidate_rejected_unanchored                     0
+candidate_rejected_observed                       0
+candidate_rejected_dominated                      0
+candidate_rejected_invalid_role                   0
+verification_unique_papers                       10
+verification_papers_already_cached               10
+new_verification_extractions                      0
+verification_papers_rejected_by_prescreen         0
+verification_papers_prescreen_accepted            0
+verification_papers_prescreen_uncertain          10
+prescreen_rejections                              0
+embedding_cache_hits                            400
+new_embeddings                                    4
+embedding_requests                                4
+openai_decomposition_requests                     0
+openai_query_generation_requests                  0
+openai_combined_planning_requests                 0
+planning_cache_hits                               2
+decomposition_cache_hits                          1
+query_generation_cache_hits                       1
+retrieval_cache_hits                              9
+retrieval_cache_misses                            0
+retrieval_provider_requests                       0
+verification_retrieval_cache_hits                 1
+retrieval_failure_cache_hits                      0
+
+
+20. Deep learning-based segmentation of lithium-ion battery microstructures enhanced by artificially generated electrodes
+   Authors: Simon Müller, Christina Sauter, Ramesh Shunmugasundaram, Nils Wenzler, Vincent De Andrade, Francesco De Carlo, Ender Konukoğlu, Vanessa Wood
+   Year: 2021
+   Final relevance: 0.687
+   Citations: 134
+   Link: https://doi.org/10.1038/s41467-021-26480-9
+   Abstract: Accurate 3D representations of lithium-ion battery electrodes, in which the active particles, binder and pore phases are distinguished and labeled, can assist in understanding and ultimately improving battery performance. Here, we demonstrate a methodology for using deep-learning tools to achieve reliable segmentations of volumetric images of electrodes on which standard segmentation approaches fail due to insufficient contrast. We implement the 3D U-Net architecture for segmentation, and, to overcome the limitations of training data obtained experimentally through imaging, we show how synthetic learning data, consisting of realistic artificial electrode structures and their tomographic reconstructions, can be generated and used to enhance network performance. We apply our method to segment x-ray tomographic microscopy images of graphite-silicon composite electrodes and show it is accurate across standard metrics. We then apply it to obtain a statistically meaningful analysis of the microstructural evolution of the carbon-black and binder domain during battery operation.
+
+Research Idea Assessment
+========================
+Assessment: Uncertain
+Rationale: Structured verification covered: outcome. Currently unconfirmed components: problem, method, data_or_modality, constraint. Partial structured matches remained for 3 paper(s). Potential title or weak matches remained for 12 paper(s). No complete same-paper match was confirmed.
+Counterexamples / direct matches: none confirmed
+Partial/contextual support:
+- https://openalex.org/W4398164480 (matched: outcome)
+- https://openalex.org/W4403600592 (matched: outcome)
+- https://openalex.org/W4376612800 (matched: outcome)
+Potential matches:
+- https://openalex.org/W4406406714
+- https://openalex.org/W4411027360
+- https://openalex.org/W4311766317
+- https://openalex.org/W4404102599
+- https://openalex.org/W4403422568
+- https://openalex.org/W4404045188
+- https://openalex.org/W4392865038
+- https://openalex.org/W4382940595
+- https://openalex.org/W4407041217
+- https://openalex.org/W4403146434
+- https://openalex.org/W4386325709
+- https://openalex.org/W3171577284
+Supporting evidence:
+- https://openalex.org/W4398164480 (contextual_or_partial_support, main_findings): The strategies identify variations in impactful features across battery sets and help disentangle degradation mechanisms and causes of state transitions.
+- https://openalex.org/W4403600592 (contextual_or_partial_support, research_objective): Rapidly assess lithium-ion battery cycle-life endpoints and degradation trajectories using transfer learning.
+- https://openalex.org/W4376612800 (contextual_or_partial_support, main_findings): The framework can preclude additional degradation experiments for new-generation battery-management algorithms
+- https://openalex.org/W4406406714 (potential_match, title): Battery lifetime prediction across diverse ageing conditions with inter-cell deep learning
+- https://openalex.org/W4411027360 (potential_match, title): Deep transfer learning enabled online state-of-health estimation of lithium-ion batteries under small samples across different cathode materials, ambient temperature and charge-discharge protocols
+- https://openalex.org/W4311766317 (potential_match, title): Transfer learning for battery smarter state estimation and ageing prognostics: Recent progress, challenges, and prospects
+- https://openalex.org/W4404102599 (potential_match, title): FGNet: Feature Engineering-Guided Attentive Graph Neural Network for SOH Estimation of Lithium Battery
+- https://openalex.org/W4403422568 (potential_match, title): Transformer-based Graph Neural Networks for Battery Range Prediction in AIoT Battery-Swap Services
+Verification searches:
+- graph neural networks gnns transfer between battery chemistries predicting battery degradation battery degradation capacity degradation labeled cycle data battery research different temperatures limited labeled
+- predicting battery degradation graph neural networks gnns transfer between battery chemistries labeled cycle data battery research different temperatures limited labeled cycle data few labeled
+- graph neural networks gnns transfer between battery chemistries predicting battery degradation labeled cycle data different temperatures limited labeled cycle data few labeled cycles battery
+Coverage: Executed 1 direct idea verification queries and retrieved 10 unique papers.
+Coverage: Direct verification used structured title/abstract evidence only.
+Coverage: Analyzed 20 evidence-bearing papers before direct idea assessment.
+Coverage: Important idea facets without explicit structured coverage: problem, method, data_or_modality, constraint.
+
+Candidate Research Gap Assessments
+==================================
+No evidence-backed candidate gaps were identified.
+
+Global qualification
+--------------------
+These assessments describe retrieved and verified evidence only; they do not prove global novelty.

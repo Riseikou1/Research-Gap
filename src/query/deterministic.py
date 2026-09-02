@@ -15,6 +15,9 @@ from src.models.idea import ResearchIdea
 
 _CONNECTOR_TO_FIELD: dict[str, str] = {
     "using": "intervention_or_method",
+    "with": "data_or_modality",
+    "from": "data_or_modality",
+    "based on": "data_or_modality",
     "among": "population",
     "compared with": "comparison",
     "compared to": "comparison",
@@ -30,6 +33,9 @@ _CONNECTOR_RE = re.compile(
     r"\b("
     r"compared\s+(?:with|to)"
     r"|using"
+    r"|with"
+    r"|from"
+    r"|based\s+on"
     r"|among"
     r"|without"
     r"|while"
@@ -44,70 +50,12 @@ _CONNECTOR_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
-# Conservative lexical hints
+# Generic grammatical cues
 #
-# These do NOT try to understand arbitrary language. They only help resolve
-# ambiguous connectors such as "for".
+# These describe grammatical roles rather than scientific concepts.
+# The deterministic decomposer intentionally avoids domain vocabularies,
+# population dictionaries, method ontologies, or scientific synonym tables.
 # ---------------------------------------------------------------------------
-
-_POPULATION_HINTS = {
-    "adult",
-    "adults",
-    "adolescent",
-    "adolescents",
-    "child",
-    "children",
-    "clinician",
-    "clinicians",
-    "developer",
-    "developers",
-    "doctor",
-    "doctors",
-    "elderly",
-    "learner",
-    "learners",
-    "men",
-    "patient",
-    "patients",
-    "participant",
-    "participants",
-    "physician",
-    "physicians",
-    "researcher",
-    "researchers",
-    "respondent",
-    "respondents",
-    "student",
-    "students",
-    "subject",
-    "subjects",
-    "survivor",
-    "survivors",
-    "teacher",
-    "teachers",
-    "user",
-    "users",
-    "volunteer",
-    "volunteers",
-    "women",
-    "worker",
-    "workers",
-}
-
-_DOMAIN_HINTS = {
-    "agriculture",
-    "biology",
-    "education",
-    "finance",
-    "healthcare",
-    "medicine",
-    "medical",
-    "robotics",
-    "security",
-    "cybersecurity",
-    "manufacturing",
-    "transportation",
-}
 
 _OUTCOME_VERBS = {
     "improve",
@@ -147,17 +95,13 @@ _PROBLEM_VERBS = {
     "summarizing",
 }
 
-_PROBLEM_NOUN_HINTS = {
-    "answering",
-    "classification",
-    "detection",
-    "diagnosis",
-    "estimation",
-    "generation",
-    "prediction",
-    "question",
-    "retrieval",
-    "summarization",
+_CONSTRAINT_PREFIXES = {
+    "few",
+    "limited",
+    "scarce",
+    "restricted",
+    "insufficient",
+    "small",
 }
 
 _STOPWORDS = {
@@ -198,27 +142,91 @@ _STOPWORDS = {
 
 
 # ---------------------------------------------------------------------------
+# Generic data/modality wording
+#
+# These terms describe structural input roles rather than application domains.
+# ---------------------------------------------------------------------------
+
+_DATA_PHRASE_HINTS = {
+    "data",
+    "dataset",
+    "datasets",
+    "signal",
+    "signals",
+    "sensor",
+    "sensors",
+    "image",
+    "images",
+    "video",
+    "videos",
+    "text",
+    "audio",
+    "speech",
+    "measurement",
+    "measurements",
+    "record",
+    "records",
+    "sample",
+    "samples",
+    "input",
+    "inputs",
+    "feature",
+    "features",
+    "embedding",
+    "embeddings",
+    "representation",
+    "representations",
+    "modality",
+}
+
+_DATA_PHRASE_ENDINGS = {
+    "data",
+    "dataset",
+    "datasets",
+    "signal",
+    "signals",
+    "image",
+    "images",
+    "video",
+    "videos",
+    "text",
+    "audio",
+    "speech",
+    "measurement",
+    "measurements",
+    "record",
+    "records",
+    "sample",
+    "samples",
+    "input",
+    "inputs",
+    "feature",
+    "features",
+    "embedding",
+    "embeddings",
+    "representation",
+    "representations",
+    "modality",
+    "form",
+}
+
+
+# ---------------------------------------------------------------------------
 # Text normalization
 # ---------------------------------------------------------------------------
 
-
 def clean_idea_text(idea: str) -> str:
     """Normalize a research idea while preserving useful technical symbols."""
+
     if not isinstance(idea, str) or not idea.strip():
         raise ValueError("idea must not be empty")
 
     text = unicodedata.normalize("NFKC", idea)
-
-    # Normalize Unicode dashes.
     text = re.sub(r"[\u2010-\u2015]", "-", text)
 
-    # Remove punctuation unlikely to carry retrieval meaning.
-    #
-    # Preserve:
-    #   C++, C#, R&D, input/output, GPT-5, don't, decimal.dot
+    # Preserve useful technical characters such as:
+    # C++, C#, R&D, input/output, GPT-5, don't, decimal.dot.
     text = re.sub(r"[^\w\s+/#&.'()%-]", " ", text, flags=re.UNICODE)
-
-    # Collapse all whitespace.
     text = " ".join(text.split())
 
     return text.strip(" .,-")
@@ -228,30 +236,26 @@ def clean_idea_text(idea: str) -> str:
 # Decomposer
 # ---------------------------------------------------------------------------
 
-
 class DeterministicDecomposer:
-    """
-    Conservative rule-based query decomposer.
+    """Conservative rule-based research-idea decomposer.
 
-    This implementation intentionally prefers missing information over
-    unsupported semantic guesses. Its purpose is to provide a transparent,
-    reproducible baseline against which semantic decomposers can be measured.
+    This baseline uses explicit grammar and generic structural cues only.
+    It intentionally prefers missing information over unsupported semantic
+    classification.
     """
 
     def decompose(self, idea: str) -> ResearchIdea:
         cleaned = clean_idea_text(idea)
-
         facets = _empty_facets()
-
         matches = list(_CONNECTOR_RE.finditer(cleaned))
 
         if not matches:
             _append_unique(facets["problem"], cleaned)
-
         else:
             self._parse_connector_clauses(cleaned, matches, facets)
 
         self._split_using_goal(facets)
+        self._split_method_data_facets(facets)
         self._refine_goal_facets(facets)
 
         synonyms = _extract_explicit_synonyms(cleaned)
@@ -261,6 +265,7 @@ class DeterministicDecomposer:
             original_text=cleaned,
             keywords=keywords,
             synonyms=synonyms,
+            canonical_facets=_identity_canonical_facets(facets),
             **facets,
         )
 
@@ -271,68 +276,64 @@ class DeterministicDecomposer:
         facets: dict[str, list[str]],
     ) -> None:
         """Split text around explicit connector clauses."""
-
-        prefix = text[: matches[0].start()].strip(" ,.-")
+        prefix = text[:matches[0].start()].strip(" ,.-")
 
         if prefix:
-            _append_unique(facets["problem"], prefix)
+            first_connector = _normalize_connector(matches[0].group())
+            first_end = matches[1].start() if len(matches) > 1 else len(text)
+            first_phrase = text[matches[0].end():first_end].strip(" ,.-")
+
+            if (
+                first_connector == "for"
+                and (
+                    _starts_with_any(first_phrase, _PROBLEM_VERBS)
+                    or _starts_with_any(first_phrase, _OUTCOME_VERBS)
+                )
+            ):
+                _append_unique(facets["intervention_or_method"], prefix)
+            else:
+                _append_unique(facets["problem"], prefix)
 
         for index, match in enumerate(matches):
             start = match.end()
-
-            end = (
-                matches[index + 1].start()
-                if index + 1 < len(matches)
-                else len(text)
-            )
-
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
             phrase = text[start:end].strip(" ,.-")
 
             if not phrase:
                 continue
 
             connector = _normalize_connector(match.group())
-
             field = self._resolve_connector_field(connector, phrase)
-
             _append_unique(facets[field], phrase)
 
     def _resolve_connector_field(self, connector: str, phrase: str) -> str:
+        """Resolve ambiguous connectors conservatively.
+
+        Explicit connectors retain fixed structural roles. Ambiguous
+        constructions are resolved only when their grammar gives enough
+        information; otherwise the baseline falls back to ``problem``.
         """
-        Resolve connector meaning conservatively.
 
-        Most connectors are fixed. "for" is ambiguous enough that blindly
-        mapping it to population causes obvious errors, so it receives a small
-        deterministic classifier.
-        """
+        if connector == "for":
+            return _classify_for_phrase(phrase)
 
-        if connector != "for":
-            return _CONNECTOR_TO_FIELD[connector]
+        if connector == "with" and _looks_like_constraint_phrase(phrase):
+            return "constraints"
 
-        return _classify_for_phrase(phrase)
+        if connector in {"with", "from", "based on"} and not _looks_like_data_phrase(phrase):
+            return "intervention_or_method"
+
+        return _CONNECTOR_TO_FIELD[connector]
 
     def _split_using_goal(self, facets: dict[str, list[str]]) -> None:
-        """
-        Split:
-
-            Using METHOD to GOAL
-
-        into method + problem/outcome when the grammar is explicit.
-        """
+        """Split ``using METHOD to GOAL`` into method plus goal."""
 
         methods = facets["intervention_or_method"]
 
         if not methods:
             return
 
-        first = methods[0]
-
-        parts = re.split(
-            r"\s+to\s+",
-            first,
-            maxsplit=1,
-            flags=re.IGNORECASE,
-        )
+        parts = re.split(r"\s+to\s+", methods[0], maxsplit=1, flags=re.IGNORECASE)
 
         if len(parts) != 2:
             return
@@ -346,63 +347,72 @@ class DeterministicDecomposer:
 
         if _starts_with_any(goal, _OUTCOME_VERBS):
             _append_unique(facets["outcomes"], goal)
-
         else:
             _append_unique(facets["problem"], goal)
 
     def _refine_goal_facets(self, facets: dict[str, list[str]]) -> None:
-        """
-        Move clearly outcome-oriented problem phrases into outcomes.
+        """Move explicit improvement-oriented goals into outcomes."""
 
-        Example:
-            "improving retrieval accuracy"
-                -> outcomes
-
-        This only fires on explicit outcome verbs.
-        """
-
-        remaining_problems: list[str] = []
+        remaining: list[str] = []
 
         for problem in facets["problem"]:
             if _starts_with_any(problem, _OUTCOME_VERBS):
                 _append_unique(facets["outcomes"], problem)
             else:
-                remaining_problems.append(problem)
+                remaining.append(problem)
 
-        facets["problem"] = remaining_problems
+        facets["problem"] = remaining
+
+    def _split_method_data_facets(self, facets: dict[str, list[str]]) -> None:
+        """Separate explicit data/modality clauses from method phrases."""
+
+        remaining: list[str] = []
+
+        for phrase in facets["intervention_or_method"]:
+            parts = re.split(
+                r"\s+(?:(?:with|from|based\s+on))\s+",
+                phrase,
+                maxsplit=1,
+                flags=re.IGNORECASE,
+            )
+
+            if len(parts) == 2:
+                method, trailing = (part.strip(" ,.-") for part in parts)
+
+                if _looks_like_constraint_phrase(trailing):
+                    if method:
+                        remaining.append(method)
+                    if trailing:
+                        _append_unique(facets["constraints"], trailing)
+                    continue
+
+                if _looks_like_data_phrase(trailing):
+                    if method:
+                        remaining.append(method)
+                    if trailing:
+                        _append_unique(facets["data_or_modality"], trailing)
+                    continue
+
+            if _looks_like_constraint_phrase(phrase):
+                _append_unique(facets["constraints"], phrase)
+            elif _looks_like_data_phrase(phrase):
+                _append_unique(facets["data_or_modality"], phrase)
+            else:
+                remaining.append(phrase)
+
+        facets["intervention_or_method"] = remaining
 
 
 # ---------------------------------------------------------------------------
 # Ambiguous connector resolution
 # ---------------------------------------------------------------------------
 
-
 def _classify_for_phrase(phrase: str) -> str:
-    """
-    Classify the phrase following ``for``.
+    """Classify ``for ...`` using generic structural cues only.
 
-    Examples:
-
-        for elderly patients
-            -> population
-
-        for language learners
-            -> population
-
-        for medical question answering
-            -> problem
-
-        for predicting mortality
-            -> problem
-
-        for improving retrieval accuracy
-            -> outcomes
-
-        for healthcare
-            -> domain
-
-    Unknown cases default to ``problem`` rather than incorrectly inventing
-    a population.
+    Explicit task/outcome grammar takes priority. Short plural noun phrases
+    are conservatively treated as populations/settings without maintaining a
+    vocabulary of scientific or demographic entities.
     """
 
     tokens = _normalized_tokens(phrase)
@@ -410,29 +420,22 @@ def _classify_for_phrase(phrase: str) -> str:
     if not tokens:
         return "problem"
 
-    token_set = set(tokens)
-
-    if _looks_like_population(phrase):
-        return "population"
-
     if _starts_with_any(phrase, _OUTCOME_VERBS):
         return "outcomes"
 
     if _starts_with_any(phrase, _PROBLEM_VERBS):
         return "problem"
 
-    if token_set & _PROBLEM_NOUN_HINTS:
-        return "problem"
+    if _looks_like_data_phrase(phrase):
+        return "data_or_modality"
 
-    if len(tokens) <= 3 and token_set & _DOMAIN_HINTS:
-        return "domain"
+    if _looks_like_population_phrase(phrase):
+        return "population"
 
     return "problem"
-
 # ---------------------------------------------------------------------------
 # Explicit synonym/acronym extraction
 # ---------------------------------------------------------------------------
-
 
 _EXPLICIT_ACRONYM_RE = re.compile(
     r"\b(?P<long>[A-Za-z][A-Za-z0-9 -]{4,}?)\s*"
@@ -441,29 +444,13 @@ _EXPLICIT_ACRONYM_RE = re.compile(
 
 
 def _extract_explicit_synonyms(text: str) -> dict[str, list[str]]:
-    """
-    Extract only synonyms explicitly provided by the user.
-
-    Example:
-
-        retrieval augmented generation (RAG)
-
-    becomes:
-
-        {
-            "retrieval augmented generation": ["RAG"]
-        }
-
-    The deterministic decomposer deliberately does not invent synonyms.
-    """
+    """Extract only synonyms explicitly written by the user."""
 
     synonyms: dict[str, list[str]] = {}
 
     for match in _EXPLICIT_ACRONYM_RE.finditer(text):
         long_form = " ".join(match.group("long").split()).strip()
         short_form = match.group("short").strip()
-
-        # Avoid swallowing a large preceding clause.
         long_form = _trim_acronym_long_form(long_form, short_form)
 
         if not long_form:
@@ -478,14 +465,9 @@ def _extract_explicit_synonyms(text: str) -> dict[str, list[str]]:
 
 
 def _trim_acronym_long_form(long_form: str, acronym: str) -> str:
-    """
-    Keep only a plausible acronym-length suffix.
-
-    For RAG, for example, there is no reason to retain fifteen preceding words.
-    """
+    """Keep only a plausible acronym-length suffix."""
 
     words = long_form.split()
-
     max_words = max(len(acronym) + 2, 3)
 
     if len(words) > max_words:
@@ -498,40 +480,21 @@ def _trim_acronym_long_form(long_form: str, acronym: str) -> str:
 # Keyword extraction
 # ---------------------------------------------------------------------------
 
-
 def _keywords(
     text: str,
     facets: dict[str, list[str]],
     *,
     limit: int = 12,
 ) -> list[str]:
-    """
-    Build bounded, deterministic keywords.
-
-    Priority:
-        1. complete extracted facet phrases
-        2. technical/acronym tokens
-        3. meaningful lexical tokens
-    """
+    """Build bounded deterministic retrieval keywords."""
 
     candidates: list[str] = []
 
-    # Full research phrases carry more retrieval meaning than isolated words.
     for phrases in facets.values():
         candidates.extend(phrases)
 
-    tokens = re.findall(
-        r"[^\W_][\w+#.-]*",
-        text,
-        flags=re.UNICODE,
-    )
-
-    # Preserve short scientific acronyms such as AI, ML, RL, CV and QA.
-    candidates.extend(
-        token
-        for token in tokens
-        if _is_useful_token(token)
-    )
+    tokens = re.findall(r"[^\W_][\w+#.-]*", text, flags=re.UNICODE)
+    candidates.extend(token for token in tokens if _is_useful_token(token))
 
     return _deduplicate(candidates, limit=limit)
 
@@ -539,10 +502,7 @@ def _keywords(
 def _is_useful_token(token: str) -> bool:
     normalized = token.casefold().strip(".-")
 
-    if not normalized:
-        return False
-
-    if normalized in _STOPWORDS:
+    if not normalized or normalized in _STOPWORDS:
         return False
 
     if token.isupper() and 2 <= len(token) <= 10:
@@ -555,16 +515,28 @@ def _is_useful_token(token: str) -> bool:
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def _empty_facets() -> dict[str, list[str]]:
     return {
         "problem": [],
         "population": [],
         "intervention_or_method": [],
+        "data_or_modality": [],
         "comparison": [],
         "outcomes": [],
         "domain": [],
         "constraints": [],
+    }
+
+
+def _identity_canonical_facets(
+    facets: dict[str, list[str]],
+) -> dict[str, dict[str, str]]:
+    """Expose deterministic facets through the canonical identity contract."""
+
+    return {
+        facet: {value: value for value in values}
+        for facet, values in facets.items()
+        if values
     }
 
 
@@ -583,6 +555,59 @@ def _normalized_tokens(text: str) -> list[str]:
 def _starts_with_any(text: str, words: Iterable[str]) -> bool:
     first = next(iter(_normalized_tokens(text)), "")
     return first in words
+
+
+def _looks_like_constraint_phrase(phrase: str) -> bool:
+    """Recognize generic limiting grammar without scientific vocabulary."""
+
+    tokens = _normalized_tokens(phrase)
+
+    if not tokens:
+        return False
+
+    return tokens[0] in _CONSTRAINT_PREFIXES
+
+def _looks_like_population_phrase(phrase: str) -> bool:
+    """Recognize a conservative population/entity-group phrase.
+
+    This uses grammatical shape only. It deliberately avoids hand-written
+    lists such as patients, students, crops, bridges, developers, etc.
+    """
+
+    tokens = _normalized_tokens(phrase)
+
+    if not 1 <= len(tokens) <= 4:
+        return False
+
+    head = tokens[-1]
+
+    # A short phrase ending in an ordinary plural noun is a reasonable
+    # deterministic population/entity-group signal:
+    #
+    #   adolescents
+    #   language learners
+    #   software developers
+    #   bridge structures
+    #
+    # Explicit problem/outcome/data grammar is checked before this helper.
+    if len(head) > 3 and head.endswith("s") and not head.endswith("ss"):
+        return True
+
+    return False
+
+
+def _looks_like_data_phrase(phrase: str) -> bool:
+    """Recognize generic input/data wording without domain classification."""
+
+    tokens = _normalized_tokens(phrase)
+
+    if not tokens:
+        return False
+
+    if not set(tokens) & _DATA_PHRASE_HINTS:
+        return False
+
+    return tokens[-1] in _DATA_PHRASE_ENDINGS
 
 
 def _append_unique(values: list[str], value: str) -> None:
@@ -619,36 +644,3 @@ def _deduplicate(values: Iterable[str], *, limit: int) -> list[str]:
             break
 
     return result
-
-def _looks_like_population(phrase: str) -> bool:
-    """Return True for explicit human/study population phrases."""
-
-    tokens = _normalized_tokens(phrase)
-
-    if not tokens:
-        return False
-
-    token_set = set(tokens)
-
-    if token_set & _POPULATION_HINTS:
-        return True
-
-    # Conservative plural human-group suffixes.
-    #
-    # Examples:
-    #   language learners
-    #   software developers
-    #   cancer survivors
-    #
-    # Keep this deliberately narrow. The deterministic baseline should
-    # prefer missing a population over inventing one.
-    population_suffixes = (
-        "learners",
-        "developers",
-        "survivors",
-        "respondents",
-        "subjects",
-        "volunteers",
-    )
-
-    return tokens[-1] in population_suffixes

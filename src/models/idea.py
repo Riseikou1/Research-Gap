@@ -14,12 +14,16 @@ class ResearchIdea(BaseModel):
     problem: list[str] = Field(default_factory=list)
     population: list[str] = Field(default_factory=list)
     intervention_or_method: list[str] = Field(default_factory=list)
+    data_or_modality: list[str] = Field(default_factory=list)
     comparison: list[str] = Field(default_factory=list)
     outcomes: list[str] = Field(default_factory=list)
     domain: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     synonyms: dict[str, list[str]] = Field(default_factory=dict)
+    # Surface facet value -> provider-derived canonical concept.  The map is
+    # intentionally generic so matching does not need a scientific ontology.
+    canonical_facets: dict[str, dict[str, str]] = Field(default_factory=dict)
 
     @field_validator("original_text", mode="before")
     @classmethod

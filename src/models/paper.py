@@ -32,6 +32,8 @@ class RetrievalProvenance(BaseModel):
     retrieved_at: AwareDatetime
     provider_rank: int = Field(ge=1)
     provider_score: float | None = None
+    serialized_query: str | None = Field(default=None, max_length=1000)
+    fallback_used: bool = False
 
     @field_validator("provider", mode="before")
     @classmethod

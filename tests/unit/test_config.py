@@ -13,6 +13,7 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(settings.ranking.lexical_weight, 0.4)
         self.assertEqual(settings.ranking.semantic_weight, 0.6)
         self.assertEqual(settings.ranking.semantic_fallback, "lexical")
+        self.assertEqual(settings.extraction_workers, 4)
 
     def test_environment_overrides_are_validated(self) -> None:
         with patch.dict(
@@ -21,12 +22,14 @@ class ConfigurationTest(unittest.TestCase):
                 "OPENALEX_CANDIDATE_LIMIT": "35",
                 "RESEARCH_GAP_LEXICAL_WEIGHT": "0.25",
                 "RESEARCH_GAP_SEMANTIC_WEIGHT": "0.75",
+                "RESEARCH_GAP_EXTRACTION_WORKERS": "3",
             },
             clear=True,
         ):
             settings = Settings.from_env()
         self.assertEqual(settings.openalex.per_route_limit, 35)
         self.assertEqual(settings.ranking.semantic_weight, 0.75)
+        self.assertEqual(settings.extraction_workers, 3)
 
     def test_invalid_values_fail_clearly(self) -> None:
         with patch.dict(
@@ -45,6 +48,15 @@ class ConfigurationTest(unittest.TestCase):
             clear=True,
         ):
             with self.assertRaisesRegex(ConfigurationError, "both be zero"):
+                Settings.from_env()
+
+    def test_extraction_workers_must_be_positive(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_GAP_EXTRACTION_WORKERS": "0"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ConfigurationError, "positive"):
                 Settings.from_env()
 
 

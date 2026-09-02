@@ -1,3 +1,6 @@
+]633;E;echo "============================================================";46d598d0-6de1-4ac7-949b-1d98a42f15ae]633;C============================================================
+verification.py
+============================================================
 """Targeted counterexample search and conservative research-gap assessment."""
 
 from __future__ import annotations
@@ -4425,3 +4428,522 @@ __all__ = [
     "build_verification_queries",
     "deduplicate_query_phrases",
 ]
+
+============================================================
+CURRENT BRIDGE CACHE
+============================================================
+
+================================================================================
+https://openalex.org/W4386491245
+================================================================================
+MODEL: gpt-5.6-luna
+SCHEMA: 4
+{
+  "paper_id": "https://openalex.org/W4386491245",
+  "title": "Few-shot learning for image-based bridge damage detection",
+  "study_type": "empirical",
+  "research_objective": {
+    "value": "Develop a few-shot learning approach for image-based bridge damage detection using few labeled examples.",
+    "canonical_value": "few-shot bridge damage detection",
+    "evidence_text": "This work proposes a few-shot learning (FSL) approach based on improved ProtoNet for damage detection with just a few labeled examples.",
+    "source": "abstract",
+    "confidence": 0.99
+  },
+  "population_or_setting": [
+    {
+      "value": "Autonomous visual inspection of bridges under varying materials, surface coatings, light, and weather conditions.",
+      "canonical_value": "real-world bridge visual inspection",
+      "evidence_text": "Autonomous bridge visual inspection is a real-world challenge due to various materials, surface coatings, and changing light and weather conditions.",
+      "source": "abstract",
+      "confidence": 0.98
+    },
+    {
+      "value": "Real bridge inspection images for validation.",
+      "canonical_value": "real bridge inspection",
+      "evidence_text": "Finally, the approach is validated using real bridge inspection images",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "method_or_intervention": [
+    {
+      "value": "Few-shot learning approach based on an improved ProtoNet.",
+      "canonical_value": "improved ProtoNet few-shot learning",
+      "evidence_text": "This work proposes a few-shot learning (FSL) approach based on improved ProtoNet for damage detection with just a few labeled examples.",
+      "source": "abstract",
+      "confidence": 0.99
+    },
+    {
+      "value": "Pre-trained GoogleNet after fine-tuning.",
+      "canonical_value": "fine-tuned pretrained GoogleNet",
+      "evidence_text": "via the pre-trained GoogleNet after fine-tuning",
+      "source": "abstract",
+      "confidence": 0.98
+    },
+    {
+      "value": "Fine-tuning methods based on a fully connected layer (FCN) and Hadamard product.",
+      "canonical_value": "FCN and Hadamard-product fine-tuning",
+      "evidence_text": "Moreover, the proposed fine-tuning methods based on a fully connected layer (FCN) and Hadamard product are demonstrated with better performance than the previous method.",
+      "source": "abstract",
+      "confidence": 0.98
+    }
+  ],
+  "comparison_or_baseline": [
+    {
+      "value": "The previous method used for comparison with the proposed fine-tuning methods.",
+      "canonical_value": "previous fine-tuning method",
+      "evidence_text": "better performance than the previous method",
+      "source": "abstract",
+      "confidence": 0.92
+    }
+  ],
+  "data_or_modality": [
+    {
+      "value": "Bridge inspection images and image-based visual inspection data.",
+      "canonical_value": "bridge inspection images",
+      "evidence_text": "validated using real bridge inspection images",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "datasets": [],
+  "sample_size": null,
+  "evaluation_metrics": [
+    {
+      "value": "Mean accuracy",
+      "canonical_value": "mean accuracy",
+      "evidence_text": "achieves over 94% mean accuracy for 2-way 5-shot classification",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "main_findings": [
+    {
+      "value": "The approach achieved over 94% mean accuracy for 2-way 5-shot classification using pre-trained GoogleNet after fine-tuning.",
+      "canonical_value": "over 94% mean accuracy in 2-way 5-shot classification",
+      "evidence_text": "achieves over 94% mean accuracy for 2-way 5-shot classification via the pre-trained GoogleNet after fine-tuning.",
+      "source": "abstract",
+      "confidence": 0.99
+    },
+    {
+      "value": "The FCN- and Hadamard-product-based fine-tuning methods outperformed the previous method.",
+      "canonical_value": "improved fine-tuning performance over previous method",
+      "evidence_text": "the proposed fine-tuning methods based on a fully connected layer (FCN) and Hadamard product are demonstrated with better performance than the previous method.",
+      "source": "abstract",
+      "confidence": 0.98
+    },
+    {
+      "value": "Validation on real bridge inspection images demonstrated fast implementation for practical damage inspection with weakly supervised information.",
+      "canonical_value": "fast practical bridge damage inspection with weak supervision",
+      "evidence_text": "demonstrating its capability of fast implementation for practical damage inspection with weakly supervised information.",
+      "source": "abstract",
+      "confidence": 0.96
+    }
+  ],
+  "constraints": [
+    {
+      "value": "Training and classification use only a few labeled examples, specifically a 2-way 5-shot setting in the reported result.",
+      "canonical_value": "few-labeled-example training",
+      "evidence_text": "for damage detection with just a few labeled examples",
+      "source": "abstract",
+      "confidence": 0.99
+    },
+    {
+      "value": "The reported classification setting is 2-way 5-shot.",
+      "canonical_value": "2-way 5-shot classification",
+      "evidence_text": "for 2-way 5-shot classification",
+      "source": "abstract",
+      "confidence": 0.99
+    },
+    {
+      "value": "Validation uses weakly supervised information.",
+      "canonical_value": "weakly supervised validation",
+      "evidence_text": "with weakly supervised information",
+      "source": "abstract",
+      "confidence": 0.96
+    }
+  ],
+  "limitations": [],
+  "future_work": [],
+  "extraction_confidence": 0.98,
+  "missing_fields": [
+    "datasets",
+    "sample_size",
+    "limitations",
+    "future_work"
+  ]
+}
+
+================================================================================
+https://openalex.org/W4321604059
+================================================================================
+MODEL: gpt-5.6-luna
+SCHEMA: 4
+{
+  "paper_id": "https://openalex.org/W4321604059",
+  "title": "Adaptive Cross-Scenario Few-Shot Learning Framework for Structural Damage Detection in Civil Infrastructure",
+  "study_type": "empirical",
+  "research_objective": {
+    "value": "Develop a cross-task structural damage detection framework for civil infrastructure under scarce damage samples",
+    "canonical_value": "cross-task structural damage detection",
+    "evidence_text": "However, the scarcity of structural damage samples and the cross-task transferability of existing knowledge currently limit this technique in practical applications. Therefore, this paper proposes a novel framework for structural damage detection with large scope of cross-task learning capability",
+    "source": "abstract",
+    "confidence": 0.96
+  },
+  "population_or_setting": [
+    {
+      "value": "Civil infrastructure",
+      "canonical_value": "civil infrastructure",
+      "evidence_text": "Adaptive Cross-Scenario Few-Shot Learning Framework for Structural Damage Detection in Civil Infrastructure",
+      "source": "title",
+      "confidence": 0.98
+    },
+    {
+      "value": "Structural damage image classification and semantic segmentation",
+      "canonical_value": "structural damage vision tasks",
+      "evidence_text": "Experimental results demonstrate the superiority of this method for both structural damage image classification and structural damage semantic segmentation.",
+      "source": "abstract",
+      "confidence": 0.98
+    }
+  ],
+  "method_or_intervention": [
+    {
+      "value": "Adaptive cross-scenario few-shot learning framework for structural damage detection",
+      "canonical_value": "cross-scenario few-shot structural damage detection",
+      "evidence_text": "Adaptive Cross-Scenario Few-Shot Learning Framework for Structural Damage Detection in Civil Infrastructure",
+      "source": "title",
+      "confidence": 0.99
+    }
+  ],
+  "comparison_or_baseline": [
+    {
+      "value": "Existing frameworks for structural damage detection",
+      "canonical_value": "existing structural damage detection frameworks",
+      "evidence_text": "Compared with existing frameworks, the proposed method can alleviate the negative influence of domain bias and reduce computation time and costs due to sample labeling.",
+      "source": "abstract",
+      "confidence": 0.93
+    }
+  ],
+  "data_or_modality": [
+    {
+      "value": "Structural damage images",
+      "canonical_value": "structural damage images",
+      "evidence_text": "both structural damage image classification and structural damage semantic segmentation",
+      "source": "abstract",
+      "confidence": 0.98
+    }
+  ],
+  "datasets": [],
+  "sample_size": null,
+  "evaluation_metrics": [
+    {
+      "value": "Image classification performance",
+      "canonical_value": "image classification performance",
+      "evidence_text": "structural damage image classification",
+      "source": "abstract",
+      "confidence": 0.9
+    },
+    {
+      "value": "Semantic segmentation performance",
+      "canonical_value": "semantic segmentation performance",
+      "evidence_text": "structural damage semantic segmentation",
+      "source": "abstract",
+      "confidence": 0.9
+    }
+  ],
+  "main_findings": [
+    {
+      "value": "The proposed method outperformed existing frameworks for structural damage image classification and semantic segmentation.",
+      "canonical_value": "superior structural damage detection performance",
+      "evidence_text": "Experimental results demonstrate the superiority of this method for both structural damage image classification and structural damage semantic segmentation. Compared with existing frameworks, the proposed method can alleviate the negative influence of domain bias and reduce computation time and costs due to sample labeling.",
+      "source": "abstract",
+      "confidence": 0.96
+    },
+    {
+      "value": "The framework alleviated the negative influence of domain bias.",
+      "canonical_value": "reduced domain bias impact",
+      "evidence_text": "the proposed method can alleviate the negative influence of domain bias",
+      "source": "abstract",
+      "confidence": 0.96
+    },
+    {
+      "value": "The framework reduced computation time and sample-labeling costs.",
+      "canonical_value": "reduced computation and labeling costs",
+      "evidence_text": "reduce computation time and costs due to sample labeling",
+      "source": "abstract",
+      "confidence": 0.96
+    }
+  ],
+  "constraints": [
+    {
+      "value": "Scarcity of structural damage samples",
+      "canonical_value": "limited structural damage samples",
+      "evidence_text": "the scarcity of structural damage samples",
+      "source": "abstract",
+      "confidence": 0.99
+    },
+    {
+      "value": "Extreme cases for training a structural damage detection model",
+      "canonical_value": "extreme-case training conditions",
+      "evidence_text": "This paper also discusses how the proposed framework can be used to train a model of the structural damage detection framework in extreme cases.",
+      "source": "abstract",
+      "confidence": 0.9
+    }
+  ],
+  "limitations": [],
+  "future_work": [],
+  "extraction_confidence": 0.96,
+  "missing_fields": [
+    "datasets",
+    "sample_size",
+    "limitations",
+    "future_work"
+  ]
+}
+
+================================================================================
+https://openalex.org/W4404102599
+================================================================================
+MODEL: gpt-5.6-luna
+SCHEMA: 4
+{
+  "paper_id": "https://openalex.org/W4404102599",
+  "title": "FGNet: Feature Engineering-Guided Attentive Graph Neural Network for SOH Estimation of Lithium Battery",
+  "study_type": "empirical",
+  "research_objective": {
+    "value": "Estimate lithium-ion battery state of health (SOH) accurately and efficiently",
+    "canonical_value": "lithium-ion battery SOH estimation",
+    "evidence_text": "The precise estimation of the state-of-health (SOH) in lithium-ion battery (LIB) holds significant importance for ensuring the safe operation of electric vehicles (EVs).",
+    "source": "abstract",
+    "confidence": 0.98
+  },
+  "population_or_setting": [
+    {
+      "value": "Lithium-ion batteries for electric-vehicle applications",
+      "canonical_value": "electric-vehicle lithium-ion batteries",
+      "evidence_text": "The precise estimation of the state-of-health (SOH) in lithium-ion battery (LIB) holds significant importance for ensuring the safe operation of electric vehicles (EVs).",
+      "source": "abstract",
+      "confidence": 0.96
+    }
+  ],
+  "method_or_intervention": [
+    {
+      "value": "Feature engineering-guided attentive graph neural network (FGNet) for SOH estimation",
+      "canonical_value": "feature-engineering-guided attentive graph neural network",
+      "evidence_text": "Our proposed network, termed the feature engineering-guided attentive graph neural network (FGNet), is designed to comprehensively capture and model the intricate relationships between HFs and SOH output.",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "comparison_or_baseline": [
+    {
+      "value": "Existing state-of-the-art methods",
+      "canonical_value": "state-of-the-art SOH estimation methods",
+      "evidence_text": "The results substantiate the superiority of our method over existing state-of-the-art methods, with a mean absolute error (MAE) consistently averaging below 2%.",
+      "source": "abstract",
+      "confidence": 0.95
+    }
+  ],
+  "data_or_modality": [
+    {
+      "value": "Original battery charge and discharge data",
+      "canonical_value": "battery charge-discharge data",
+      "evidence_text": "Specifically, we begin by extracting health factors (HFs) from the original charge and discharge data of the battery.",
+      "source": "abstract",
+      "confidence": 0.98
+    },
+    {
+      "value": "Three-dimensional correlated features used as primary network inputs",
+      "canonical_value": "three-dimensional battery health features",
+      "evidence_text": "Subsequently, we identify 3-D features exhibiting strong correlations, which serve as the primary inputs for the network.",
+      "source": "abstract",
+      "confidence": 0.98
+    }
+  ],
+  "datasets": [
+    {
+      "value": "Center for Advanced Life Cycle Engineering (CALCE) aging dataset",
+      "canonical_value": "CALCE battery aging dataset",
+      "evidence_text": "Extensive experiments are conducted using the Center for Advanced Life Cycle Engineering (CALCE) aging dataset and National Aeronautics and Space Administration (NASA) battery dataset.",
+      "source": "abstract",
+      "confidence": 0.99
+    },
+    {
+      "value": "National Aeronautics and Space Administration (NASA) battery dataset",
+      "canonical_value": "NASA battery dataset",
+      "evidence_text": "Extensive experiments are conducted using the Center for Advanced Life Cycle Engineering (CALCE) aging dataset and National Aeronautics and Space Administration (NASA) battery dataset.",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "sample_size": null,
+  "evaluation_metrics": [
+    {
+      "value": "Mean absolute error (MAE)",
+      "canonical_value": "mean absolute error",
+      "evidence_text": "with a mean absolute error (MAE) consistently averaging below 2%.",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "main_findings": [
+    {
+      "value": "FGNet outperformed existing state-of-the-art methods, with MAE consistently averaging below 2%",
+      "canonical_value": "FGNet outperforms state-of-the-art methods",
+      "evidence_text": "The results substantiate the superiority of our method over existing state-of-the-art methods, with a mean absolute error (MAE) consistently averaging below 2%.",
+      "source": "abstract",
+      "confidence": 0.99
+    }
+  ],
+  "constraints": [],
+  "limitations": [],
+  "future_work": [],
+  "extraction_confidence": 0.98,
+  "missing_fields": [
+    "sample_size",
+    "constraints",
+    "limitations",
+    "future_work"
+  ]
+}
+
+================================================================================
+https://openalex.org/W4406406714
+================================================================================
+MODEL: gpt-5.6-luna
+SCHEMA: 4
+{
+  "paper_id": "https://openalex.org/W4406406714",
+  "title": "Battery lifetime prediction across diverse ageing conditions with inter-cell deep learning",
+  "study_type": "empirical",
+  "research_objective": {
+    "value": "Predict battery lifetime reliably across diverse ageing conditions using early-cycle data.",
+    "canonical_value": "battery lifetime prediction across diverse ageing conditions",
+    "evidence_text": "Here we introduce BatLiNet, a deep learning framework tailored to predict battery lifetime reliably across a variety of ageing conditions.",
+    "source": "abstract",
+    "confidence": 0.98
+  },
+  "population_or_setting": [
+    {
+      "value": "Batteries tested under diverse ageing conditions, including different cycling protocols, ambient temperatures, and electrode materials.",
+      "canonical_value": "battery ageing under diverse cycling, temperature, and electrode conditions",
+      "evidence_text": "such as cycling protocols, ambient temperatures and electrode materials",
+      "source": "abstract",
+      "confidence": 0.97
+    },
+    {
+      "value": "Cross-chemistry battery lifetime prediction.",
+      "canonical_value": "battery lifetime prediction across battery chemistries",
+      "evidence_text": "BatLiNet also exhibits transferring capabilities across different battery chemistries",
+      "source": "abstract",
+      "confidence": 0.94
+    }
+  ],
+  "method_or_intervention": [
+    {
+      "value": "BatLiNet, a deep learning framework integrating inter-cell learning with conventional single-cell learning for battery lifetime prediction.",
+      "canonical_value": "inter-cell and single-cell deep learning for battery lifetime prediction",
+      "evidence_text": "The distinctive design is integrating an inter-cell learning mechanism to predict the lifetime differences between two battery cells. This mechanism, when combined with conventional single-cell learning, enhances the stability of lifetime predictions for a target cell under varied ageing conditions.",
+      "source": "abstract",
+      "confidence": 0.98
+    }
+  ],
+  "comparison_or_baseline": [
+    {
+      "value": "Existing predictive models developed and validated within restricted ageing conditions.",
+      "canonical_value": "predictive models restricted to limited ageing conditions",
+      "evidence_text": "Existing predictive models, primarily developed and validated within a restricted set of ageing conditions",
+      "source": "abstract",
+      "confidence": 0.86
+    }
+  ],
+  "data_or_modality": [
+    {
+      "value": "Battery-cell ageing and capacity-degradation data collected across diverse ageing conditions.",
+      "canonical_value": "battery cell ageing and capacity degradation data",
+      "evidence_text": "our experimental results, derived from a broad spectrum of ageing conditions",
+      "source": "abstract",
+      "confidence": 0.88
+    }
+  ],
+  "datasets": [],
+  "sample_size": null,
+  "evaluation_metrics": [
+    {
+      "value": "Accuracy of battery lifetime predictions.",
+      "canonical_value": "battery lifetime prediction accuracy",
+      "evidence_text": "demonstrate BatLiNet’s superior accuracy and robustness compared to existing models",
+      "source": "abstract",
+      "confidence": 0.9
+    },
+    {
+      "value": "Robustness of battery lifetime predictions.",
+      "canonical_value": "battery lifetime prediction robustness",
+      "evidence_text": "demonstrate BatLiNet’s superior accuracy and robustness compared to existing models",
+      "source": "abstract",
+      "confidence": 0.9
+    }
+  ],
+  "main_findings": [
+    {
+      "value": "BatLiNet has superior accuracy and robustness compared with existing models.",
+      "canonical_value": "superior accuracy and robustness versus existing models",
+      "evidence_text": "demonstrate BatLiNet’s superior accuracy and robustness compared to existing models",
+      "source": "abstract",
+      "confidence": 0.97
+    },
+    {
+      "value": "BatLiNet can transfer across different battery chemistries.",
+      "canonical_value": "cross-chemistry transfer capability",
+      "evidence_text": "BatLiNet also exhibits transferring capabilities across different battery chemistries",
+      "source": "abstract",
+      "confidence": 0.96
+    }
+  ],
+  "constraints": [
+    {
+      "value": "Lifetime prediction is performed in early cycles.",
+      "canonical_value": "early-cycle battery lifetime prediction",
+      "evidence_text": "Accurately predicting battery lifetime in early cycles",
+      "source": "abstract",
+      "confidence": 0.95
+    },
+    {
+      "value": "The study addresses diverse ageing conditions and associated factors such as cycling protocols, ambient temperatures, and electrode materials.",
+      "canonical_value": "diverse battery ageing conditions",
+      "evidence_text": "diverse factors influencing complex battery capacity degradation, such as cycling protocols, ambient temperatures and electrode materials",
+      "source": "abstract",
+      "confidence": 0.95
+    },
+    {
+      "value": "Cycling under specific conditions is resource-intensive and time-consuming.",
+      "canonical_value": "resource-intensive and time-consuming battery cycling",
+      "evidence_text": "cycling under specific conditions is both resource-intensive and time-consuming",
+      "source": "abstract",
+      "confidence": 0.96
+    },
+    {
+      "value": "The approach is intended to support scenarios with limited resources.",
+      "canonical_value": "limited-resource battery prediction scenarios",
+      "evidence_text": "benefitting scenarios with limited resources",
+      "source": "abstract",
+      "confidence": 0.9
+    }
+  ],
+  "limitations": [],
+  "future_work": [
+    {
+      "value": "Explore cross-cell insights and battery research across comprehensive ageing factors.",
+      "canonical_value": "cross-cell learning across comprehensive ageing factors",
+      "evidence_text": "We expect this study could promote exploration of cross-cell insights and facilitate battery research across comprehensive ageing factors.",
+      "source": "abstract",
+      "confidence": 0.9
+    }
+  ],
+  "extraction_confidence": 0.94,
+  "missing_fields": [
+    "datasets",
+    "sample_size",
+    "limitations"
+  ]
+}

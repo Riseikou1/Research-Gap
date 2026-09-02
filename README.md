@@ -56,6 +56,12 @@ papers is never treated as proof that no work exists.
 `--show-landscape` prints the deterministic Milestone-5 literature landscape: normalized feature
 frequencies, observed combinations, evidence coverage, and conservatively comparable conflicts.
 
+Provider-backed planning and raw retrieval results use the local SQLite cache under
+`RESEARCH_GAP_CACHE_DIR`. Planning rows are versioned by normalized idea, provider/model, and
+planning configuration; retrieval rows expire after `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS`.
+Evidence and paper embeddings use the same database, while ranking and gap reasoning still run on
+every invocation.
+
 ## Semantic behavior and fallback
 
 Two distinct semantic capabilities are used:
@@ -86,6 +92,10 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Swappable embedding model |
 | `OPENAI_EXTRACTION_MODEL` | `OPENAI_MODEL` | Structured evidence extraction model |
 | `RESEARCH_GAP_EVIDENCE_LIMIT` | `10` | Maximum ranked papers sent to extraction |
+| `RESEARCH_GAP_EXTRACTION_WORKERS` | `4` | Maximum concurrent evidence extractions |
+| `RESEARCH_GAP_EXTRACTION_BATCH_SIZE` | `3` | Uncached papers per bounded extraction request |
+| `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS` | `21600` | Freshness window for persistent retrieval results |
+| `RESEARCH_GAP_CACHE_DIR` | `data/cache` | Local SQLite cache directory |
 
 ## Architecture
 

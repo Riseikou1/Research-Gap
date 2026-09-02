@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-import time
-
 import argparse
+import cProfile
+import io
 import json
 import logging
+import pstats
 import sys
-from typing import Any
+from contextlib import contextmanager
+from time import perf_counter
+from typing import Any, Iterator
 
-from src.config import ConfigurationError, Settings
+from src.config import CACHE_DIR, ConfigurationError, Settings
 from src.analysis.gap_candidates import GapCandidateGenerator, is_concrete_entity
 from src.analysis.verification import GapVerifier
 from src.extraction.paper_extractor import PaperExtractor
@@ -42,6 +45,46 @@ from src.reporting.landscape import format_landscape
 MIN_PAPER_LIMIT = 1
 MAX_PAPER_LIMIT = 100
 DEFAULT_PAPER_LIMIT = 20
+
+
+class TimingTracker:
+    """Collect lightweight wall-clock timings for major CLI stages."""
+
+    def __init__(self) -> None:
+        self.started_at = perf_counter()
+        self.timings: dict[str, float] = {}
+
+    @contextmanager
+    def measure(self, name: str) -> Iterator[None]:
+        started_at = perf_counter()
+        try:
+            yield
+        finally:
+            elapsed = perf_counter() - started_at
+            self.timings[name] = self.timings.get(name, 0.0) + elapsed
+
+    def print_report(
+        self,
+        metrics: dict[str, int] | None = None,
+        stage_timings: dict[str, float] | None = None,
+    ) -> None:
+        total = perf_counter() - self.started_at
+
+        print("\nTiming", file=sys.stderr)
+        print("======", file=sys.stderr)
+        for name, elapsed in self.timings.items():
+            print(f"{name:24} {elapsed:8.2f}s", file=sys.stderr)
+        print(f"{'total':24} {total:8.2f}s", file=sys.stderr)
+        if stage_timings:
+            print("\nPipeline stages", file=sys.stderr)
+            print("===============", file=sys.stderr)
+            for name, elapsed in stage_timings.items():
+                print(f"{name:24} {elapsed:8.2f}s", file=sys.stderr)
+        if metrics:
+            print("\nWork accounting", file=sys.stderr)
+            print("===============", file=sys.stderr)
+            for name, value in metrics.items():
+                print(f"{name:42} {value:8d}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -101,8 +144,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--show-landscape",
         action="store_true",
-        help="Extract evidence and display the deterministic literature landscape",
+        help=(
+            "Extract evidence and display the deterministic literature "
+            "landscape"
+        ),
     )
+    parser.add_argument(
+        "--show-timings",
+        action="store_true",
+        help="Show wall-clock timing for major pipeline stages",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Profile ResearchPipeline.run() and show the slowest internal functions",
+    )
+
     return parser
 
 
@@ -116,6 +173,7 @@ def build_decomposer(
         return OpenAIDecomposer(
             api_key=settings.openai_api_key if settings else None,
             model=settings.openai_model if settings else None,
+            cache_path=CACHE_DIR / "research_gap.sqlite3",
         )
     raise ValueError(f"Unsupported decomposer: {name}")
 
@@ -134,6 +192,8 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         max_candidates=openalex.max_candidates,
         per_route_limit=openalex.per_route_limit,
         max_workers=openalex.max_workers,
+        cache_path=CACHE_DIR / "research_gap.sqlite3",
+        retrieval_cache_ttl_seconds=openalex.retrieval_cache_ttl_seconds,
     )
 
     semantic_scorer: SemanticScorer | None = None
@@ -156,6 +216,7 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         OpenAIQueryGenerator(
             api_key=settings.openai_api_key,
             model=settings.openai_model,
+            cache_path=CACHE_DIR / "research_gap.sqlite3",
         )
         if args.query_generator == "openai"
         else None
@@ -164,6 +225,9 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         api_key=settings.openai_api_key,
         model=settings.extraction_model,
         evidence_limit=settings.evidence_limit,
+        max_workers=settings.extraction_workers,
+        batch_size=settings.extraction_batch_size,
+        cache_path=CACHE_DIR / "research_gap.sqlite3",
     ) if (args.show_evidence or show_gaps or show_landscape) else None
     gap_generator = GapCandidateGenerator() if show_gaps else None
     gap_verifier = GapVerifier(
@@ -396,34 +460,87 @@ def print_idea_assessment(result: ResearchResult) -> None:
     for failure in assessment.failures:
         print(f"Verification failure: {failure.provider}: {failure.error}")
 
+def run_pipeline(
+    pipeline: ResearchPipeline,
+    idea: str,
+    top_k: int,
+    *,
+    profile: bool = False,
+) -> ResearchResult:
+    if not profile:
+        return pipeline.run(idea, top_k=top_k)
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+
+    try:
+        return pipeline.run(idea, top_k=top_k)
+    finally:
+        profiler.disable()
+
+        output = io.StringIO()
+        stats = pstats.Stats(profiler, stream=output)
+        stats.strip_dirs()
+        stats.sort_stats("cumulative")
+        stats.print_stats(30)
+
+        print("\nPipeline Profile", file=sys.stderr)
+        print("================", file=sys.stderr)
+        print(
+            "Top 30 functions by cumulative execution time:",
+            file=sys.stderr,
+        )
+        print(output.getvalue(), file=sys.stderr)
 
 def main() -> int:
-    start = time.time()
+    timings = TimingTracker()
+
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    args = build_parser().parse_args()
-    idea = read_research_idea(args.idea)
+
+    with timings.measure("argument_parsing"):
+        args = build_parser().parse_args()
+        idea = read_research_idea(args.idea)
+
     if not idea:
         print("Error: a research idea is required.", file=sys.stderr)
+        if args.show_timings:
+            timings.print_report()
         return 2
+
     if not MIN_PAPER_LIMIT <= args.limit <= MAX_PAPER_LIMIT:
         print(
             f"Error: --limit must be between {MIN_PAPER_LIMIT} "
             f"and {MAX_PAPER_LIMIT}.",
             file=sys.stderr,
         )
+        if args.show_timings:
+            timings.print_report()
         return 2
 
     try:
-        settings = Settings.from_env()
+        with timings.measure("settings_load"):
+            settings = Settings.from_env()
+
         if args.limit > settings.openalex.max_candidates:
             raise ConfigurationError(
                 "--limit cannot exceed RESEARCH_GAP_MAX_CANDIDATES "
                 f"({settings.openalex.max_candidates})"
             )
-        result = build_pipeline(args, settings).run(idea, top_k=args.limit)
+
+        with timings.measure("pipeline_build"):
+            pipeline = build_pipeline(args, settings)
+
+        with timings.measure("pipeline_run"):
+            result = run_pipeline(
+                pipeline,
+                idea,
+                args.limit,
+                profile=args.profile,
+            )
+
     except (
         ConfigurationError,
         OpenAIConfigurationError,
@@ -434,43 +551,60 @@ def main() -> int:
         ValueError,
     ) as exc:
         print(f"Error: {exc}", file=sys.stderr)
+        if args.show_timings:
+            timings.print_report()
         return 1
 
-    handle_retrieval_failures(result)
-    for notice in result.notices:
-        print(f"Notice: {notice}", file=sys.stderr)
-    for notice in result.analysis_notices:
-        print(f"Analysis notice: {notice}", file=sys.stderr)
+    with timings.measure("reporting"):
+        handle_retrieval_failures(result)
 
-    if args.json:
-        payload: Any
-        if args.show_queries:
-            payload = result.to_dict()
-        elif args.show_evidence or args.show_gaps or args.show_landscape:
-            payload = result.to_dict()
+        for notice in result.notices:
+            print(f"Notice: {notice}", file=sys.stderr)
+
+        for notice in result.analysis_notices:
+            print(f"Analysis notice: {notice}", file=sys.stderr)
+
+        if args.json:
+            payload: Any
+
+            if args.show_queries:
+                payload = result.to_dict()
+            elif args.show_evidence or args.show_gaps or args.show_landscape:
+                payload = result.to_dict()
+            else:
+                payload = [_paper_json(paper) for paper in result.papers]
+
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+
         else:
-            payload = [_paper_json(paper) for paper in result.papers]
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0
+            if args.show_queries:
+                print_query_context(result)
 
-    if args.show_queries:
-        print_query_context(result)
-    print(f"Found {result.candidate_count} unique candidate papers.")
-    print(
-        f"Showing top {len(result.papers)} ranked results for: {idea} "
-        f"({result.ranking_mode})"
-    )
-    print_papers(result.papers, show_scores=args.show_scores)
-    if args.show_evidence:
-        print_evidence(result)
-    if args.show_gaps:
-        print_gaps(result)
-    if args.show_landscape:
-        print(f"\nRanked papers shown: {len(result.papers)}")
-        print(format_landscape(result.landscape) if result.landscape else "No literature landscape was generated.")
+            print(f"Found {result.candidate_count} unique candidate papers.")
+            print(
+                f"Showing top {len(result.papers)} ranked results for: {idea} "
+                f"({result.ranking_mode})"
+            )
 
+            print_papers(result.papers, show_scores=args.show_scores)
 
-    print(f"It took {time.time() - start}seconds.")
+            if args.show_evidence:
+                print_evidence(result)
+
+            if args.show_gaps:
+                print_gaps(result)
+
+            if args.show_landscape:
+                print(f"\nRanked papers shown: {len(result.papers)}")
+                print(
+                    format_landscape(result.landscape)
+                    if result.landscape
+                    else "No literature landscape was generated."
+                )
+
+    if args.show_timings:
+        timings.print_report(result.work_metrics, result.stage_timings)
+
     return 0
 
 
