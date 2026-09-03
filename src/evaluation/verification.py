@@ -9,23 +9,51 @@ from .models import FieldMetrics, Label, VerificationEvaluationCase, Verificatio
 LABELS = ("well_studied", "uncertain", "promising_gap")
 
 
-def _prediction(value: object) -> tuple[str | None, set[str], dict[str, str]]:
+def _normalize_ids(values: object) -> set[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, Sequence):
+        return set()
+    return {
+        normalized
+        for value in values
+        if (normalized := " ".join(str(value).split()).casefold())
+    }
+
+
+def _prediction(value: object) -> tuple[str | None, set[str], set[str], dict[str, str]]:
     if isinstance(value, str):
-        return value, set(), {}
+        return value, set(), set(), {}
     if isinstance(value, Mapping):
         label = value.get("label") or value.get("final_label")
-        ids = value.get("counterexample_paper_ids") or value.get("contradicting_paper_ids") or []
+        searched_ids = _normalize_ids(value.get("searched_paper_ids", []))
+        confirmed_ids = (
+            _normalize_ids(value.get("counterexample_paper_ids", []))
+            | _normalize_ids(value.get("contradicting_paper_ids", []))
+        )
         candidates = value.get("candidate_labels") or {}
-        return label if isinstance(label, str) else None, set(str(x) for x in ids), dict(candidates)
+        return label if isinstance(label, str) else None, searched_ids, confirmed_ids, dict(candidates)
     label = getattr(value, "label", None) or getattr(value, "final_label", None)
-    ids = getattr(value, "counterexample_paper_ids", None) or getattr(value, "contradicting_paper_ids", None) or []
-    return label, set(str(x) for x in ids), {}
+    searched_ids = _normalize_ids(getattr(value, "searched_paper_ids", []))
+    confirmed_ids = (
+        _normalize_ids(getattr(value, "counterexample_paper_ids", []))
+        | _normalize_ids(getattr(value, "contradicting_paper_ids", []))
+    )
+    return label, searched_ids, confirmed_ids, {}
 
 
 def counterexample_discovery_rate(known_ids: Sequence[str], discovered_ids: Sequence[str]) -> float | None:
-    if not known_ids:
+    known = _normalize_ids(known_ids)
+    if not known:
         return None
-    return float(bool(set(known_ids) & set(discovered_ids)))
+    return len(known & _normalize_ids(discovered_ids)) / len(known)
+
+
+def counterexample_confirmation_rate(known_ids: Sequence[str], confirmed_ids: Sequence[str]) -> float | None:
+    known = _normalize_ids(known_ids)
+    if not known:
+        return None
+    return len(known & _normalize_ids(confirmed_ids)) / len(known)
 
 
 def evaluate_verification(
@@ -36,17 +64,22 @@ def evaluate_verification(
     scored = 0
     discovered = 0
     counterexample_cases = 0
+    known_counterexamples = 0
+    confirmed = 0
     false_positive = 0
     well_studied_cases = 0
     candidate_total = candidate_correct = 0
     for case in cases:
-        label, ids, candidate_labels = _prediction(predictions.get(case.id))
+        label, searched_ids, confirmed_ids, candidate_labels = _prediction(predictions.get(case.id))
         if label in LABELS:
             matrix[case.expected_label][label] += 1
             scored += 1
-        if case.known_counterexample_ids:
+        known_ids = _normalize_ids(case.known_counterexample_ids)
+        if known_ids:
             counterexample_cases += 1
-            discovered += int(bool(set(case.known_counterexample_ids) & ids))
+            known_counterexamples += len(known_ids)
+            discovered += len(known_ids & searched_ids)
+            confirmed += len(known_ids & confirmed_ids)
         false_positive += int(case.expected_label == "well_studied" and label == "promising_gap")
         well_studied_cases += int(case.expected_label == "well_studied")
         for candidate_id, expected in case.expected_candidate_labels.items():
@@ -70,8 +103,11 @@ def evaluate_verification(
         accuracy=sum(matrix[x][x] for x in LABELS) / scored if scored else None,
         confusion_matrix=matrix, per_label=per_label,
         counterexample_cases=counterexample_cases,
+        known_counterexamples=known_counterexamples,
         counterexamples_discovered=discovered,
-        counterexample_discovery_rate=discovered / counterexample_cases if counterexample_cases else None,
+        counterexample_discovery_rate=discovered / known_counterexamples if known_counterexamples else None,
+        counterexamples_confirmed=confirmed,
+        counterexample_confirmation_rate=confirmed / known_counterexamples if known_counterexamples else None,
         false_promising_gap_count=false_positive,
         false_promising_gap_rate=false_positive / well_studied_cases if well_studied_cases else None,
         candidate_accuracy=candidate_correct / candidate_total if candidate_total else None,

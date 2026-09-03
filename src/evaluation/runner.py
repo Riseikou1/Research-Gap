@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from .dataset import load_jsonl
+from .ablation import AblationPrediction, AblationPredictionGenerator, AblationVariant
 from .extraction import aggregate_extraction, evaluate_attribution, evaluate_extraction
 from .metrics import evaluate_retrieval
 from .models import (
@@ -41,6 +42,51 @@ class EvaluationRunner:
         if not values:
             return RetrievalAggregateMetrics(cases=0)
         return RetrievalAggregateMetrics(cases=len(values), **{name: sum(getattr(item, name) for item in values) / len(values) for name in ("recall_at_10", "recall_at_50", "mrr", "ndcg_at_10")})
+
+    def generate_retrieval_ablation_predictions(
+        self,
+        cases: Sequence[RetrievalEvaluationCase],
+        generator: AblationPredictionGenerator,
+        variant: AblationVariant | str,
+    ) -> dict[str, AblationPrediction]:
+        """Execute one retrieval ablation for each case.
+
+        Unavailable optional dependencies are retained as explicit results and
+        recorded as case-level failures; callers can still inspect which
+        variants were attempted without mistaking them for empty predictions.
+        """
+        results: dict[str, AblationPrediction] = {}
+        for case in cases:
+            try:
+                result = generator.generate(case.idea, variant)
+                results[case.id] = result
+                if not result.available:
+                    self.failures.append(
+                        EvaluationFailure(
+                            case_id=case.id,
+                            stage="ablation_unavailable",
+                            error=result.unavailable_reason or "ablation dependencies unavailable",
+                        )
+                    )
+            except Exception as exc:
+                self.failures.append(
+                    EvaluationFailure(case_id=case.id, stage="ablation_generation", error=str(exc))
+                )
+        return results
+
+    def generate_retrieval_predictions(
+        self,
+        cases: Sequence[RetrievalEvaluationCase],
+        generator: AblationPredictionGenerator,
+        variant: AblationVariant | str,
+    ) -> dict[str, Sequence[str]]:
+        """Return only available ranked IDs for the existing offline scorer."""
+        results = self.generate_retrieval_ablation_predictions(cases, generator, variant)
+        return {
+            case_id: result.retrieved_ids
+            for case_id, result in results.items()
+            if result.available
+        }
 
     def evaluate_extraction(self, cases: Sequence[ExtractionEvaluationCase], predictions: Mapping[str, object]) -> tuple[object, object]:
         extraction_scores = []

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from src.extraction.evidence import EvidenceItem, PaperEvidence
 
@@ -26,7 +27,7 @@ def _values(record: PaperEvidence | Mapping[str, object], field: str) -> list[st
     value = record.get(field) if isinstance(record, Mapping) else getattr(record, field, None)
     if value is None:
         return []
-    values = value if isinstance(value, list) else [value]
+    values = value if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else [value]
     output: list[str] = []
     for item in values:
         if isinstance(item, EvidenceItem):
@@ -40,43 +41,67 @@ def _values(record: PaperEvidence | Mapping[str, object], field: str) -> list[st
     return list(dict.fromkeys(output))
 
 
+def _gold_values(gold: Mapping[str, Sequence[str]], field: str) -> list[str]:
+    values = gold.get(field, [])
+    return list(
+        dict.fromkeys(
+            normalized
+            for value in values
+            if (normalized := normalize_value(str(value)))
+        )
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Counts:
+    true_positive: int
+    false_positive: int
+    false_negative: int
+
+    @property
+    def active(self) -> bool:
+        return bool(self.true_positive or self.false_positive or self.false_negative)
+
+
+def _counts(predicted: Sequence[str], gold: Sequence[str]) -> _Counts:
+    predicted_set, gold_set = set(predicted), set(gold)
+    return _Counts(
+        true_positive=len(predicted_set & gold_set),
+        false_positive=len(predicted_set - gold_set),
+        false_negative=len(gold_set - predicted_set),
+    )
+
+
 def _field_metrics(predicted: list[str], gold: list[str]) -> FieldMetrics:
     predicted_set, gold_set = set(predicted), set(gold)
-    tp = len(predicted_set & gold_set)
-    fp = len(predicted_set - gold_set)
-    fn = len(gold_set - predicted_set)
-    precision = tp / (tp + fp) if tp + fp else 1.0
-    recall = tp / (tp + fn) if tp + fn else 1.0
+    counts = _counts(predicted, gold)
+    tp, fp, fn = counts.true_positive, counts.false_positive, counts.false_negative
+    # Empty/empty is an unscored field, not a perfect prediction.  Returning
+    # zero here keeps direct per-field output explicit; macro and micro use
+    # ``active`` below and therefore exclude it entirely.
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return FieldMetrics(
-        precision=precision, recall=recall, f1=f1, support=len(gold_set),
-        exact_accuracy=1.0 if predicted_set == gold_set else 0.0,
+        precision=precision, recall=recall, f1=f1, support=len(set(gold)),
+        exact_accuracy=(1.0 if predicted_set == gold_set else 0.0) if counts.active else None,
+        true_positive=tp,
+        false_positive=fp,
+        false_negative=fn,
     )
 
 
 def evaluate_extraction(predicted: PaperEvidence | Mapping[str, object], gold: Mapping[str, Sequence[str]]) -> ExtractionMetrics:
     per_field = {
-        field: _field_metrics(_values(predicted, field), [normalize_value(str(v)) for v in gold.get(field, [])])
+        field: _field_metrics(_values(predicted, field), _gold_values(gold, field))
         for field in EVIDENCE_FIELDS
     }
-    tp = fp = fn = 0
-    for field, metrics in per_field.items():
-        pred, expected = set(_values(predicted, field)), {normalize_value(str(v)) for v in gold.get(field, [])}
-        tp += len(pred & expected); fp += len(pred - expected); fn += len(expected - pred)
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    micro = FieldMetrics(precision=precision, recall=recall, f1=f1, support=tp + fn)
-    nonempty = [metric for metric in per_field.values() if metric.support]
+    total = _sum_counts(per_field.values())
+    micro = _metrics_from_counts(total, exact_accuracy=None)
+    nonempty = [metric for metric in per_field.values() if _metric_is_active(metric)]
     macro = None
     if nonempty:
-        macro = FieldMetrics(
-            precision=sum(m.precision for m in nonempty) / len(nonempty),
-            recall=sum(m.recall for m in nonempty) / len(nonempty),
-            f1=sum(m.f1 for m in nonempty) / len(nonempty),
-            support=sum(m.support for m in nonempty),
-            exact_accuracy=sum(m.exact_accuracy or 0 for m in nonempty) / len(nonempty),
-        )
+        macro = _average_metrics(nonempty)
     return ExtractionMetrics(per_field=per_field, macro=macro, micro=micro)
 
 
@@ -144,28 +169,59 @@ def aggregate_extraction(metrics: Sequence[ExtractionMetrics]) -> ExtractionMetr
     per_field: dict[str, FieldMetrics] = {}
     for field in fields:
         values = [item.per_field[field] for item in metrics if field in item.per_field]
-        per_field[field] = FieldMetrics(
-            precision=sum(x.precision for x in values) / len(values),
-            recall=sum(x.recall for x in values) / len(values),
-            f1=sum(x.f1 for x in values) / len(values),
-            support=sum(x.support for x in values),
-            exact_accuracy=sum(x.exact_accuracy or 0 for x in values) / len(values),
+        counts = _sum_counts(values)
+        exact_values = [x.exact_accuracy for x in values if x.exact_accuracy is not None and _metric_is_active(x)]
+        per_field[field] = _metrics_from_counts(
+            counts,
+            exact_accuracy=sum(exact_values) / len(exact_values) if exact_values else None,
         )
-    active = [metric for metric in per_field.values() if metric.support]
+    active = [metric for metric in per_field.values() if _metric_is_active(metric)]
     macro = None
     if active:
-        macro = FieldMetrics(
-            precision=sum(x.precision for x in active) / len(active),
-            recall=sum(x.recall for x in active) / len(active),
-            f1=sum(x.f1 for x in active) / len(active),
-            support=sum(x.support for x in active),
-            exact_accuracy=sum(x.exact_accuracy or 0 for x in active) / len(active),
-        )
-    total_support = sum(x.support for x in per_field.values())
-    micro = FieldMetrics(
-        precision=sum(x.precision * max(x.support, 1) for x in per_field.values()) / max(sum(max(x.support, 1) for x in per_field.values()), 1),
-        recall=sum(x.recall * x.support for x in per_field.values()) / max(total_support, 1),
-        f1=sum(x.f1 * max(x.support, 1) for x in per_field.values()) / max(sum(max(x.support, 1) for x in per_field.values()), 1),
-        support=total_support,
-    )
+        macro = _average_metrics(active)
+    micro = _metrics_from_counts(_sum_counts(per_field.values()), exact_accuracy=None)
     return ExtractionMetrics(per_field=per_field, macro=macro, micro=micro)
+
+
+def _sum_counts(metrics: Sequence[FieldMetrics]) -> _Counts:
+    return _Counts(
+        true_positive=sum(metric.true_positive for metric in metrics),
+        false_positive=sum(metric.false_positive for metric in metrics),
+        false_negative=sum(metric.false_negative for metric in metrics),
+    )
+
+
+def _metric_is_active(metric: FieldMetrics) -> bool:
+    return bool(metric.true_positive or metric.false_positive or metric.false_negative)
+
+
+def _metrics_from_counts(counts: _Counts, *, exact_accuracy: float | None) -> FieldMetrics:
+    tp, fp, fn = counts.true_positive, counts.false_positive, counts.false_negative
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return FieldMetrics(
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        support=tp + fn,
+        exact_accuracy=exact_accuracy,
+        true_positive=tp,
+        false_positive=fp,
+        false_negative=fn,
+    )
+
+
+def _average_metrics(metrics: Sequence[FieldMetrics]) -> FieldMetrics:
+    exact_values = [metric.exact_accuracy for metric in metrics if metric.exact_accuracy is not None]
+    counts = _sum_counts(metrics)
+    return FieldMetrics(
+        precision=sum(metric.precision for metric in metrics) / len(metrics),
+        recall=sum(metric.recall for metric in metrics) / len(metrics),
+        f1=sum(metric.f1 for metric in metrics) / len(metrics),
+        support=sum(metric.support for metric in metrics),
+        exact_accuracy=sum(exact_values) / len(exact_values) if exact_values else None,
+        true_positive=counts.true_positive,
+        false_positive=counts.false_positive,
+        false_negative=counts.false_negative,
+    )

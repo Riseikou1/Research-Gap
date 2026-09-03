@@ -1527,6 +1527,19 @@ class GapVerifier:
                 f"verification_pruning: skipped {pruned} redundant candidate hypotheses"
             )
 
+        # A combination already present in one analyzed paper is not a gap
+        # candidate. Filter it before external verification so the observed
+        # rejection is accounted for without leaking the well-studied
+        # verification result into the final candidate list.
+        unobserved: list[GapCandidate] = []
+        for candidate in selected:
+            if _candidate_observed_papers(candidate, evidence):
+                self._metrics["observed_candidates_rejected_preverification"] += 1
+                self._metrics["candidate_rejected_observed"] += 1
+                continue
+            unobserved.append(candidate)
+        selected = unobserved
+
         self._metrics["candidate_hypotheses_verified"] += len(selected)
         verified_selected = [
             self.verify(idea, candidate, evidence)

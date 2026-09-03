@@ -591,6 +591,67 @@ class PerformanceRegressionTest(unittest.TestCase):
             1,
         )
 
+    def test_verify_many_filters_observed_combination_before_final_output(self):
+        backend = CountingEmptyRetriever()
+        verifier = GapVerifier(
+            MultiQueryRetriever(
+                backend,
+                max_candidates=20,
+                per_route_limit=5,
+                max_workers=2,
+            ),
+            EmptyExtractor(),
+        )
+        candidate = GapCandidate(
+            id="observed-candidate",
+            title="problem_a method_b constraint_c",
+            description="synthetic combination",
+            category="combination",
+            pattern_type="combination_gap",
+            rationale="synthetic rationale",
+            supporting_paper_ids=["p1"],
+            landscape_basis=[
+                LandscapeBasis(
+                    dimension=dimension,
+                    value=value,
+                    count=1,
+                    total=1,
+                    prevalence=1.0,
+                    paper_ids=["p1"],
+                )
+                for dimension, value in (
+                    ("problem", "problem_a"),
+                    ("method_family", "method_b"),
+                    ("constraint", "constraint_c"),
+                )
+            ],
+        )
+        records = [
+            evidence(
+                "p1",
+                problem="problem_a",
+                method="method_b",
+                constraint="constraint_c",
+            )
+        ]
+
+        result = verifier.verify_many(
+            ResearchIdea(
+                original_text="problem_a method_b constraint_c",
+                problem=["problem_a"],
+                intervention_or_method=["method_b"],
+                constraints=["constraint_c"],
+            ),
+            [candidate],
+            records,
+        )
+
+        self.assertEqual(result, [])
+        self.assertEqual(backend.calls, 0)
+        metrics = verifier.metrics_snapshot()
+        self.assertEqual(metrics["candidate_rejected_observed"], 1)
+        self.assertEqual(metrics["observed_candidates_rejected_preverification"], 1)
+
     def test_pruned_candidates_are_not_returned_or_resurrected(self):
         backend = CountingEmptyRetriever()
         verifier = GapVerifier(

@@ -51,6 +51,11 @@ class FieldMetrics(StrictModel):
     f1: float = Field(ge=0, le=1)
     support: int = Field(ge=0)
     exact_accuracy: float | None = Field(default=None, ge=0, le=1)
+    # Keep the sufficient statistics alongside derived scores so aggregate
+    # evaluation never has to reverse-engineer TP/FP/FN from rounded rates.
+    true_positive: int = Field(default=0, ge=0)
+    false_positive: int = Field(default=0, ge=0)
+    false_negative: int = Field(default=0, ge=0)
 
 
 class ExtractionMetrics(StrictModel):
@@ -97,8 +102,11 @@ class VerificationMetrics(StrictModel):
     confusion_matrix: dict[str, dict[str, int]] = Field(default_factory=dict)
     per_label: dict[str, FieldMetrics] = Field(default_factory=dict)
     counterexample_cases: int = Field(ge=0)
-    counterexamples_discovered: int = Field(ge=0)
+    known_counterexamples: int = Field(default=0, ge=0)
+    counterexamples_discovered: int = Field(default=0, ge=0)
     counterexample_discovery_rate: float | None = Field(default=None, ge=0, le=1)
+    counterexamples_confirmed: int = Field(default=0, ge=0)
+    counterexample_confirmation_rate: float | None = Field(default=None, ge=0, le=1)
     false_promising_gap_count: int = Field(ge=0)
     false_promising_gap_rate: float | None = Field(default=None, ge=0, le=1)
     candidate_accuracy: float | None = Field(default=None, ge=0, le=1)

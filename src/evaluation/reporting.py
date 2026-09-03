@@ -35,7 +35,7 @@ def format_report(report: EvaluationReport) -> str:
         lines += ["", "Attribution", "-----------", f"Supported claims: {attribution.supported_claim_rate:.1%}", f"Unsupported claim rate: {attribution.unsupported_claim_rate:.1%}"]
     verification = report.verification
     if verification:
-        lines += ["", "Verification", "------------", f"Cases scored: {verification.cases_scored}/{verification.cases_total}", f"Assessment accuracy: {verification.accuracy}", f"Counterexample discovery rate: {verification.counterexample_discovery_rate}", f"False promising-gap rate: {verification.false_promising_gap_rate}"]
+        lines += ["", "Verification", "------------", f"Cases scored: {verification.cases_scored}/{verification.cases_total}", f"Assessment accuracy: {verification.accuracy}", f"Counterexample discovery rate: {verification.counterexample_discovery_rate}", f"Counterexample confirmation rate: {verification.counterexample_confirmation_rate}", f"False promising-gap rate: {verification.false_promising_gap_rate}"]
     performance = report.performance
     if performance:
         lines += ["", "Performance", "-----------", f"Total latency: {performance.total_seconds}", f"Cache mode: {performance.cache_mode}", f"Cache hit rates: {performance.cache_hit_rates}"]

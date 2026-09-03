@@ -4,12 +4,15 @@ import unittest
 from pathlib import Path
 
 from src.evaluation import (
+    AblationPredictionGenerator,
+    AblationVariant,
     AnnotationRecord,
     EvaluationRunner,
     ExtractionEvaluationCase,
     RetrievalEvaluationCase,
     RetrievalJudgment,
     VerificationEvaluationCase,
+    aggregate_extraction,
     aggregate_ratings,
     evaluate_attribution,
     evaluate_deduplication,
@@ -71,17 +74,148 @@ class ExtractionTest(unittest.TestCase):
         attribution = evaluate_attribution([item], title="Title", abstract="Abstract")
         self.assertEqual(attribution.unsupported_claim_rate, 1.0)
 
+    def test_aggregate_micro_scores_use_accumulated_counts(self):
+        first = evaluate_extraction(
+            {"research_objective": ["a"]},
+            {"research_objective": ["a"]},
+        )
+        second = evaluate_extraction(
+            {"research_objective": ["b"]},
+            {"research_objective": ["b", "c"]},
+        )
+
+        micro = aggregate_extraction([first, second]).micro
+        self.assertEqual(micro.true_positive, 2)
+        self.assertEqual(micro.false_positive, 0)
+        self.assertEqual(micro.false_negative, 1)
+        self.assertEqual(micro.precision, 1.0)
+        self.assertAlmostEqual(micro.recall, 2 / 3)
+        self.assertAlmostEqual(micro.f1, 0.8)
+
+    def test_empty_empty_fields_are_unscored(self):
+        empty = evaluate_extraction({}, {})
+        self.assertIsNone(empty.macro)
+        self.assertEqual(empty.micro.support, 0)
+        self.assertEqual(empty.micro.precision, 0.0)
+        self.assertEqual(empty.micro.recall, 0.0)
+        self.assertEqual(empty.micro.f1, 0.0)
+        self.assertEqual(empty.per_field["constraints"].true_positive, 0)
+        self.assertIsNone(empty.per_field["constraints"].exact_accuracy)
+
+        nonempty = evaluate_extraction(
+            {"research_objective": ["a"]},
+            {"research_objective": ["a"]},
+        )
+        combined = aggregate_extraction([nonempty, empty])
+        self.assertEqual(combined.micro, nonempty.micro)
+        self.assertEqual(combined.macro, nonempty.macro)
+
 
 class VerificationTest(unittest.TestCase):
     def test_uncertain_and_dangerous_positive_are_scored(self):
         cases = [
-            VerificationEvaluationCase(id="a", idea="x", expected_label="well_studied", known_counterexample_ids=["p1"]),
+            VerificationEvaluationCase(id="a", idea="x", expected_label="well_studied", known_counterexample_ids=["p1", "p2", "p3", "p4", "p5"]),
             VerificationEvaluationCase(id="b", idea="y", expected_label="uncertain"),
         ]
-        result = evaluate_verification(cases, {"a": {"label": "promising_gap", "counterexample_paper_ids": ["p1"]}, "b": "uncertain"})
-        self.assertEqual(result.counterexample_discovery_rate, 1.0)
+        result = evaluate_verification(cases, {"a": {"label": "promising_gap", "searched_paper_ids": ["p1"], "counterexample_paper_ids": ["p1"]}, "b": "uncertain"})
+        self.assertEqual(result.counterexample_discovery_rate, 0.2)
+        self.assertEqual(result.counterexample_confirmation_rate, 0.2)
         self.assertEqual(result.false_promising_gap_count, 1)
         self.assertEqual(result.accuracy, 0.5)
+
+    def test_discovery_is_paper_level_and_separate_from_confirmation(self):
+        cases = [VerificationEvaluationCase(
+            id="a",
+            idea="x",
+            expected_label="uncertain",
+            known_counterexample_ids=["p1", "p2", "p3", "p4", "p5"],
+        )]
+        result = evaluate_verification(cases, {
+            "a": {
+                "label": "uncertain",
+                "searched_paper_ids": ["p1", "p2"],
+                "counterexample_paper_ids": ["p1"],
+                "potential_contradiction_paper_ids": ["p2"],
+            }
+        })
+        self.assertEqual(result.known_counterexamples, 5)
+        self.assertEqual(result.counterexamples_discovered, 2)
+        self.assertEqual(result.counterexample_discovery_rate, 0.4)
+        self.assertEqual(result.counterexamples_confirmed, 1)
+        self.assertEqual(result.counterexample_confirmation_rate, 0.2)
+
+
+class AblationExecutionTest(unittest.TestCase):
+    class FakeDecomposer:
+        def decompose(self, text):
+            from src.models.idea import ResearchIdea
+            return ResearchIdea(original_text=text)
+
+    class FakeGenerator:
+        def __init__(self, text, source, strategy):
+            self.text = text
+            self.source = source
+            self.strategy = strategy
+
+        def generate(self, idea):
+            from src.models.query import SearchQuery
+            return [SearchQuery(text=self.text, source=self.source, strategy=self.strategy)]
+
+    class FakeRetriever:
+        def __init__(self):
+            self.calls = []
+
+        def _result(self, kind, queries):
+            from src.models.paper import Paper
+            self.calls.append((kind, tuple(query.text for query in queries)))
+            return type("Result", (), {
+                "papers": [Paper(id=f"{kind}:{'|'.join(query.text for query in queries)}", title="paper")]
+            })()
+
+        def retrieve_verification(self, queries, *, adaptive, limit):
+            return self._result("lexical", queries)
+
+        def retrieve_hybrid(self, queries, *, limit):
+            return self._result("hybrid", queries)
+
+    class FakeReranker:
+        def rerank(self, idea, papers):
+            return type("Ranking", (), {"papers": list(reversed(papers)), "mode": "hybrid"})()
+
+    def test_all_six_variants_execute_and_remain_distinguishable(self):
+        generator = AblationPredictionGenerator(
+            decomposer=self.FakeDecomposer(),
+            retriever=self.FakeRetriever(),
+            deterministic_generator=self.FakeGenerator("det expansion", "deterministic", "det"),
+            llm_generator=self.FakeGenerator("llm expansion", "llm", "llm"),
+            reranker=self.FakeReranker(),
+        )
+        case = RetrievalEvaluationCase(
+            id="c1",
+            idea="original idea",
+            relevant_papers=[RetrievalJudgment(paper_id="lexical:original idea", relevance=1)],
+        )
+        runner = EvaluationRunner()
+        results = {
+            variant: runner.generate_retrieval_ablation_predictions([case], generator, variant)["c1"]
+            for variant in AblationVariant
+        }
+        self.assertTrue(all(result.available for result in results.values()))
+        self.assertEqual(set(results), set(AblationVariant))
+        self.assertEqual(
+            len({(result.retrieved_ids, result.ranking_mode) for result in results.values()}),
+            6,
+        )
+        self.assertEqual(results[AblationVariant.HYBRID_RERANKED].ranking_mode, "hybrid")
+
+    def test_llm_ablation_reports_missing_optional_dependency(self):
+        generator = AblationPredictionGenerator(
+            decomposer=self.FakeDecomposer(),
+            retriever=self.FakeRetriever(),
+        )
+        result = generator.generate("original idea", AblationVariant.LLM_EXPANSION)
+        self.assertFalse(result.available)
+        self.assertEqual(result.unavailable_dependencies, ("llm_generator",))
 
 
 class DatasetAndRunnerTest(unittest.TestCase):
