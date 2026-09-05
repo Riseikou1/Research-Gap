@@ -1,0 +1,227 @@
+Benchmark: 3
+Idea: federated reinforcement learning for adaptive traffic signal control across multiple cities under non-IID data and limited communication
+Started: 2026-09-04T15:03:21+09:00
+
+Found 100 unique candidate papers.
+Showing top 20 ranked results for: federated reinforcement learning for adaptive traffic signal control across multiple cities under non-IID data and limited communication (hybrid)
+
+1. Intelligent Spatiotemporal Traffic Optimization Using Federated Model-Based Reinforcement Learning for Smart Cities
+   Authors: Niranchana Radhakrishnan, Ezil Sam Leni Ayyaswami, B. Bharathi Kannan, V. Porkodi, S. Hemalatha
+   Year: 2025
+   Final relevance: 0.976
+   Citations: 2
+   Link: https://doi.org/10.1109/tce.2025.3598586
+   Abstract: Traffic congestion remains a critical challenge in urban mobility, increasing travel time, fuel consumption, and environmental impact. Traditional static timing traffic signal systems lack adaptability to dynamic traffic conditions. To address this, we propose DMFLADPPRL, a novel traffic signal control framework that combines three core innovations: (i) a multilevel deep federated learning architecture that enables decentralized training across edge, fog and cloud layers; (ii) AutoDeepCABAC, a custom autoencoder-based entropy compression technique that significantly reduces communication overhead; and (iii) a modified Proximal Policy Optimization (PPO) algorithm tailored for adaptive traffic control. Unlike previous approaches, our framework tightly integrates these components to achieve privacy-preserving, energy-efficient, and real-time decision-making. AutoDeepCABAC enables seamless deployment in consumer electronics based on the Internet of Things (IoT), such as smart cameras and roadside sensors, while the hierarchical FL design ensures scalability in large urban networks. Evaluations of benchmark datasets (SIND, PeMS, Bosch Small Traffic Lights) under IID and non-IID conditions show that DMFLADPPRL outperforms baseline methods in reducing vehicle waiting time, improving throughput, and minimizing congestion. This work demonstrates the potential of intelligent and cooperative learning systems to power the next generation of smart city traffic infrastructure.
+
+2. Federated hierarchical reinforcement learning for adaptive traffic signal control
+   Authors: Yongjie Fu, Lingyun Zhong, Zifan Li, Xuan Di
+   Year: 2026
+   Final relevance: 0.862
+   Citations: 3
+   Link: https://doi.org/10.1016/j.trc.2026.105894
+   Abstract: Abstract unavailable
+
+3. Federated Reinforcement Learning for Adaptive Traffic Signal Control: A Case Study in New York City
+   Authors: Yongjie Fu, Xuan Di
+   Year: 2023
+   Final relevance: 0.848
+   Citations: 16
+   Link: https://doi.org/10.1109/itsc57777.2023.10422024
+   Abstract: Adaptive traffic signal control (ATSC), a networked traffic signal control system with real-time coordination of traffic control signals across intersections, aims to address the aggravated traffic congestion in urban areas. Recent years have seen a growing body of literature that employs multiagent reinforcement learning (MARL) for ATSC, where each traffic controller located at one road intersection is an agent aiming to optimize an objective like minimizing traffic delay. The centralized RL control paradigm, however, incurs high communication costs and demands substantial data, making it challenging to implement in large-scale, real-world road networks. Accordingly, decentralized RL control is more desirable. On the other hand, data sharing and exchange could be challenging in real-time, which demands training a coordinated ATSC using individual datasets collected from each road intersection. In this paper, we apply federated reinforcement learning (FedRL) to ATSC for its benefits in reducing communication cost while maintaining collaborative control. By comparing FedRL to centralized RL and distributed RL through experiments conducted on real-world road networks, we demonstrate the efficiency and superior performance of the FedRL approach in addressing traffic congestion.
+
+4. Federated Hierarchical Reinforcement Learning for Adaptive Traffic Signal Control
+   Authors: Yongjie Fu, Lingyun Zhong, Zifan Li, Xuan Di
+   Year: 2025
+   Final relevance: 0.840
+   Citations: 0
+   Link: https://doi.org/10.48550/arxiv.2504.05553
+   Abstract: Multi-agent reinforcement learning (MARL) has shown promise for adaptive traffic signal control (ATSC), enabling multiple intersections to coordinate signal timings in real time. However, in large-scale settings, MARL faces constraints due to extensive data sharing and communication requirements. Federated learning (FL) mitigates these challenges by training shared models without directly exchanging raw data, yet traditional FL methods such as FedAvg struggle with highly heterogeneous intersections. Different intersections exhibit varying traffic patterns, demands, and road structures, so performing FedAvg across all agents is inefficient. To address this gap, we propose Hierarchical Federated Reinforcement Learning (HFRL) for ATSC. HFRL employs clustering-based or optimization-based techniques to dynamically group intersections and perform FedAvg independently within groups of intersections with similar characteristics, enabling more effective coordination and scalability than standard FedAvg.Our experiments on synthetic and real-world traffic networks demonstrate that HFRL consistently outperforms decentralized and standard federated RL approaches, and achieves competitive or superior performance compared to centralized RL as network scale and heterogeneity increase, particularly in real-world settings. The method also identifies suitable grouping patterns based on network structure or traffic demand, resulting in a more robust framework for distributed, heterogeneous systems.
+
+5. Federated deep reinforcement learning-based urban traffic signal optimal control
+   Authors: M. Li, Xiaolong Pan, Chuhui Liu, Zirui Li
+   Year: 2025
+   Final relevance: 0.773
+   Citations: 39
+   Link: https://doi.org/10.1038/s41598-025-91966-1
+   Abstract: This paper proposes a cross-domain intelligent traffic signal control method based on federated Proximal-Policy Optimization (PPO) for distributed joint training of agents across domains for typical intersections, aiming at solving the problems of slow learning speed and poor model generalization when deep reinforcement learning (RL) is applied to cross-domain multi-intersection traffic signal optimization control. The proposed method improves the model generalization ability of different local models during global cross-region distributed joint training under the premise of ensuring information security and data privacy, solves the problem of non-independent and homogeneous distribution of environmental data faced by different agents in real intersection scenarios, and significantly accelerates the convergence speed of the model training phase. By reasonably designing the state, action and reward functions and determining the optimal values of several key parameters in the federated collaboration mechanism, the RL model could ensure high learning efficiency and fast convergence in the face of the gradual increase of road network size and the exponential increase of state and action space with the number of intersections. In addition, the new state interaction method and the reward function allow the agents to collaborate with each other, which greatly improves the information interaction efficiency between the federated learning local agents and the central coordinator, and improves the access efficiency of the road network and reduces the amount of communication data transmitted. Finally, through experimental comparisons, the proposed method can significantly reduce the average vehicle waiting time by up to 27.34% compared with the existing fixed timing method, and under the same convergence height, the convergence speed is up to 47.69% faster compared with the individual PPO trained in a single local environment, and up to 45.35% faster than the aggregated PPO trained jointly using all local data. The proposed method effectively optimizes intersection access efficiency with excellent robustness under various traffic flow settings.
+
+6. Cooperative Traffic Signal Control Using a Distributed Agent-Based Deep Reinforcement Learning With Incentive Communication
+   Authors: Bin Zhou, Qishen Zhou, Simon Hu, Dongfang Ma, Sheng Jin, Der‐Horng Lee
+   Year: 2024
+   Final relevance: 0.758
+   Citations: 52
+   Link: https://doi.org/10.1109/tits.2024.3352730
+   Abstract: Deep Reinforcement Learning has shown some promise in dynamic traffic signal control by adapting to real-time traffic conditions. However, multi-intersection control presents challenges, primarily due to the need for efficient information exchange across increasing intersections, and the importance of spatiotemporal dynamics in traffic flows. Traditional methods often focus solely on spatial or temporal aspects, leading to suboptimal control strategies. This paper introduces a novel Multi-Agent Incentive Communication Deep Reinforcement Learning (MICDRL) method, designed for collaborative control across multiple intersections. MICDRL features an incentive communication mechanism, allowing agents to generate customized messages that influence other agents’ policies, thereby enhancing coordination and achieving globally optimal decisions. A key feature of MICDRL is its reliance on local information for message generation, effectively reducing communication overhead while ensuring collaboration. Additionally, MICDRL integrates a teammate module that leverages temporal data for predicting other agents’ actions, crucial for understanding collective dynamics and spatial environment characteristics. Empirical results show that MICDRL outperforms several state-of-the-art methods in metrics like queue length and throughput. Furthermore, we introduce a tailored three-layer Internet-of-Things architecture to enhance data collection and transmission.
+
+7. Toward A Thousand Lights: Decentralized Deep Reinforcement Learning for Large-Scale Traffic Signal Control
+   Authors: Chacha Chen, Hua Wei, Nan Xu, Guanjie Zheng, Ming Yang, Yuanhao Xiong, Kai Xu, Zhenhui Li
+   Year: 2020
+   Final relevance: 0.732
+   Citations: 413
+   Link: https://doi.org/10.1609/aaai.v34i04.5744
+   Abstract: Traffic congestion plagues cities around the world. Recent years have witnessed an unprecedented trend in applying reinforcement learning for traffic signal control. However, the primary challenge is to control and coordinate traffic lights in large-scale urban networks. No one has ever tested RL models on a network of more than a thousand traffic lights. In this paper, we tackle the problem of multi-intersection traffic signal control, especially for large-scale networks, based on RL techniques and transportation theories. This problem is quite difficult because there are challenges such as scalability, signal coordination, data feasibility, etc. To address these challenges, we (1) design our RL agents utilizing ‘pressure’ concept to achieve signal coordination in region-level; (2) show that implicit coordination could be achieved by individual control agents with well-crafted reward design thus reducing the dimensionality; and (3) conduct extensive experiments on multiple scenarios, including a real-world scenario with 2510 traffic lights in Manhattan, New York City 1 2.
+
+8. FedLight: Federated Reinforcement Learning for Autonomous Multi-Intersection Traffic Signal Control
+   Authors: Yutong Ye, Wupan Zhao, Tongquan Wei, Shiyan Hu, Mingsong Chen
+   Year: 2021
+   Final relevance: 0.725
+   Citations: 26
+   Link: https://doi.org/10.1109/dac18074.2021.9586175
+   Abstract: Although Reinforcement Learning (RL) has been successfully applied in traffic control, it suffers from the problems of high average vehicle travel time and slow convergence to optimized solutions. This is because, due to the scalability restriction, most existing RL-based methods focus on the optimization of individual intersections while the impact of their cooperation is neglected. Without taking all the correlated intersections as a whole into account, it is difficult to achieve global optimization goals for complex traffic scenarios. To address this issue, this paper proposes a novel federated reinforcement learning approach named FedLight to enable optimal signal control policy generation for multi-intersection traffic scenarios. Inspired by federated learning, our approach supports knowledge sharing among RL agents, whose models are trained using decentralized traffic data at intersections. Based on such model-level collaborations, both the overall convergence rate and control quality can be significantly improved. Comprehensive experimental results demonstrate that compared with the state-of-the-art techniques, our approach can not only achieve better average vehicle travel time for various multi-intersection configurations, but also converge to optimal solutions much faster.
+
+9. Optimizing Traffic Signal Control: A Scalable Approach with Federated Reinforcement Learning
+   Authors: Jingjing Bao, Celimuge Wu, Yangfei Lin, Lei Zhong, Xianfu Chen, Rui Yin
+   Year: 2023
+   Final relevance: 0.725
+   Citations: 1
+   Link: https://doi.org/10.21203/rs.3.rs-3248732/v1
+   Abstract: Abstract Intelligent Transportation has seen significant advancements with Deep Learning (DL) and Internet of Things, making Traffic Signal Control (TSC) research crucial for reducing congestion, travel time, emissions, and energy consumption. Reinforcement Learning (RL) has emerged as the primary method for TSC, but centralized learning poses communication and computing challenges, while distributed learning struggles to adapt across intersections. This paper presents a novel approach using Federated Learning (FL)-based RL for TSC. FL integrates knowledge from local agents into a global model, overcoming intersection variations with a unified agent state structure. Additionally, the output layer's parameters are not aggregated to handle different intersection settings; instead, fine-tuning is performed after model training for deployment. Extensive experiments demonstrate reduced queuing and waiting times globally, and successful scalability of the proposed model is validated on a real-world traffic network in Monaco, showing its potential for new intersections.
+
+10. Adaptive Traffic Signal Control Using Distributed MARL and Federated Learning
+   Authors: Tianyu Wang, Teng Liang, Jun Li, Weibin Zhang, Yiji Zhang, Yan Lin
+   Year: 2020
+   Final relevance: 0.722
+   Citations: 16
+   Link: https://doi.org/10.1109/icct50939.2020.9295660
+   Abstract: Facing the increasingly serious traffic congestion problem, the existing traffic signal control technology has been unable to meet the demands of urban smart traffic construction. As one of the most promising methods, Reinforcement Learning (RL) has been widely exploited for solving the adaptive traffic signal control (ATSC) problem. However, centralized RL control mode is impractical due to its poor robustness and high computational complexity. In this paper, we propose two distributed Multi-agent Reinforcement Learning (MARL) control modes as well as a Federated Learning (FL) framework to solve the ATSC problem, where the former is based on Advantage Actor-Critic (A2C) algorithm and the latter is based on Federated Averaging (FedAvg) algorithm. By comparing in a small grid of traffic network, the experimental results reveal that our proposed algorithms outperform the centralized solution in terms of both the optimality and the learning efficiency.
+
+11. Adaptive Traffic Signal Control for large-scale scenario with Cooperative Group-based Multi-agent reinforcement learning
+   Authors: Tong Wang, Cao Jiahua, Azhar Hussain
+   Year: 2021
+   Final relevance: 0.710
+   Citations: 162
+   Link: https://doi.org/10.1016/j.trc.2021.103046
+   Abstract: Abstract unavailable
+
+12. A scalable approach to optimize traffic signal control with federated reinforcement learning
+   Authors: Jingjing Bao, Celimuge Wu, Yangfei Lin, Lei Zhong, Xianfu Chen, Rui Yin
+   Year: 2023
+   Final relevance: 0.706
+   Citations: 30
+   Link: https://doi.org/10.1038/s41598-023-46074-3
+   Abstract: Intelligent Transportation has seen significant advancements with Deep Learning and the Internet of Things, making Traffic Signal Control (TSC) research crucial for reducing congestion, travel time, emissions, and energy consumption. Reinforcement Learning (RL) has emerged as the primary method for TSC, but centralized learning poses communication and computing challenges, while distributed learning struggles to adapt across intersections. This paper presents a novel approach using Federated Learning (FL)-based RL for TSC. FL integrates knowledge from local agents into a global model, overcoming intersection variations with a unified agent state structure. To endow the model with the capacity to globally represent the TSC task while preserving the distinctive feature information inherent to each intersection, a segment of the RL neural network is aggregated to the cloud, and the remaining layers undergo fine-tuning upon convergence of the model training process. Extensive experiments demonstrate reduced queuing and waiting times globally, and the successful scalability of the proposed model is validated on a real-world traffic network in Monaco, showing its potential for new intersections.
+
+13. Smart Edge-Enabled Traffic Light Control: Improving Reward-Communication Trade-offs with Federated Reinforcement Learning
+   Authors: Nathaniel Hudson, Pratham Oza, Hana Khamfroush, Thidapat Chantem
+   Year: 2022
+   Final relevance: 0.702
+   Citations: 15
+   Link: https://doi.org/10.1109/smartcomp55677.2022.00021
+   Abstract: Traffic congestion is a costly phenomenon of every-day life. Reinforcement Learning (RL) is a promising solution due to its applicability to solving complex decision-making problems in highly dynamic environments. To train smart traffic lights using RL, large amounts of data is required. Recent RL-based approaches consider training to occur on some nearby server or a remote cloud server. However, this requires that traffic lights all communicate their raw data to some central location. For large road systems, communication cost can be impractical, particularly if traffic lights collect heavy data (e.g., video, LIDAR). As such, this work pushes training to the traffic lights directly to reduce communication cost. However, completely independent learning can reduce the performance of trained models. As such, this work considers the recent advent of Federated Reinforcement Learning (FedRL) for edge-enabled traffic lights so they can learn from each other's experience by periodically aggregating locally-learned policy network parameters rather than share raw data, hence keeping communication costs low. To do this, we propose the SEAL framework which uses an intersection-agnostic representation to support FedRL across traffic lights controlling heterogeneous intersection types. We then evaluate our FedRL approach against Centralized and Decentralized RL strategies. We compare the reward-communication trade-offs of these strategies. Our results show that FedRL is able to reduce the communication costs associated with Centralized training by 36.24%; while only seeing a 2.11 % decrease in average reward (i.e., decreased traffic congestion).
+
+14. Evaluating reinforcement learning state representations for adaptive traffic signal control
+   Authors: Wade Genders, Saiedeh Razavi
+   Year: 2018
+   Final relevance: 0.680
+   Citations: 112
+   Link: https://doi.org/10.1016/j.procs.2018.04.008
+   Abstract: Reinforcement learning has shown potential for developing effective adaptive traffic signal controllers to reduce traffic congestion and improve mobility. Despite many successful research studies, few of these ideas have been implemented in practice. There remains uncertainty about what the requirements are in terms of data and sensors to actualize reinforcement learning traffic signal control. We seek to understand the data requirements and the performance differences in different state representations for reinforcement learning traffic signal control. We model three state representations, from low to high-resolution, and compare their performance using the asynchronous advantage actor-critic algorithm with neural network function approximation in simulation. Results show that low-resolution state representations (e.g., occupancy and average speed) perform almost identically to high-resolution state representations (e.g., individual vehicle position and speed). These results indicate implementing reinforcement learning traffic signal controllers may be possible with conventional sensors, such as loop detectors, and do not require sophisticated sensors, such as cameras or radar.
+
+15. CVLight: Decentralized learning for adaptive traffic signal control with connected vehicles
+   Authors: Zhaobin Mo, Wangzhi Li, Yongjie Fu, Kangrui Ruan, Xuan Di
+   Year: 2022
+   Final relevance: 0.656
+   Citations: 64
+   Link: https://doi.org/10.1016/j.trc.2022.103728
+   Abstract: Abstract unavailable
+
+16. Using a Deep Reinforcement Learning Agent for Traffic Signal Control
+   Authors: Wade Genders, Saiedeh Razavi
+   Year: 2016
+   Final relevance: 0.649
+   Citations: 242
+   Link: https://doi.org/10.48550/arxiv.1611.01142
+   Abstract: Ensuring transportation systems are efficient is a priority for modern society. Technological advances have made it possible for transportation systems to collect large volumes of varied data on an unprecedented scale. We propose a traffic signal control system which takes advantage of this new, high quality data, with minimal abstraction compared to other proposed systems. We apply modern deep reinforcement learning methods to build a truly adaptive traffic signal control agent in the traffic microsimulator SUMO. We propose a new state space, the discrete traffic state encoding, which is information dense. The discrete traffic state encoding is used as input to a deep convolutional neural network, trained using Q-learning with experience replay. Our agent was compared against a one hidden layer neural network traffic signal control agent and reduces average cumulative delay by 82%, average queue length by 66% and average travel time by 20%.
+
+17. A Review of the Self-Adaptive Traffic Signal Control System Based on Future Traffic Environment
+   Authors: Yizhe Wang, Xiaoguang Yang, Hailun Liang, Yangdong Liu
+   Year: 2018
+   Final relevance: 0.644
+   Citations: 205
+   Link: https://doi.org/10.1155/2018/1096123
+   Abstract: The self-adaptive traffic signal control system serves as an effective measure for relieving urban traffic congestion. The system is capable of adjusting the signal timing parameters in real time according to the seasonal changes and short-term fluctuation of traffic demand, resulting in improvement of the efficiency of traffic operation on urban road networks. The development of information technologies on computing science, autonomous driving, vehicle-to-vehicle, and mobile Internet has created a sufficient abundance of acquisition means for traffic data. Great improvements for data acquisition include the increase of available amount of holographic data, available data types, and accuracy. The article investigates the development of commonly used self-adaptive signal control systems in the world, their technical characteristics, the current research status of self-adaptive control methods, and the signal control methods for heterogeneous traffic flow composed of connected vehicles and autonomous vehicles. Finally, the article concluded that signal control based on multiagent reinforcement learning is a kind of closed-loop feedback adaptive control method, which outperforms many counterparts in terms of real-time characteristic, accuracy, and self-learning and therefore will be an important research focus of control method in future due to the property of “model-free” and “self-learning” that well accommodates the abundance of traffic information data. Besides, it will also provide an entry point and technical support for the development of Vehicle-to-X systems, Internet of vehicles, and autonomous driving industries. Therefore, the related achievements of the adaptive control system for the future traffic environment have extremely broad application prospects.
+
+18. Is cooperative always better? Multi-Agent Reinforcement Learning with explicit neighborhood backtracking for network-wide traffic signal control
+   Authors: Yilong Ren, Yizhuo Chang, Zhiyong Cui, Xiao Chang, Haiyang Yu, Xiaosong Li, Yinhai Wang
+   Year: 2025
+   Final relevance: 0.633
+   Citations: 38
+   Link: https://doi.org/10.1016/j.trc.2025.105265
+   Abstract: Abstract unavailable
+
+19. Sharing Control Knowledge Among Heterogeneous Intersections: A Distributed Arterial Traffic Signal Coordination Method Using Multi-Agent Reinforcement Learning
+   Authors: Hong Zhu, J. H. Feng, Fengmei Sun, Keshuang Tang, Di Zang, Qi Kang
+   Year: 2025
+   Final relevance: 0.632
+   Citations: 15
+   Link: https://doi.org/10.1109/tits.2024.3521514
+   Abstract: Treating each intersection as basic agent, multi-agent reinforcement learning (MARL) methods have emerged as the predominant approach for distributed adaptive traffic signal control (ATSC) in multi-intersection scenarios, such as arterial coordination. MARL-based ATSC currently faces two challenges: disturbances from the control policies of other intersections may impair the learning and control stability of the agents; and the heterogeneous features across intersections may complicate coordination efforts. To address these challenges, this study proposes a novel MARL method for distributed ATSC in arterials, termed the Distributed Controller for Heterogeneous Intersections (DCHI). The DCHI method introduces a Neighborhood Experience Sharing (NES) framework, wherein each agent utilizes both local data and shared experiences from adjacent intersections to improve its control policy. Within this framework, the neural networks of each agent are partitioned into two parts following the Knowledge Homogenizing Encapsulation (KHE) mechanism. The first part manages heterogeneous intersection features and transforms the control experiences, while the second part optimizes homogeneous control logic. Experimental results demonstrate that the proposed DCHI achieves efficiency improvements in average travel time of over 30% compared to traditional methods and yields similar performance to the centralized sharing method. Furthermore, vehicle trajectories reveal that DCHI can adaptively establish green wave bands in a distributed manner. Given its superior control performance, accommodation of heterogeneous intersections, and low reliance on information networks, DCHI could significantly advance the application of MARL-based ATSC methods in practice.
+
+20. Advances in reinforcement learning for traffic signal control: a review of recent progress
+   Authors: Xiao Feng, Jiaming Lu, Lu Li, Wenwen Tu, Chaojing Li
+   Year: 2024
+   Final relevance: 0.618
+   Citations: 19
+   Link: https://doi.org/10.1093/iti/liaf009
+   Abstract: Abstract In recent years, reinforcement learning (RL) methods have shown substantial promise in traffic signal control (TSC), drawing significant attention from academia and industry. The integration of RL with advanced machine learning methods offers a novel approach to tackling dynamic and complex traffic conditions. Previous reviews have primarily focused on foundational RL methods or controlled experimental setups, with limited attention to advanced methodologies and real-world complexities. To address this gap, this paper provides a comprehensive review of recent advancements in RL-based TSC from both methodological and application perspectives. From the methodological perspective, it comprehensively examines how advanced RL methods are integrated with state-of-the-art artificial intelligence algorithms to address TSC challenges. From the application perspective, it systematically reviews studies that extend RL approaches to more complex and multi-modal traffic scenarios. Furthermore, it identifies critical challenges, including model scalability, real-time adaptability, the sim-to-real gap, and the integration of TSC with broader urban transport systems, offering insights, and directions for future research.
+
+Research Idea Assessment
+========================
+Assessment: Uncertain
+Rationale: Structured verification covered: problem, method. Currently unconfirmed components: population_or_domain, constraint. Partial structured matches remained for 8 paper(s). Potential title or weak matches remained for 9 paper(s). No complete same-paper match was confirmed.
+Counterexamples / direct matches: none confirmed
+Partial/contextual support:
+- https://openalex.org/W4413156884 (matched: problem)
+- https://openalex.org/W4391770292 (matched: problem, method)
+- https://openalex.org/W4416528813 (matched: problem, method)
+- https://openalex.org/W4409184035 (matched: method)
+- https://openalex.org/W3211802628 (matched: method)
+- https://openalex.org/W4386050573 (matched: method)
+- https://openalex.org/W3114142431 (matched: problem, method)
+- https://openalex.org/W3205598877 (matched: method)
+Potential matches:
+- https://openalex.org/W4409183260 (matched: problem, method)
+- https://openalex.org/W4391929615
+- https://openalex.org/W2998187693
+- https://openalex.org/W3116546042
+- https://openalex.org/W3127161477
+- https://openalex.org/W4402666098
+- https://openalex.org/W3023574229
+- https://openalex.org/W4313238647
+- https://openalex.org/W4385737398
+Supporting evidence:
+- https://openalex.org/W4413156884 (contextual_or_partial_support, research_objective): Develop a traffic signal control framework for adaptive, privacy-preserving, energy-efficient, and real-time decision-making in smart cities.
+- https://openalex.org/W4391770292 (contextual_or_partial_support, research_objective): Apply federated reinforcement learning to adaptive traffic signal control in real-world road networks.
+- https://openalex.org/W4391770292 (contextual_or_partial_support, method_or_intervention): Federated reinforcement learning for adaptive traffic signal control
+- https://openalex.org/W4416528813 (contextual_or_partial_support, research_objective): Develop a scalable federated reinforcement learning method for adaptive traffic signal control in heterogeneous, large-scale intersection networks.
+- https://openalex.org/W4416528813 (contextual_or_partial_support, method_or_intervention): Hierarchical Federated Reinforcement Learning (HFRL) for adaptive traffic signal control
+- https://openalex.org/W4409184035 (contextual_or_partial_support, research_objective): Develop a federated PPO-based deep reinforcement learning method for cross-domain, multi-intersection traffic signal optimization.
+- https://openalex.org/W3211802628 (contextual_or_partial_support, method_or_intervention): FedLight federated reinforcement learning
+- https://openalex.org/W4386050573 (contextual_or_partial_support, method_or_intervention): Federated learning-based reinforcement learning for traffic signal control
+Verification searches:
+- federated reinforcement learning federated rl adaptive traffic signal control multiple cities traffic signal control non iid data limited communication
+- adaptive traffic signal control federated reinforcement learning federated rl multiple cities traffic signal control non iid data limited communication
+- federated reinforcement learning federated rl adaptive traffic signal control non iid data limited communication multiple cities traffic signal control
+Coverage: Executed 1 direct idea verification queries and retrieved 10 unique papers.
+Coverage: Direct verification used structured title/abstract evidence only.
+Coverage: Analyzed 18 evidence-bearing papers before direct idea assessment.
+Coverage: Important idea facets without explicit structured coverage: population_or_domain.
+Coverage: Some verification papers lacked abstracts; title-only matches were not treated as direct.
+
+Candidate Research Gap Assessments
+==================================
+No evidence-backed candidate gaps were identified.
+
+Global qualification
+--------------------
+These assessments describe retrieved and verified evidence only; they do not prove global novelty.
+
+=== PROCESS TIMING ===
+Wall time: 2.44 s
+CPU user: 1.68 s
+CPU system: 0.09 s
+Max RSS: 94428 KB
+Exit code: 0
+
+Finished: 2026-09-04T15:03:23+09:00
+Program exit status: 0

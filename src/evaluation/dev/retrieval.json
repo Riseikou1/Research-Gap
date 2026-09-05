@@ -1,0 +1,15 @@
+{
+    "id": "retrieval_dev_001",
+    "idea": "molecular property prediction using graph neural networks with limited labeled data",
+    "relevant_papers": [
+      {
+        "paper_id": "https://openalex.org/W...",
+        "relevance": 3
+      },
+      {
+        "paper_id": "https://openalex.org/W...",
+        "relevance": 2
+      }
+    ]
+  }
+

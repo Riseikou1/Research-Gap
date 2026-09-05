@@ -1,0 +1,202 @@
+Benchmark: 1
+Idea: molecular property prediction using graph neural networks with limited labeled data
+Started: 2026-09-04T15:03:14+09:00
+
+Found 100 unique candidate papers.
+Showing top 20 ranked results for: molecular property prediction using graph neural networks with limited labeled data (hybrid)
+
+1. Hierarchical Grammar-Induced Geometry for Data-Efficient Molecular Property Prediction
+   Authors: Minghao Guo, Veronika Thost, Samuel W Song, Adithya Balachandran, Payel Das, Jie Chen, Wojciech Matusik
+   Year: 2023
+   Final relevance: 1.000
+   Citations: 2
+   Link: https://doi.org/10.48550/arxiv.2309.01788
+   Abstract: The prediction of molecular properties is a crucial task in the field of material and drug discovery. The potential benefits of using deep learning techniques are reflected in the wealth of recent literature. Still, these techniques are faced with a common challenge in practice: Labeled data are limited by the cost of manual extraction from literature and laborious experimentation. In this work, we propose a data-efficient property predictor by utilizing a learnable hierarchical molecular grammar that can generate molecules from grammar production rules. Such a grammar induces an explicit geometry of the space of molecular graphs, which provides an informative prior on molecular structural similarity. The property prediction is performed using graph neural diffusion over the grammar-induced geometry. On both small and large datasets, our evaluation shows that this approach outperforms a wide spectrum of baselines, including supervised and pre-trained graph neural networks. We include a detailed ablation study and further analysis of our solution, showing its effectiveness in cases with extremely limited data. Code is available at https://github.com/gmh14/Geo-DEG.
+
+2. Few-Shot Graph Learning for Molecular Property Prediction
+   Authors: Zhichun Guo, Chuxu Zhang, Wenhao Yu, John E. Herr, Olaf Wiest, Meng Jiang, Nitesh V. Chawla
+   Year: 2021
+   Final relevance: 0.975
+   Citations: 154
+   Link: https://doi.org/10.1145/3442381.3450112
+   Abstract: The recent success of graph neural networks has significantly boosted molecular property prediction, advancing activities such as drug discovery. The existing deep neural network methods usually require large training dataset for each property, impairing their performance in cases (especially for new molecular properties) with a limited amount of experimental data, which are common in real situations. To this end, we propose Meta-MGNN, a novel model for few-shot molecular property prediction. Meta-MGNN applies molecular graph neural network to learn molecular representations and builds a meta-learning framework for model optimization. To exploit unlabeled molecular information and address task heterogeneity of different molecular properties, Meta-MGNN further incorporates molecular structures, attribute based self-supervised modules and self-attentive task weights into the former framework, strengthening the whole learning model. Extensive experiments on two public multi-property datasets demonstrate that Meta-MGNN outperforms a variety of state-of-the-art methods.
+
+3. Few-shot learning via graph embeddings with convolutional networks for low-data molecular property prediction
+   Authors: Luis H.M. Torres, Joel P. Arrais, Bernardete Ribeiro
+   Year: 2023
+   Final relevance: 0.936
+   Citations: 11
+   Link: https://doi.org/10.1007/s00521-023-08403-5
+   Abstract: Abstract Graph neural networks and convolutional architectures have proven to be pivotal in improving the prediction of molecular properties in drug discovery. However, this is fundamentally a low data problem that is incompatible with regular deep learning approaches. Contemporary deep networks require large amounts of training data, which severely limits the prediction of new molecular entities from limited available data. In this paper, we address the challenge of low data in molecular property prediction by: (1) defining a set of deep learning architectures that accept compound chemical structures in the form of molecular graphs, (2) creating a few-shot learning strategy across graph neural networks and convolutional neural networks to leverage the rich information of graph embeddings, and (3) proposing a two-module meta-learning framework to learn from task-transferable knowledge and predict molecular properties on few-shot data. Furthermore, we conduct multiple experiments on two benchmark multiproperty datasets to demonstrate a superior performance over conventional graph-based baselines. ROC-AUC results for 10-shot experiments show an average improvement of $$+11.37\%$$ + 11.37 % on Tox21 and $$+0.53\%$$ + 0.53 % on SIDER, which are representative small-sized biological datasets for molecular property prediction.
+
+4. ASGN: An Active Semi-supervised Graph Neural Network for Molecular Property Prediction
+   Authors: Zhongkai Hao, Chengqiang Lu, Zhenya Huang, Hao Wang, Zheyuan Hu, Qi Liu, Enhong Chen, Cheekong Lee
+   Year: 2020
+   Final relevance: 0.870
+   Citations: 115
+   Link: https://doi.org/10.1145/3394486.3403117
+   Abstract: Molecular property prediction (e.g., energy) is an essential problem in chemistry and biology. Unfortunately, many supervised learning methods usually suffer from the problem of scarce labeled molecules in the chemical space, where such property labels are generally obtained by Density Functional Theory (DFT) calculation which is extremely computational costly. An effective solution is to incorporate the unlabeled molecules in a semi-supervised fashion. However, learning semi-supervised representation for large amounts of molecules is challenging, including the joint representation issue of both molecular essence and structure, the conflict between representation and property leaning. Here we propose a novel framework called Active Semi-supervised Graph Neural Network (ASGN) by incorporating both labeled and unlabeled molecules. Specifically, ASGN adopts a teacher-student framework. In the teacher model, we propose a novel semi-supervised learning method to learn general representation that jointly exploits information from molecular structure and molecular distribution. Then in the student model, we target at property prediction task to deal with the learning loss conflict. At last, we proposed a novel active learning strategy in terms of molecular diversities to select informative data during the whole framework learning. We conduct extensive experiments on several public datasets. Experimental results show the remarkable performance of our ASGN framework.
+
+5. DeBERTaSSL: Enhancing Molecular Property Prediction with Self-Supervised Learning
+   Authors: K Ghaayathri Devi, Ravi Shankar Bedadhala, S. Sachin Kumar, K. P. Soman, Jyotsana Devi Bodapatiq
+   Year: 2024
+   Final relevance: 0.859
+   Citations: 2
+   Link: https://doi.org/10.1109/conit61985.2024.10626549
+   Abstract: This research introduces a novel approach to molecular property prediction, leveraging the transformative power of the DeBERTa model, a state-of-the-art transformer-based architecture. By integrating DeBERTa with graph convolutional neural networks (GCNs) and self-supervised learning techniques using fusion modality, our methodology achieves comprehensive representation learning from SMILES-encoded molecular structures. We combine graph-based and sequential representations to capture both local and global relationships within molecules, while incorporating self-supervised learning enables efficient learning from limited labeled data. Through rigorous evaluation and comparison with existing methodologies, including Graph self-supervised learning, Graph Convolutional Network and others, our model DeBERTaSSL, demonstrates superior performance in predicting molecular properties across diverse datasets. This research contributes to advancing the field of molecular property prediction, offering a novel framework that combines the strengths of transformer-based models with graph-based representations and self-supervised learning techniques.
+
+6. When Do Models Win? A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes
+   Authors: Junho Lee¹
+   Year: 2026
+   Final relevance: 0.838
+   Citations: 0
+   Link: https://doi.org/10.26434/chemrxiv.15001253/v1
+   Abstract: In many molecular property prediction tasks, such as drug discovery and OLED material design, labeled data are often limited to only tens to thousands of samples due to high experimental costs. Despite the rapid development of machine learning models, it remains unclear which model classes are most effective under such low-data regimes and how their performance evolves with increasing data. In this work, we present a comprehensive learning curve benchmark across traditional machine learning methods, graph neural networks (GNNs), transformer-based molecular language models, and hybrid architectures. We systematically vary the training data size from 50 to 3,000 samples and evaluate performance on QM9, ESOL, Lipophilicity, and BACE datasets using scaffold splits with repeated trials for statistical robustness. We further propose two hybrid models combining GCN and ChemBERTa with different fusion strategies-concatenation (GTCA-Cat) and cross-attention (GTCA-CA)-and analyze their data efficiency through ablation studies. Our results reveal that (1) hybrid models substantially improve over single-modality GCN in low-data regimes for physicochemical property targets (e.g., 32% RMSE reduction on ESOL at N=50), (2) simple concatenation fusion generally outperforms or matches cross-attention due to reduced overfitting and improved stability, and (3) clear crossover points exist where traditional kernel-based methods outperform deep learning models depending on the task type. Importantly, we identify regimedependent model optimality: deep learning models dominate continuous physicochemical property prediction, while kernel-based methods can be more effective for bioactivity prediction across most data scales. Our findings provide actionable guidelines for model selection under data scarcity and highlight the importance of learning curve analysis as a principled tool for understanding model behavior.
+
+7. Graph Neural Networks for the Prediction of Molecular Structure–Property Relationships
+   Authors: Jan G. Rittig, Qinghe Gao, Manuel Dahmen, Alexander Mitsos, Artur M. Schweidtmann
+   Year: 2023
+   Final relevance: 0.825
+   Citations: 30
+   Link: https://doi.org/10.1039/bk9781837670178-00159
+   Abstract: Molecular property prediction is of crucial importance in many disciplines such as drug discovery, molecular biology, or materials and process design. The frequently employed quantitative structure–property/activity relationships (QSPRs/QSARs) characterize molecules by descriptors which are then mapped to the properties of interest via a linear or nonlinear model. In contrast, graph neural networks, a novel machine learning method, directly work on the molecular graph, i.e., a graph representation where atoms correspond to nodes and bonds correspond to edges. GNNs allow learning of properties in an end-to-end fashion, thereby avoiding the need for informative descriptors as in QSPRs/QSARs. GNNs have been shown to achieve state-of-the-art prediction performance on various property prediction tasks and represent an active field of research. We describe the fundamentals of GNNs and demonstrate the application of GNNs via two examples for molecular property prediction.
+
+8. Quantitative evaluation of explainable graph neural networks for molecular property prediction
+   Authors: Jiahua Rao, Shuangjia Zheng, Yutong Lu, Yuedong Yang
+   Year: 2022
+   Final relevance: 0.820
+   Citations: 91
+   Link: https://doi.org/10.1016/j.patter.2022.100628
+   Abstract: Graph neural networks (GNNs) have received increasing attention because of their expressive power on topological data, but they are still criticized for their lack of interpretability. To interpret GNN models, explainable artificial intelligence (XAI) methods have been developed. However, these methods are limited to qualitative analyses without quantitative assessments from the real-world datasets due to a lack of ground truths. In this study, we have established five XAI-specific molecular property benchmarks, including two synthetic and three experimental datasets. Through the datasets, we quantitatively assessed six XAI methods on four GNN models and made comparisons with seven medicinal chemists of different experience levels. The results demonstrated that XAI methods could deliver reliable and informative answers for medicinal chemists in identifying the key substructures. Moreover, the identified substructures were shown to complement existing classical fingerprints to improve molecular property predictions, and the improvements increased with the growth of training data.
+
+9. A compact review of molecular property prediction with graph neural networks
+   Authors: Oliver Wieder, Stefan M. Kohlbacher, Mélaine A. Kuenemann, Arthur Garon, Ducrot Pierre, Thomas Seidel, Thierry Langer
+   Year: 2020
+   Final relevance: 0.812
+   Citations: 542
+   Link: https://doi.org/10.1016/j.ddtec.2020.11.009
+   Abstract: As graph neural networks are becoming more and more powerful and useful in the field of drug discovery, many pharmaceutical companies are getting interested in utilizing these methods for their own in-house frameworks. This is especially compelling for tasks such as the prediction of molecular properties which is often one of the most crucial tasks in computer-aided drug discovery workflows. The immense hype surrounding these kinds of algorithms has led to the development of many different types of promising architectures and in this review we try to structure this highly dynamic field of AI-research by collecting and classifying 80 GNNs that have been used to predict more than 20 molecular properties using 48 different datasets.
+
+10. Meta-Learning GNN Initializations for Low-Resource Molecular Property Prediction
+   Authors: Cuong Q. Nguyen, Constantine Kreatsoulas, Kim Branson
+   Year: 2020
+   Final relevance: 0.809
+   Citations: 20
+   Link: https://doi.org/10.48550/arxiv.2003.05996
+   Abstract: Building in silico models to predict chemical properties and activities is a crucial step in drug discovery. However, limited labeled data often hinders the application of deep learning in this setting. Meanwhile advances in meta-learning have enabled state-of-the-art performances in few-shot learning benchmarks, naturally prompting the question: Can meta-learning improve deep learning performance in low-resource drug discovery projects? In this work, we assess the transferability of graph neural networks initializations learned by the Model-Agnostic Meta-Learning (MAML) algorithm - and its variants FO-MAML and ANIL - for chemical properties and activities tasks. Using the ChEMBL20 dataset to emulate low-resource settings, our benchmark shows that meta-initializations perform comparably to or outperform multi-task pre-training baselines on 16 out of 20 in-distribution tasks and on all out-of-distribution tasks, providing an average improvement in AUPRC of 11.2% and 26.9% respectively. Finally, we observe that meta-initializations consistently result in the best performing models across fine-tuning sets with $k \in \{16, 32, 64, 128, 256\}$ instances.
+
+11. Composite Graph Neural Networks for Molecular Property Prediction
+   Authors: Pietro Bongini, Niccolò Pancino, Asma Bendjeddou, Franco Scarselli, Marco Maggini, Monica Bianchini
+   Year: 2024
+   Final relevance: 0.805
+   Citations: 9
+   Link: https://doi.org/10.3390/ijms25126583
+   Abstract: Graph Neural Networks have proven to be very valuable models for the solution of a wide variety of problems on molecular graphs, as well as in many other research fields involving graph-structured data. Molecules are heterogeneous graphs composed of atoms of different species. Composite graph neural networks process heterogeneous graphs with multiple-state-updating networks, each one dedicated to a particular node type. This approach allows for the extraction of information from s graph more efficiently than standard graph neural networks that distinguish node types through a one-hot encoded type of vector. We carried out extensive experimentation on eight molecular graph datasets and on a large number of both classification and regression tasks. The results we obtained clearly show that composite graph neural networks are far more efficient in this setting than standard graph neural networks.
+
+12. When Do Models Win? A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes
+   Authors: Junho Lee¹
+   Year: 2026
+   Final relevance: 0.800
+   Citations: 0
+   Link: https://doi.org/10.26434/chemrxiv.15001253/v2
+   Abstract: In many molecular property prediction tasks, such as drug discovery and OLED material design, labeled data are often limited to only tens to thousands of samples due to high experimental costs. Despite the rapid development of machine learning models, it remains unclear which model classes are most effective under such low-data regimes and how their performance evolves with increasing data. In this work, we present a comprehensive learning curve benchmark across traditional machine learning methods, graph neural networks (GNNs), transformer-based molecular language models, and hybrid architectures. We systematically vary the training data size from 50 to 3,000 samples and evaluate performance on QM9, ESOL, Lipophilicity, and BACE datasets using scaffold splits with repeated trials for statistical robustness. We further propose two hybrid models combining GCN and ChemBERTa with different fusion strategies—concatenation (GTCA-Cat) and cross-attention (GTCA-CA)—and analyze their data efficiency through ablation studies on both transformer layer depth (2/4/6) and fusion strategy. Our results reveal that (1) hybrid models substantially improve over single-modality GCN in low-data regimes for physicochemical property targets (e.g., 32.1% RMSE reduction on ESOL at N=50), (2) simple concatenation fusion generally outperforms or matches cross-attention due to reduced overfitting and improved stability, (3) deeper transformer layers (depth=6) consistently outperform shallower configurations across most targets and data regimes, (4) clear crossover points exist where traditional kernel-based methods outperform deep learning models depending on the task type, and (5) PaiNN, despite having access to DFT-optimized 3D coordinates on QM9, fails to outperform 2D-based models across all training sizes, suggesting fundamental limitations of equivariant 3D architectures in low-data regimes. Importantly, we identify regime-dependent model optimality: deep learning models dominate continuous physicochemical property prediction (e.g., ESOL, Lipophilicity), while kernel-based methods can be more effective for bioactivity prediction (e.g., BACE) across most data scales. Our findings provide actionable guidelines for model selection under data scarcity and highlight the importance of learning curve analysis as a principled tool for understanding model behavior.
+
+13. Context-informed few-shot molecular property prediction via heterogeneous meta-learning
+   Authors: Junhao Xue, Jun Liu, Kai Chen
+   Year: 2025
+   Final relevance: 0.791
+   Citations: 0
+   Link: https://doi.org/10.1016/j.csbj.2025.08.016
+   Abstract: Molecular property prediction is essential in diversified applications, as it helps identify molecules with the desired characteristics. However, the task often suffers from limited data, making the few-shot learning challenging. We introduce a Context-informed Few-shot Molecular Property Prediction via a Heterogeneous Meta-Learning approach, which employs graph neural networks combined with self-attention encoders to effectively extract and integrate both property-specific and property-shared molecular features, respectively. Based on the property-shared molecular features, we further infer molecular relations by using an adaptive relational learning module. The final molecular embedding is improved by aligning with the property label in the property-specific classifier. Furthermore, we employ a heterogeneous meta-learning strategy that updates parameters of the property-specific features within individual tasks in the inner loop and jointly updates all parameters in the outer loop. This enhances the model's ability to effectively capture both general and contextual information, leading to a substantial improvement in predictive accuracy. The model's performance was rigorously evaluated across various real molecular datasets, showcasing its superiority over current methods, especially in challenging few-shot learning scenarios.
+
+14. When Do Models Win? A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes
+   Authors: Junho Lee¹
+   Year: 2026
+   Final relevance: 0.789
+   Citations: 0
+   Link: https://doi.org/10.26434/chemrxiv.15001253/v3
+   Abstract: In many molecular propertIn many molecular property prediction tasks, such as drug discovery and OLED material design, labeled data are often limited to only tens to thousands of samples due to high experimental costs. Despite the rapid development of machine learning models, it remains unclear which model classes are most effective under such low-data regimes and how their performance evolves with increasing data. In this work, we present a comprehensive learning curve benchmark across traditional machine learning methods, graph neural networks (GNNs), transformer-based molecular language models, and hybrid architectures. We systematically vary the training data size from 50 to 3,000 samples and evaluate performance on QM9, ESOL, Lipophilicity, and BACE datasets using scaffold splits with repeated trials for statistical robustness. We further propose two hybrid models combining GCN and ChemBERTa with different fusion strategies—concatenation (GTCA-Cat) and cross-attention (GTCA-CA)—and analyze their data efficiency through ablation studies on both transformer layer depth (2/4/6) and fusion strategy. Our results reveal that (1) hybrid models substantially improve over single-modality GCN in low-data regimes for physicochemical property targets (e.g., 32.1% RMSE reduction on ESOL at N=50), (2) simple concatenation fusion generally outperforms or matches cross-attention due to reduced overfitting and improved stability, (3) deeper transformer layers (depth=6) consistently outperform shallower configurations across most targets and data regimes, (4) clear crossover points exist where traditional kernel-based methods outperform deep learning models depending on the task type. Importantly, we identify regime-dependent model optimality: deep learning models dominate continuous physicochemical property prediction (e.g., ESOL, Lipophilicity), while kernel-based methods can be more effective for bioactivity prediction (e.g., BACE) across most data scales. Our findings provide actionable guidelines for model selection under data scarcity and highlight the importance of learning curve analysis as a principled tool for understanding model behavior. Scientific Contribution: This study establishes a comprehensive learning curve benchmark for molecular property prediction in low-data regimes, systematically comparing eleven model families across four datasets spanning physicochemical, quantum mechanical, and biological activity properties. We identify regime-dependent model optimality and crossover points between traditional machine learning and deep learning methods, providing actionable guidelines for data-scale-aware model selection. We further demonstrate that simple concatenation-based multimodal fusion is more stable and data-efficient than cross-attention in low-data settings, offering practical design principles for hybrid molecular property prediction architectures.
+
+15. Cross-dependent graph neural networks for molecular property prediction
+   Authors: Hehuan Ma, Yatao Bian, Yu Rong, Wenbing Huang, Tingyang Xu, Weiyang Xie, Geyan Ye, Junzhou Huang
+   Year: 2022
+   Final relevance: 0.782
+   Citations: 81
+   Link: https://doi.org/10.1093/bioinformatics/btac039
+   Abstract: MOTIVATION: The crux of molecular property prediction is to generate meaningful representations of the molecules. One promising route is to exploit the molecular graph structure through graph neural networks (GNNs). Both atoms and bonds significantly affect the chemical properties of a molecule, so an expressive model ought to exploit both node (atom) and edge (bond) information simultaneously. Inspired by this observation, we explore the multi-view modeling with GNN (MVGNN) to form a novel paralleled framework, which considers both atoms and bonds equally important when learning molecular representations. In specific, one view is atom-central and the other view is bond-central, then the two views are circulated via specifically designed components to enable more accurate predictions. To further enhance the expressive power of MVGNN, we propose a cross-dependent message-passing scheme to enhance information communication of different views. The overall framework is termed as CD-MVGNN. RESULTS: We theoretically justify the expressiveness of the proposed model in terms of distinguishing non-isomorphism graphs. Extensive experiments demonstrate that CD-MVGNN achieves remarkably superior performance over the state-of-the-art models on various challenging benchmarks. Meanwhile, visualization results of the node importance are consistent with prior knowledge, which confirms the interpretability power of CD-MVGNN. AVAILABILITY AND IMPLEMENTATION: The code and data underlying this work are available in GitHub at https://github.com/uta-smile/CD-MVGNN. SUPPLEMENTARY INFORMATION: Supplementary data are available at Bioinformatics online.
+
+16. Graph Neural Networks for the Prediction of Molecular Structure–Property Relationships
+   Authors: Rittig, Jan G., Gao, Qinghe, Dahmen, Manuel, Mitsos, Alexander, Schweidtmann, Artur M.
+   Year: 2023
+   Final relevance: 0.777
+   Citations: 0
+   Link: https://doi.org/10.34734/fzj-2024-03070
+   Abstract: Abstract unavailable
+
+17. Advancing molecular property prediction for environmental fate using graph neural networks: A comparative analysis
+   Authors: Pravinkumar M. Sonsare, Roshni Khedgaonkar, Kavita Singh, Pratik Agrawal
+   Year: 2025
+   Final relevance: 0.775
+   Citations: 0
+   Link: https://doi.org/10.1016/j.chemolab.2025.105581
+   Abstract: Abstract unavailable
+
+18. GMPP-NN: a deep learning architecture for graph molecular property prediction
+   Authors: Outhman Abbassi, Soumia Ziti, Meryam Belhiah, Souad Najoua Lagmiri, Yassine Zaoui Seghroucheni
+   Year: 2024
+   Final relevance: 0.770
+   Citations: 9
+   Link: https://doi.org/10.1007/s42452-024-05944-9
+   Abstract: Abstract The pharmacy industry is highly focused on drug discovery and development for the identification and optimization of potential drug candidates. One of the key aspects of this process is the prediction of various molecular properties that justify their potential effectiveness in treating specific diseases. Recently, graph neural networks have gained significant attention, primarily due to their strong suitability for predicting complex relationships that exist between atoms and other molecular structures. GNNs require significant depth to capture global features and to allow the network to iteratively aggregate and propagate information across the entire graph structure. In this research study, we present a deep learning architecture known as a graph molecular property prediction neural network. which combines MPNN feature extraction with a multilayer perceptron classifier. The deep learning architecture was evaluated on four benchmark datasets, and its performance was compared to the smiles transformer, fingerprint to vector, deeper graph convolutional networks, geometry-enhanced molecular, and atom-bond transformer-based message-passing neural network. The results showed that the architecture outperformed the other models using the receiver operating characteristic area under the curve metric. These findings offer an exciting opportunity to enhance and improve molecular property prediction in drug discovery and development.
+
+19. When Do Models Win? A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes
+   Authors: Junho Lee¹
+   Year: 2026
+   Final relevance: 0.765
+   Citations: 0
+   Link: https://doi.org/10.26434/chemrxiv.15001253/v4
+   Abstract: In many molecular property prediction tasks, such as drug discovery and OLED material design, labeled data are often limited to only tens to thousands of samples due to high experimental costs. Despite the rapid development of machine learning models, it remains unclear which model classes are most effective under such low-data regimes and how their performance evolves with increasing data. In this work, we present a comprehensive learning curve benchmark of molecular property prediction across a broad model suite spanning traditional machine learning, graph neural networks (GNNs), transformer-based molecular language models, SE(3)-equivariant 3D networks, descriptor-based hybrids, multi-task learning variants, and multimodal graph–sequence fusion baselines. We systematically vary the training data size from 50 to 3,000 samples and evaluate on the QM9, ESOL, Lipophilicity, and BACE datasets using scaffold splits with repeated trials for statistical robustness. Our analysis reveals four principal patterns: (1) regime-dependent model optimality — deep learning models dominate continuous physicochemical property prediction (ESOL, Lipophilicity), while kernel-based methods such as Gaussian Process Regression remain superior for bioactivity prediction (BACE) across most of the tested range, with clear crossover points emerging between traditional and deep learning approaches; (2) target-dependent benefit of 3D inductive bias — on QM9 an equivariant 3D network trained on DFT-optimized geometries performs strongly on LUMO and the HOMO–LUMO gap but struggles on HOMO despite these exact geometries, isolating a representational mismatch rather than a geometry-quality limitation; on Lipophilicity and BACE, single-conformer ETKDG inputs yield essentially flat learning curves, where weak conformer geometry and the conformer-insensitivity of these endpoints cannot be fully disentangled — though both readings point to a mismatch between single-geometry 3D models and conformer-insensitive targets; (3) non-monotonic pretraining benefit — the advantage of modern transformer and 3D foundation models (ChemBERTa-2, MoLFormer-XL, SELFormer, Uni-Mol-PT) over GNNs and fingerprints is most pronounced at intermediate training sizes on most tasks (and at the smallest on bioactivity), and neither parameter count nor pretraining-corpus size predicts downstream accuracy (the compact ChemBERTa-2 outperforms the far larger MoLFormer and SELFormer on ESOL and Lipophilicity); and (4) model selection over model averaging — in a controlled post-hoc analysis, even oracle ensembles that select their members by test-set error barely improve on the best single model in the lowest-data regime (at most +1.2% at N=50, and negative on ESOL), indicating that the dominant lever under data scarcity is choosing the right single model rather than combining several. Our findings provide actionable guidelines for model selection under data scarcity and highlight learning curve analysis as a principled tool for understanding model behavior across the property–scale plane. Scientific Contribution: This study establishes a comprehensive learning curve benchmark for molecular property prediction in low-data regimes, systematically comparing a broad suite of model families—including traditional machine learning, graph neural networks, transformer-based molecular language models, SE(3)-equivariant 3D networks, descriptor-based hybrids, multi-task learning variants, and multimodal graph–sequence fusion baselines—across four datasets spanning physicochemical, quantum mechanical, and biological activity properties. We identify regime- and target-dependent model optimality and crossover points between traditional machine learning and deep learning methods, quantify the target-dependent benefit and conformer-fidelity limits of 3D equivariant networks, and provide actionable, data-scale-aware guidelines for model selection in low-data molecular property prediction.
+
+20. Analyzing Learned Molecular Representations for Property Prediction
+   Authors: Kevin Yang, Kyle Swanson, Wengong Jin, Connor W. Coley, Philipp Eiden, Hua Gao, Angel Guzmán-Pérez, Timothy Hopper, Brian Kelley, Miriam Mathea, Andrew Palmer, Volker Settels, Tommi Jaakkola, Klavs F. Jensen, Regina Barzilay
+   Year: 2019
+   Final relevance: 0.755
+   Citations: 1911
+   Link: https://doi.org/10.1021/acs.jcim.9b00237
+   Abstract: Advancements in neural machinery have led to a wide range of algorithmic solutions for molecular property prediction. Two classes of models in particular have yielded promising results: neural networks applied to computed molecular fingerprints or expert-crafted descriptors and graph convolutional neural networks that construct a learned molecular representation by operating on the graph structure of the molecule. However, recent literature has yet to clearly determine which of these two methods is superior when generalizing to new chemical space. Furthermore, prior research has rarely examined these new models in industry research settings in comparison to existing employed models. In this paper, we benchmark models extensively on 19 public and 16 proprietary industrial data sets spanning a wide variety of chemical end points. In addition, we introduce a graph convolutional model that consistently matches or outperforms models using fixed molecular descriptors as well as previous graph neural architectures on both public and proprietary data sets. Our empirical findings indicate that while approaches based on these representations have yet to reach the level of experimental reproducibility, our proposed model nevertheless offers significant improvements over models currently used in industrial workflows.
+
+Research Idea Assessment
+========================
+Assessment: Well studied
+Rationale: Existing analyzed evidence already supports the complete research idea; external direct verification was not required.
+Counterexamples / direct matches: none confirmed
+Supporting evidence:
+- https://openalex.org/W4386557187 (confirmed_direct_match, research_objective): Develop a data-efficient predictor for molecular property prediction
+- https://openalex.org/W4386557187 (confirmed_direct_match, comparison_or_baseline): Supervised graph neural networks
+- https://openalex.org/W4386557187 (confirmed_direct_match, data_or_modality): Molecular graphs generated from grammar production rules
+- https://openalex.org/W4386557187 (confirmed_direct_match, constraints): Labeled molecular-property data are limited because extraction and experimentation are costly
+- https://openalex.org/W7140899953 (confirmed_direct_match, research_objective): Benchmark model performance and learning curves for molecular property prediction in low-data regimes.
+- https://openalex.org/W7140899953 (confirmed_direct_match, method_or_intervention): Traditional machine learning methods
+- https://openalex.org/W7140899953 (confirmed_direct_match, data_or_modality): GCN and ChemBERTa molecular representations
+- https://openalex.org/W7140899953 (confirmed_direct_match, constraints): Labeled data are limited to tens to thousands of samples because of high experimental costs.
+Verification searches:
+Coverage: Initial analyzed evidence was checked before external retrieval.
+Coverage: External direct verification was not required.
+
+Candidate Research Gap Assessments
+==================================
+No evidence-backed candidate gaps were identified.
+
+Global qualification
+--------------------
+These assessments describe retrieved and verified evidence only; they do not prove global novelty.
+
+=== PROCESS TIMING ===
+Wall time: 4.01 s
+CPU user: 1.41 s
+CPU system: 0.08 s
+Max RSS: 99436 KB
+Exit code: 0
+
+Finished: 2026-09-04T15:03:18+09:00
+Program exit status: 0

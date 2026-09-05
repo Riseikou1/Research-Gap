@@ -1,0 +1,32 @@
+{
+    "id": "extraction_dev_001",
+    "paper_id": "https://openalex.org/W...",
+    "title": "Few-Shot Graph Learning for Molecular Property Prediction",
+    "abstract": "The recent success of graph neural networks...",
+    "gold": {
+      "research_objective": [
+        "few-shot molecular property prediction"
+      ],
+      "population_or_setting": [],
+      "method_or_intervention": [
+        "Meta-MGNN",
+        "molecular graph neural network",
+        "meta-learning"
+      ],
+      "comparison_or_baseline": [
+        "state-of-the-art methods"
+      ],
+      "data_or_modality": [
+        "molecular graphs"
+      ],
+      "datasets": [
+        "two public multi-property datasets"
+      ],
+      "evaluation_metrics": [],
+      "constraints": [
+        "limited experimental data"
+      ],
+      "limitations": [],
+      "future_work": []
+    }
+  }

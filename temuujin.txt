@@ -1,0 +1,495 @@
+Facets:
+  problem: ["training a Generative AI model for a data-limited task"]
+  population: []
+  intervention_or_method: ["few-shot technique", "training a Generative AI model"]
+  data_or_modality: []
+  comparison: []
+  outcomes: []
+  domain: ["Generative AI"]
+  constraints: ["data-limited task"]
+  keywords: ["few-shot learning", "Generative AI", "model training", "data-limited task"]
+  synonyms: {"few-shot learning": ["few-shot technique"], "generative artificial intelligence": ["Generative AI"]}
+  canonical_facets: {"problem": {"training a Generative AI model for a data-limited task": "generative model training under limited-data conditions"}, "intervention_or_method": {"few-shot technique": "few-shot learning", "training a Generative AI model": "generative model training"}, "domain": {"Generative AI": "generative artificial intelligence"}, "constraints": {"data-limited task": "limited-data condition"}, "keywords": {"few-shot learning": "few-shot learning", "Generative AI": "generative artificial intelligence", "model training": "model training", "data-limited task": "limited-data task"}}
+Planned queries:
+  1. using few-shot technique for training a Generative AI model data-limited task [deterministic/original]
+  2. few-shot technique training a Generative AI model training a Generative AI model for a data-limited task [deterministic/method_problem]
+  3. training a Generative AI model for a data-limited task Generative AI [deterministic/problem_context]
+  4. "few-shot learning" OR "few-shot technique" AND ("generative AI" OR "generative artificial intelligence" OR "generative model") AND (training OR fine-tuning) AND ("limited data" OR "data-limited" OR "low-data") [llm/terminology_expansion/openai]
+  5. Training or adapting generative artificial intelligence models for tasks with limited labeled or task-specific data using only a small number of examples [llm/conceptual_reformulation/openai]
+  6. Few-shot prompting, few-shot fine-tuning, or in-context learning for training or adapting generative AI models in limited-data tasks [llm/method_focused_reformulation/openai]
+Found 94 unique candidate papers.
+Showing top 20 ranked results for: using few-shot technique for training a Generative AI model data-limited task (hybrid)
+
+1. Few-Shot Generative Models. Learning Generative Models with Limited Data
+   Authors: Giorgio Giannone
+   Year: 2024
+   Final relevance: 1.000
+   Lexical: 0.712 | Semantic: 1.000 | Constraint: 0.930
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://orbit.dtu.dk/en/publications/9bc464a8-9d05-48c2-b18f-ef4335e97589
+   Abstract: Abstract unavailable
+
+2. Zero-Shot Learning and Few-Shot Learning with Generative AI: Bridging the Data Gap for Real-World Applications
+   Authors: Vinay Kumar Gali, Raghav Agarwal
+   Year: 2025
+   Final relevance: 0.964
+   Lexical: 0.885 | Semantic: 0.869 | Constraint: 0.674
+   Retrieval routes: title_abstract: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://doi.org/10.55544/ijrah.5.1.24
+   Abstract: Modern artificial intelligence systems frequently rely on vast amounts of labeled data to achieve robust performance, yet many real-world scenarios suffer from limited data availability. This paper investigates the potential of integrating zero-shot and few-shot learning paradigms with generative AI models to bridge the persistent data gap. Zero-shot learning empowers models to recognize and classify instances from unseen categories by leveraging semantic descriptors, while few-shot learning focuses on adapting models to new classes using only a handful of examples. Generative AI techniques, such as advanced generative adversarial networks and transformer-based models, can synthesize realistic data samples that mimic complex distributions found in natural environments. By combining these approaches, our methodology offers a dual advantage: it not only enhances model generalization across diverse tasks but also mitigates the challenges posed by data scarcity. We demonstrate the effectiveness of this hybrid framework through experiments in domains including computer vision, natural language processing, and anomaly detection, where traditional data collection is prohibitive. Our analysis reveals that the strategic use of generated data significantly boosts learning outcomes, even when initial training samples are sparse. Furthermore, the adaptability of the proposed system makes it suitable for dynamic, real-world applications where new categories continuously emerge. Overall, this study provides a comprehensive overview of leveraging generative AI to enhance zero-shot and few-shot learning, paving the way for more resilient and scalable solutions in environments constrained by limited data resources. These innovations promise to reshape the future of machine learning by opening new pathways for robust AI development.
+
+3. In Generative AI : Zero-Shot and Few-Shot
+   Authors: Phani Monogya Katikireddi, Santosh Jaini
+   Year: 2022
+   Final relevance: 0.954
+   Lexical: 1.000 | Semantic: 0.834 | Constraint: 0.398
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 3
+   Link: https://doi.org/10.32628/cseit2390668
+   Abstract: Generative AI has become a change-maker in many fields, using different text, image, and voice generation modes. One of the profound sub-areas within this domain is the optimum utilization of learning systems with minimal information using zero- and few-shot learning. Zero-shot learning lets models operate on novel classes or tasks for which it has no training sample, while few-shot learning allows models to learn with initial samples. Such approaches are useful when it is difficult or expensive to obtain information, which suggests a technique for providing a direction for developing accurate AI models when data are lacking. This paper explains the background, application, and challenges of generative AI models that use zero-shot/one-shot learning, outlining how these techniques help set new paradigms and raise innovative horizons for AI systems.
+
+4. Few-Shot Learning with Adaptive Weight Masking in Conditional GANs
+   Authors: Jinxia Hu, Zhen Qi, Jianjun Wei, Jiajing Chen, Ruiqi Bao, Xinyu Qiu
+   Year: 2024
+   Final relevance: 0.833
+   Lexical: 0.954 | Semantic: 0.645 | Constraint: 0.557
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 7
+   Link: https://doi.org/10.1109/icedcs64328.2024.00083
+   Abstract: Deep learning has revolutionized various fields, yet its efficacy is hindered by overfitting and the requirement of extensive annotated data, particularly in few-shot learning scenarios where limited samples are available. This paper introduces a novel approach to few-shot learning by employing a Residual Weight Masking Conditional Generative Adversarial Network (RWM-CGAN) for data augmentation. The proposed model integrates residual units within the generator to enhance network depth and sample quality, coupled with a weight mask regularization technique in the discriminator to improve feature learning from small-sample categories. This method addresses the core issues of robustness and generalization in few-shot learning by providing a controlled and clear augmentation of the sample space. Extensive experiments demonstrate that RWM-CGAN not only expands the sample space effectively but also enriches the diversity and quality of generated samples, leading to significant improvements in detection and classification accuracy on public datasets. The paper contributes to the advancement of few-shot learning by offering a practical solution to the challenges posed by data scarcity and the need for rapid generalization to new tasks or categories.
+
+5. Learning under Limited Supervision for Better Generalization
+   Authors: Jae Myung Kim
+   Year: 2026
+   Final relevance: 0.799
+   Lexical: 0.878 | Semantic: 0.585 | Constraint: 0.923
+   Retrieval routes: title_abstract: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://doi.org/10.15496/publikation-119126
+   Abstract: Learning under limited supervision has been a long-standing theme in machine learning. This thesis explores how limited supervision can be effectively leveraged in the domains of computer vision and vision-language modeling. It covers a range of settings, from scenarios with no access to training data, to those with only a few labeled examples, and further to human intervention to AI systems that incorporate minimal but meaningful feedback. Across these settings, the central goal is to improve model generalization with limited real data. We first consider scenarios where no training data is available for a downstream task in the vision-language models. We explore how to better utilize pre-trained foundation models without additional supervision. WaffleCLIP investigates the role of class descriptors in the zero-shot classification of the vision-language models and shows that performance gains stem from an ensemble of multiple noisy prompts rather than the semantic richness of the prompts, throwing a question of current prompting techniques. FLM introduces a feasibility prediction module that leverages large language models to assess the feasibility of novel state-object compositions for each class, thereby improving performance in open-world compositional zero-shot learning by discarding infeasible classes in the class candidate set. Together, these contributions improve the downstream performance of vision-language models in zero-shot settings. Next, we examine the case where users have access to a small number of labeled examples. To maximize the utility of this data, we propose synthetic data generation frameworks guided by few-shot real examples where the synthetic data is used as training data for the downstream classification tasks. DataDream fine-tunes text-to-image generative models using LoRA on a handful of class-specific images, allowing the fine-tuned models to generate more realistic and discriminative data. Building on this, LoFT fine-tunes LoRA modules for each image, and then fuses two LoRAs within the same class at inference time, improving the fidelity and diversity of generated samples. These works demonstrate that synthetic data can provide complementary information to real data. Finally, we explore the role of human intervention in interpretable models. While Concept Bottleneck Models allow humans to modify intermediate concept predictions, current approaches require extensive manual correction. To address this, we propose a Concept Realignment module that reduces the number of necessary interventions by automatically adjusting related concepts after a small correction by human. This leads to more efficient human-in-the-loop collaboration, making interpretable models more practical in real-world applications. Together, these contributions present a comprehensive study of learning under limited supervision in computer vision and multimodal tasks. We demonstrate that through thoughtful leverage of the foundation model, synthetic data augmentation, and efficient human interaction, it is possible to improve performance with minimal labeled data. This thesis lays the groundwork for future research toward data-efficient, adaptive, and human-aligned AI systems.
+
+6. Generative Probabilistic Meta-Learning for Few-Shot Image Classification
+   Authors: Meijun Fu, Xiaomin Wang, Jun Wang, Yi Zhang
+   Year: 2024
+   Final relevance: 0.773
+   Lexical: 0.891 | Semantic: 0.580 | Constraint: 0.652
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 6
+   Link: https://doi.org/10.1109/tetci.2024.3483255
+   Abstract: Meta-learning, a rapidly advancing area in computational intelligence, leverages prior knowledge from related tasks to facilitate the swift adaptation to new tasks with limited data. A critical challenge in meta-learning is the quantification of model uncertainty. In this paper, we propose a novel meta-learning method, Generative Probabilistic Meta-Learning (GPML), designed for few-shot image classification. GPML extends the Probably Approximately Correct-Bayes (PAC-Bayes) framework, initially formulated for single-task scenarios, to meta-learning across multiple tasks. This extension not only provides theoretical generalization guarantees for meta-learning but also effectively captures model uncertainty through variational parameters. To enhance the expressiveness of approximated posteriors in Bayesian inference, GPML incorporates implicit modeling, which defines probability distributions over task-specific parameters in a data-driven manner. This is achieved by designing a generative model structure that integrates task-dependent prior knowledge into the model inference process. We conduct extensive multidimensional performance evaluations on few-shot image classification tasks across various benchmarks, demonstrating that GPML outperforms existing state-of-the-art meta-learning methods. Additionally, ablation studies focusing on model components, the PAC-Bayes framework, and implicit modeling validate the performance improvements attributed to the proposed generative model structure, learning framework, and modeling approach.
+
+7. Few-shot Learning with Data Augmentation with Generative Model.
+   Authors: Mu Zhou, Yusuke Tanimura, Hidemoto Nakada
+   Year: 2020
+   Final relevance: 0.769
+   Lexical: 0.592 | Semantic: 0.809 | Constraint: 0.431
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://confit.atlas.jp/guide/event/jsai2020/subject/3Rin4-58/detail
+   Abstract: Abstract unavailable
+
+8. Few-shot learning using generative modeling
+   Authors: King Hong Leung, Alexander Toshev, Narayan Hegde, Yair Movshovitz-Attias
+   Year: 2018
+   Final relevance: 0.740
+   Lexical: 0.372 | Semantic: 0.916 | Constraint: 0.399
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://www.tdcommons.org/cgi/viewcontent.cgi?article=2088&context=dpubs_series
+   Abstract: Abstract unavailable
+
+9. Leveraging Few-Shot Learning in Generative AI for UPI Transaction Classification
+   Authors: Chirantan Jain, N Nalini, Dhruv Shah, Rudrank Basant
+   Year: 2024
+   Final relevance: 0.739
+   Lexical: 0.799 | Semantic: 0.587 | Constraint: 0.659
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 1
+   Link: https://doi.org/10.1109/gcat62922.2024.10923925
+   Abstract: Classifying financial transactions based on individual needs is a vital and often complex task. Ranging from a college student who manages monthly expenses based on their allowance to a working professional preparing an annual income tax report, both require a tailored classification of finances to ensure smart spending and financial management. The recent invention of Unified Payments Interface (UPI) and constantly increasing UPI IDs have made classifying finances an extremely tedious and complex task, making supervised learning an impractical option. To tackle this problem, we propose a novel Few-Shot Learning architecture leveraging state-of-the-art Large Language Models (LLM), offering high accuracy in multi-class data classification. This prompt-based 3-way 4-shot learning utilizes the Llama 3.1 8 billion parameters model, which provides fast and efficient results on compact systems while ensuring privacy. Key findings include the importance of prompt engineering while highlighting the efficiency of few-shot learning in the finance sector. It also highlights the efficiency of open-source LLMs in task-focused applications without relying on resource-intensive models.
+
+10. Retracted: Feature Learning‐Based Generative Adversarial Network Data Augmentation for Class‐Based Few‐Shot Learning
+   Authors: Mathematical Problems in Engineering
+   Year: 2023
+   Final relevance: 0.657
+   Lexical: 0.462 | Semantic: 0.716 | Constraint: 0.459
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://doi.org/10.1155/2023/9840853
+   Abstract: Abstract unavailable
+
+11. Towards Improved Generative Models for Structural Health Monitoring with Limited Data
+   Authors: Kyle Dunphy
+   Year: 2025
+   Final relevance: 0.639
+   Lexical: 0.701 | Semantic: 0.494 | Constraint: 0.725
+   Retrieval routes: title_abstract: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: https://hdl.handle.net/20.500.14721/38529
+   Abstract: The rapid deterioration of global infrastructure due to aging and extreme events has underscored the critical need for efficient and accurate Structural Health Monitoring (SHM) systems. Traditional manual inspection approaches are increasingly inadequate, as they are labor-intensive, subjective, and often limited to accessible areas, resulting in inefficient assessments and delayed interventions. To address these limitations, recent advancements have explored the integration of Artificial Intelligence (AI), particularly Machine Learning (ML) and Deep Learning (DL) techniques, to automate damage detection, classification, localization, and quantification. Vision-based systems, particularly those leveraging convolutional neural networks (CNNs), have shown state-of-the-art performance in damage classification using imagery from cameras, drones, and smartphones. However, these methods remain constrained by the scarcity and imbalance of annotated datasets, limiting their ability to generalize across diverse structural types and damage scenarios. To mitigate the challenges posed by limited training data, various traditional and generative Data Augmentation (DA) strategies have been proposed. Generative Adversarial Networks (GANs), for instance, offer a promising avenue for synthetically expanding datasets with realistic and diverse samples. Yet, existing GAN-based SHM studies largely focus on binary classification tasks with large datasets, leaving the efficacy of such techniques for multiclass damage identification with limited, unbalanced data unexplored. Similarly, Few-Shot Learning (FSL) models have emerged as potential solutions to enable accurate damage classification with minimal data. Despite their potential, FSL approaches are prone to overfitting and struggle with adaptation to novel damage categories, especially when structural and material heterogeneity is present. This thesis investigates the development and integration of advanced DA techniques to enhance AI-based SHM systems under data-constrained scenarios. It focuses on assessing the effectiveness of synthetic data generated through traditional DA techniques, GANs, and evaluating the feasibility of FSL frameworks for multiclass damage classification in complex, real-world conditions. By addressing the data scarcity problem and expanding the applicability of AI-based models in SHM, this research contributes toward the realization of scalable, autonomous, and robust structural assessment platforms for aging and disaster-prone infrastructure.
+
+12. Few-shot Generative Modelling with Generative Matching Networks
+   Authors: Sergey Bartunov, Dmitry Vetrov
+   Year: 2018
+   Final relevance: 0.617
+   Lexical: 0.375 | Semantic: 0.738 | Constraint: 0.270
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 59
+   Link: http://proceedings.mlr.press/v84/bartunov18a/bartunov18a.pdf
+   Abstract: Abstract unavailable
+
+13. FFGAN: Feature Fusion GAN for Few-shot Image Classification
+   Authors: Runzhou Hua, Ji Zhang, Jingfeng Xue, Yong Wang, Zhenyan Liu
+   Year: 2024
+   Final relevance: 0.613
+   Lexical: 0.484 | Semantic: 0.650 | Constraint: 0.335
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 2
+   Link: https://doi.org/10.1109/ipec61310.2024.00026
+   Abstract: With the rapid development and wide application of deep learning in large-scale data training models, the problem of insufficient data has become a constraint on the performance and applicability of deep learning models. In response to this issue, researchers have proposed methods based on feature fusion. However, existing feature fusion methods have certain limitations in terms of generating diverse and accurate images. To further improve the effectiveness of image classification tasks, this paper proposes a novel method for few-shot image generation based on local feature fusion. This method combines the concepts of Feature Fusion and Generative Adversarial Networks (FFGAN) to improve the quality and diversity of generated images. It addresses issues such as spatial misalignment in generated images. Additionally, this paper introduces a local reconstruction loss to optimize the local feature fusion module. The local reconstruction loss improves the quality of few-shot image generation by enforcing the generated images to closely resemble the corresponding local positions of input images in certain local regions. Finally, extensive experiments are conducted in image generation, image classification and image visualization.
+
+14. Large Language Models Vote: Prompting for Rare Disease Identification
+   Authors: David Oniani, Jordan Hilsman, Hang Dong, Fengyi Gao, Shiven Verma, Yanshan Wang
+   Year: 2023
+   Final relevance: 0.609
+   Lexical: 0.714 | Semantic: 0.450 | Constraint: 0.645
+   Retrieval routes: title_abstract: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 1
+   Link: https://doi.org/10.48550/arxiv.2308.12890
+   Abstract: The emergence of generative Large Language Models (LLMs) emphasizes the need for accurate and efficient prompting approaches. LLMs are often applied in Few-Shot Learning (FSL) contexts, where tasks are executed with minimal training data. FSL has become popular in many Artificial Intelligence (AI) subdomains, including AI for health. Rare diseases affect a small fraction of the population. Rare disease identification from clinical notes inherently requires FSL techniques due to limited data availability. Manual data collection and annotation is both expensive and time-consuming. In this paper, we propose Models-Vote Prompting (MVP), a flexible prompting approach for improving the performance of LLM queries in FSL settings. MVP works by prompting numerous LLMs to perform the same tasks and then conducting a majority vote on the resulting outputs. This method achieves improved results to any one model in the ensemble on one-shot rare disease identification and classification tasks. We also release a novel rare disease dataset for FSL, available to those who signed the MIMIC-IV Data Use Agreement (DUA). Furthermore, in using MVP, each model is prompted multiple times, substantially increasing the time needed for manual annotation, and to address this, we assess the feasibility of using JSON for automating generative LLM evaluation.
+
+15. Multitask Prompted Training Enables Zero-Shot Task Generalization
+   Authors: Victor Sanh, Albert Webson, Colin Raffel, Stephen H. Bach, Lintang Sutawika, Zaid Alyafeai, Antoine Chaffin, Arnaud Stiegler, Teven Le Scao, Arun Raja, Manan Dey, Mehwish Bari, Canwen Xu, Urmish Thakker, Shanya Sharma, Eliza Szczechla, Taewoon Kim, Gunjan Chhablani, Nihal V. Nayak, Debajyoti Datta, Jonathan Chang, Mike Tian-Jian Jiang, Han Wang, Matteo Manica, Sheng Shen, Zheng-Xin Yong, Harshit Pandey, Rachel Bawden, Thomas J. Wang, Trishala Neeraj, Jos Rozen, Abheesht Sharma, Andrea Santilli, Thibault Févry, Jason Fries, Ryan Teehan, Tali Bers, Stella Biderman, Leo Gao, Thomas Wolf, Alexander M. Rush
+   Year: 2021
+   Final relevance: 0.595
+   Lexical: 0.580 | Semantic: 0.515 | Constraint: 0.668
+   Retrieval routes: broad_lexical: Few-shot prompting, few-shot fine-tuning, or in-context learning for training or adapting generative AI models in limited-data tasks (llm/method_focused_reformulation); broad_lexical: using few-shot technique for training a Generative AI model data-limited task (deterministic/original); broad_lexical: few-shot technique training a Generative AI model training a Generative AI model for a data-limited task (deterministic/method_problem)
+   Citations: 562
+   Link: https://doi.org/10.48550/arxiv.2110.08207
+   Abstract: Large language models have recently been shown to attain reasonable zero-shot generalization on a diverse set of tasks (Brown et al., 2020). It has been hypothesized that this is a consequence of implicit multitask learning in language models' pretraining (Radford et al., 2019). Can zero-shot generalization instead be directly induced by explicit multitask learning? To test this question at scale, we develop a system for easily mapping any natural language tasks into a human-readable prompted form. We convert a large set of supervised datasets, each with multiple prompts with diverse wording. These prompted datasets allow for benchmarking the ability of a model to perform completely held-out tasks. We fine-tune a pretrained encoder-decoder model (Raffel et al., 2020; Lester et al., 2021) on this multitask mixture covering a wide variety of tasks. The model attains strong zero-shot performance on several standard datasets, often outperforming models up to 16x its size. Further, our approach attains strong performance on a subset of tasks from the BIG-bench benchmark, outperforming models up to 6x its size. All trained models are available at https://github.com/bigscience-workshop/t-zero and all prompts are available at https://github.com/bigscience-workshop/promptsource.
+
+16. DANet: A RAG-inspired Dual Attention Model for Few-shot Time Series Prediction
+   Authors: Zimo Wen, Hanwen Hu, Nenghu Fang, Shiyou Qian, Jian Cao
+   Year: 2025
+   Final relevance: 0.582
+   Lexical: 0.570 | Semantic: 0.503 | Constraint: 0.654
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 1
+   Link: https://doi.org/10.1145/3746252.3761012
+   Abstract: Practical applications often require forecasting the future states of short time series (STS) using multiple related long time series (LTS) as auxiliary data, a process known as few-shot prediction. The primary challenge, given the limited data on STS, is effectively capturing the pattern similarities between STS and LTS. Current methods, despite notable advancements, primarily focus on trans- ferring pattern characteristics from LTS to STS without explicitly addressing their similarities at various levels. To overcome this lim- itation, we propose a novel few-shot time series forecasting model called DANet. Drawing on the Retrieval-Augmented Generation (RAG) framework in large language models, DANet retrieves long and short sequences from LTS that closely resemble STS, thereby enhancing prediction accuracy while simultaneously reducing un- certainty through this retrieval process. First, we define two metrics to quantify pattern similarities between STS and LTS, addressing the issue of different representations of the same pattern due to variations in sequence length. Second, we propose a dual-attention mechanism which embeds the two similarities metrics to extract and integrate long and short sequences from LTS across variable and temporal levels for generating predictions. Our experiments across six scenarios show that DANet significantly outperforms six state-of-the-art (SOTA) methods.
+
+17. A Few-shot learning SAR image generative model for automatic target recognition
+   Authors: Zhibin Zeng, Shengkai Sun, Zi He, Dazhi Ding
+   Year: 2023
+   Final relevance: 0.573
+   Lexical: 0.492 | Semantic: 0.593 | Constraint: 0.242
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 6
+   Link: https://doi.org/10.23919/aces-china60289.2023.10249732
+   Abstract: A new Synthetic aperture radar (SAR) image generative model is proposed for efficiently solving the recognition tasks in few-shot learning. In order to further improve SAR image quality and variety, the advantages of the two types of traditional generative models are combined, parts of their structure are used to stitch together into a novel generative model. An intuitive representation is the series connection between Variational Auto-encoder (VAE) and discriminator (Dis), the former is used to generate images and the latter is used to judge the generated images and the real images. Numerical results show that the image quality and variety can be improved significantly by the proposed VAE-Dis method with encouraging accuracy in the identification tasks.
+
+18. MAML-based temporal supervised information maximizing GAN for few-shot time series data generation
+   Authors: Hanwen Zhang, Houze Guo, Haojie Bai, Chuanfang Zhang, Linlin Li
+   Year: 2025
+   Final relevance: 0.571
+   Lexical: 0.360 | Semantic: 0.651 | Constraint: 0.448
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 3
+   Link: https://doi.org/10.1016/j.eswa.2025.129342
+   Abstract: Abstract unavailable
+
+19. Few-Shot Learning via Data Augmentation in Feature Space
+   Authors: 정성재
+   Year: 2020
+   Final relevance: 0.569
+   Lexical: 0.366 | Semantic: 0.638 | Constraint: 0.507
+   Retrieval routes: semantic: using few-shot technique for training a Generative AI model data-limited task (deterministic/original)
+   Citations: 0
+   Link: http://dcollection.snu.ac.kr/common/orgView/000000159408
+   Abstract: Abstract unavailable
+
+20. PaLM: Scaling Language Modeling with Pathways
+   Authors: Aakanksha Chowdhery, Sharan Narang, Jacob Devlin, Maarten Bosma, Gaurav Mishra, Adam Roberts, Paul Barham, Hyung Won Chung, Charles Sutton, Sebastian Gehrmann, Parker Schuh, Kensen Shi, Sasha Tsvyashchenko, Joshua Maynez, Abhishek S. Rao, Parker Barnes, Yi Tay, Noam Shazeer, Vinodkumar Prabhakaran, Emily Reif, Nan Du, Ben Hutchinson, Reiner Pope, James T. Bradbury, Jacob Austin, Michael Isard, Guy Gur-Ari, Pengcheng Yin, Toju Duke, Anselm Levskaya, Sanjay Ghemawat, Sunipa Dev, Henryk Michalewski, Xavier García, Vedant Misra, Kevin Robinson, Liam Fedus, Denny Zhou, Daphne Ippolito, David Luan, Hyeontaek Lim, Barret Zoph, Alexander Spiridonov, Ryan Sepassi, D. Dohan, Shivani Agrawal, Mark Omernick, Andrew M. Dai, Thanumalayan Sankaranarayana Pillai, Marie Pellat, Aitor Lewkowycz, Érica Rodrigues Moreira, Rewon Child, Oleksandr Polozov, Katherine Lee, Zongwei Zhou, Xuezhi Wang, Brennan Saeta, Mark Díaz, Orhan Fırat, Michele Catasta, Wei, Jason, Meier-Hellstern, Kathy, Douglas Eck, Jeff Dean, Slav Petrov, Noah Fiedel
+   Year: 2022
+   Final relevance: 0.566
+   Lexical: 0.636 | Semantic: 0.447 | Constraint: 0.550
+   Retrieval routes: broad_lexical: using few-shot technique for training a Generative AI model data-limited task (deterministic/original); broad_lexical: few-shot technique training a Generative AI model training a Generative AI model for a data-limited task (deterministic/method_problem); broad_lexical: Few-shot prompting, few-shot fine-tuning, or in-context learning for training or adapting generative AI models in limited-data tasks (llm/method_focused_reformulation)
+   Citations: 2136
+   Link: https://doi.org/10.48550/arxiv.2204.02311
+   Abstract: Large language models have been shown to achieve remarkable performance across a variety of natural language tasks using few-shot learning, which drastically reduces the number of task-specific training examples needed to adapt the model to a particular application. To further our understanding of the impact of scale on few-shot learning, we trained a 540-billion parameter, densely activated, Transformer language model, which we call Pathways Language Model PaLM. We trained PaLM on 6144 TPU v4 chips using Pathways, a new ML system which enables highly efficient training across multiple TPU Pods. We demonstrate continued benefits of scaling by achieving state-of-the-art few-shot learning results on hundreds of language understanding and generation benchmarks. On a number of these tasks, PaLM 540B achieves breakthrough performance, outperforming the finetuned state-of-the-art on a suite of multi-step reasoning tasks, and outperforming average human performance on the recently released BIG-bench benchmark. A significant number of BIG-bench tasks showed discontinuous improvements from model scale, meaning that performance steeply increased as we scaled to our largest model. PaLM also has strong capabilities in multilingual tasks and source code generation, which we demonstrate on a wide array of benchmarks. We additionally provide a comprehensive analysis on bias and toxicity, and study the extent of training data memorization with respect to model scale. Finally, we discuss the ethical considerations related to large language models and discuss potential mitigation strategies.
+
+1. Few-Shot Generative Models. Learning Generative Models with Limited Data
+  Study type: methodological
+  Research objective: Learning generative models with limited data
+  Methods:
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+  Main findings:
+  Author-stated limitations:
+  Future work:
+  Missing: population_or_setting, method_or_intervention, comparison_or_baseline, data_or_modality, datasets, sample_size, evaluation_metrics, main_findings, constraints, limitations, future_work
+
+2. Zero-Shot Learning and Few-Shot Learning with Generative AI: Bridging the Data Gap for Real-World Applications
+  Study type: empirical
+  Research objective: Investigate integrating zero-shot and few-shot learning with generative AI to address limited data availability
+  Methods:
+    - Hybrid framework combining zero-shot learning, few-shot learning, and generative AI
+    - Advanced generative adversarial networks for synthesizing realistic data samples
+    - Transformer-based models for synthesizing realistic data samples
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+  Main findings:
+    - The hybrid framework enhances model generalization across diverse tasks and mitigates data scarcity challenges
+    - Generated data significantly improves learning outcomes when initial training samples are sparse
+    - The proposed system is adaptable to dynamic real-world applications with continuously emerging categories
+  Author-stated limitations:
+  Future work:
+  Missing: comparison_or_baseline, datasets, sample_size, evaluation_metrics, limitations, future_work
+
+3. In Generative AI : Zero-Shot and Few-Shot
+  Study type: survey
+  Research objective: Explain the background, applications, and challenges of generative AI models using zero-shot and few-shot learning
+  Methods:
+    - Zero-shot learning
+    - Few-shot learning
+    - One-shot learning
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+  Main findings:
+    - Zero-shot and few-shot learning are useful when information is difficult or expensive to obtain
+    - Zero-shot and few-shot techniques can guide the development of accurate AI models when data are lacking
+  Author-stated limitations:
+  Future work:
+  Missing: comparison_or_baseline, datasets, sample_size, evaluation_metrics, limitations, future_work
+
+4. Few-Shot Learning with Adaptive Weight Masking in Conditional GANs
+  Study type: empirical
+  Research objective: Develop a few-shot learning approach that improves robustness, generalization, and sample augmentation under data scarcity.
+  Methods:
+    - Residual Weight Masking Conditional Generative Adversarial Network (RWM-CGAN) for data augmentation.
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+    - Detection accuracy.
+    - Classification accuracy.
+  Main findings:
+    - RWM-CGAN effectively expands the sample space and enriches the diversity and quality of generated samples.
+    - The method significantly improves detection and classification accuracy on public datasets.
+  Author-stated limitations:
+  Future work:
+  Missing: comparison_or_baseline, datasets, sample_size, limitations, future_work
+
+5. Learning under Limited Supervision for Better Generalization
+  Study type: empirical
+  Research objective: Study how limited supervision can improve model generalization in computer vision and vision-language modeling.
+  Methods:
+    - WaffleCLIP, using an ensemble of multiple noisy prompts for zero-shot classification.
+    - FLM, a feasibility prediction module leveraging large language models to filter infeasible class compositions.
+    - DataDream, which fine-tunes text-to-image generative models using LoRA on class-specific images.
+    - LoFT, which fine-tunes and fuses LoRA modules within the same class.
+    - Concept Realignment module for automatically adjusting related concepts after human correction.
+  Datasets:
+  Sample size:
+  Comparisons:
+    - Current prompting techniques in vision-language models.
+  Metrics:
+  Main findings:
+    - Multiple noisy prompts, rather than semantic prompt richness, produce performance gains in WaffleCLIP.
+    - FLM improves open-world compositional zero-shot learning by discarding infeasible classes.
+    - DataDream and LoFT show that synthetic data provides complementary information to real data.
+    - Concept Realignment enables more efficient human-in-the-loop collaboration.
+    - The thesis demonstrates improved performance with minimal labeled data through foundation models, synthetic augmentation, and efficient human interaction.
+  Author-stated limitations:
+    - Current prompting techniques are questioned because performance gains may not stem from semantic richness.
+    - Current Concept Bottleneck Model approaches require extensive manual correction.
+  Future work:
+    - Pursue data-efficient, adaptive, and human-aligned AI systems.
+  Missing: datasets, sample_size, evaluation_metrics
+
+6. Generative Probabilistic Meta-Learning for Few-Shot Image Classification
+  Study type: empirical
+  Research objective: Develop a probabilistic meta-learning method for few-shot image classification that quantifies model uncertainty and provides generalization guarantees.
+  Methods:
+    - Generative Probabilistic Meta-Learning (GPML).
+  Datasets:
+    - Various benchmarks, not individually named.
+  Sample size:
+  Comparisons:
+    - Existing state-of-the-art meta-learning methods.
+  Metrics:
+    - Multidimensional performance evaluations.
+  Main findings:
+    - GPML provides theoretical generalization guarantees for meta-learning and captures model uncertainty through variational parameters.
+    - GPML outperforms existing state-of-the-art meta-learning methods.
+    - Ablation studies validate improvements attributed to the generative model structure, learning framework, and modeling approach.
+  Author-stated limitations:
+  Future work:
+  Missing: sample_size, limitations, future_work
+
+7. Few-shot Learning with Data Augmentation with Generative Model.
+  Study type: methodological
+  Research objective: Few-shot learning with data augmentation using a generative model
+  Methods:
+    - Data augmentation with a generative model for few-shot learning
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+  Main findings:
+  Author-stated limitations:
+  Future work:
+  Missing: population_or_setting, comparison_or_baseline, data_or_modality, datasets, sample_size, evaluation_metrics, main_findings, limitations, future_work
+
+8. Few-shot learning using generative modeling
+  Study type: methodological
+  Research objective: Few-shot learning using generative modeling
+  Methods:
+    - Generative modeling for few-shot learning
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+  Main findings:
+  Author-stated limitations:
+  Future work:
+  Missing: population_or_setting, comparison_or_baseline, data_or_modality, datasets, sample_size, evaluation_metrics, main_findings, limitations, future_work
+
+9. Leveraging Few-Shot Learning in Generative AI for UPI Transaction Classification
+  Study type: empirical
+  Research objective: —
+  Methods:
+    - Few-shot learning architecture leveraging large language models
+    - Prompt-based 3-way 4-shot learning
+    - Llama 3.1 8 billion parameters model
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+    - Accuracy
+  Main findings:
+    - The approach offers high accuracy in multi-class financial data classification
+    - Prompt engineering is important for the approach
+    - Few-shot learning is efficient in the finance sector
+    - Open-source LLMs are efficient for task-focused applications without resource-intensive models
+  Author-stated limitations:
+  Future work:
+  Missing: research_objective, comparison_or_baseline, datasets, sample_size, limitations, future_work
+
+10. Retracted: Feature Learning‐Based Generative Adversarial Network Data Augmentation for Class‐Based Few‐Shot Learning
+  Study type: methodological
+  Research objective: Develop feature-learning-based GAN data augmentation for class-based few-shot learning
+  Methods:
+    - Feature learning-based generative adversarial network data augmentation
+  Datasets:
+  Sample size:
+  Comparisons:
+  Metrics:
+  Main findings:
+  Author-stated limitations:
+  Future work:
+  Missing: comparison_or_baseline, data_or_modality, datasets, sample_size, evaluation_metrics, main_findings, limitations, future_work
+
+Ranked papers shown: 20
+Literature Landscape
+====================
+
+Evidence papers analyzed: 10
+
+Evidence Coverage
+-----------------
+Research objective: 1/10
+Population / setting: 7/10
+Methods: 9/10
+Datasets: 1/10
+Sample size: 0/10
+Baselines: 2/10
+Metrics: 3/10
+Outcomes: 6/10
+Constraints: 8/10
+Limitations: 1/10
+Future work: 1/10
+
+Problems
+--------
+learning generative models with limited data: 1
+
+Method Families
+---------------
+advanced generative adversarial networks for synthesizing realistic data samples: 1
+concept realignment module for automatically adjusting related concepts after human correction: 1
+data augmentation with a generative model for few shot learning: 1
+datadream which fine tunes text to image generative models using lora on class specific images: 1
+feature learning based generative adversarial network data augmentation: 1
+few shot learning: 1
+few shot learning architecture leveraging large language: 1
+flm a feasibility prediction module leveraging large language models to filter infeasible class compositions: 1
+generative modeling for few shot learning: 1
+generative probabilistic meta learning gpml: 1
+
+Datasets
+--------
+various benchmarks not individually named: 1
+
+Performance Metrics
+-------------------
+accuracy: 1
+classification accuracy: 1
+detection accuracy: 1
+multidimensional performance evaluations: 1
+
+Efficiency Metrics
+------------------
+None observed.
+
+Constraints
+-----------
+few shot learning setting: 3
+avoidance of resource intensive models: 1
+few shot learning uses only initial samples: 1
+human intervention is limited to minimal feedback or small corrections: 1
+information may be difficult or expensive to obtain: 1
+limited data availability and data scarcity: 1
+privacy is ensured: 1
+some downstream tasks have no access to training data: 1
+some settings provide only a few labeled examples: 1
+sparse initial training samples: 1
+
+Study Types
+-----------
+empirical: 5
+methodological: 4
+survey: 1
+
+Dataset Settings
+----------------
+None observed.
+
+Frequent Combinations
+---------------------
+None observed.
+
+Sparse Observed Combinations
+----------------------------
+current prompting techniques in vision language + human intervention is limited to minimal feedback or small corrections: 1
+current prompting techniques in vision language + some downstream tasks have no access to training data: 1
+current prompting techniques in vision language + some settings provide only a few labeled examples: 1
+various benchmarks not individually named + existing state of the art meta learning methods: 1
+advanced generative adversarial networks for synthesizing realistic data samples + limited data availability and data scarcity: 1
+advanced generative adversarial networks for synthesizing realistic data samples + sparse initial training samples: 1
+advanced generative adversarial networks for synthesizing realistic data samples + advanced generative adversarial networks for synthesizing realistic data samples: 1
+advanced generative adversarial networks for synthesizing realistic data samples + advanced generative adversarial networks for synthesizing realistic data samples + limited data availability and data scarcity: 1
+advanced generative adversarial networks for synthesizing realistic data samples + advanced generative adversarial networks for synthesizing realistic data samples + sparse initial training samples: 1
+advanced generative adversarial networks for synthesizing realistic data samples + hybrid framework combining zero shot learning few shot learning and generative ai: 1
+
+Potential Conflicts
+-------------------
+None supported by sufficiently comparable evidence.

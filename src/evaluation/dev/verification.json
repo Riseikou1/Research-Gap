@@ -1,0 +1,8 @@
+{
+    "id": "verification_dev_001",
+    "idea": "molecular property prediction using graph neural networks with limited labeled data",
+    "expected_label": "well_studied",
+    "known_counterexample_ids": [
+      "https://openalex.org/W..."
+    ]
+  }
