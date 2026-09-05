@@ -1,16 +1,16 @@
 {
-    "id": "dedup_dev_001",
-    "paper_a": {
-      "id": "...",
-      "title": "...",
-      "doi": "...",
-      "year": 2024
-    },
-    "paper_b": {
-      "id": "...",
-      "title": "...",
-      "doi": "...",
-      "year": 2024
-    },
-    "is_duplicate": true
-  }
+  "id": "dedup_dev_001",
+  "paper_a": {
+    "id": "...",
+    "title": "...",
+    "doi": "...",
+    "year": 2024
+  },
+  "paper_b": {
+    "id": "...",
+    "title": "...",
+    "doi": "...",
+    "year": 2024
+  },
+  "is_duplicate": true
+}
