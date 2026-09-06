@@ -96,6 +96,8 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_EXTRACTION_BATCH_SIZE` | `3` | Uncached papers per bounded extraction request |
 | `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS` | `21600` | Freshness window for persistent retrieval results |
 | `RESEARCH_GAP_CACHE_DIR` | `data/cache` | Local SQLite cache directory |
+| `RESEARCH_GAP_DATABASE_PATH` | `data/research_gap.sqlite3` | Durable analysis-history database |
+| `RESEARCH_GAP_MAX_ANALYSIS_WORKERS` | `2` | Maximum concurrent API analysis jobs |
 
 ## Architecture
 
@@ -108,6 +110,49 @@ idea -> decomposition -> typed query plan -> bounded OpenAlex routes
 Every result retains matched queries, query-generator origins, retrieval modes, provider rank and
 score where available, and lexical/semantic/final relevance scores. Citation count is retained as
 metadata but does not affect Milestone 3 relevance.
+
+## Milestone 8 local API and persistence
+
+The FastAPI service runs the same `ResearchPipeline` used by the CLI. `POST /analyses` writes a
+`pending` record and returns immediately; a bounded local thread pool transitions it through
+`running` to `completed` or `failed`. Completed records retain the configuration snapshot, generated
+queries, every retrieved paper ID, normalized top papers, extracted evidence, landscape, gap
+candidates, direct assessment, verification details, timings, and work metrics. This durable history
+is stored separately from the expiring provider cache.
+
+Apply the ordered SQLite migrations:
+
+```bash
+python -m src.persistence.migrate
+```
+
+Start the local service:
+
+```bash
+uvicorn src.api.app:app --reload
+```
+
+Start an analysis:
+
+```bash
+curl -X POST http://127.0.0.1:8000/analyses \
+  -H "Content-Type: application/json" \
+  -d '{"research_idea":"federated learning for adaptive traffic signal control"}'
+```
+
+Use the returned ID to inspect status and retrieve the final result:
+
+```bash
+curl http://127.0.0.1:8000/analyses/<analysis_id>
+curl 'http://127.0.0.1:8000/analyses?limit=20'
+curl -X DELETE http://127.0.0.1:8000/analyses/<analysis_id>
+curl http://127.0.0.1:8000/health
+```
+
+The service runs the complete evidence, landscape, gap-generation, and verification path, so a real
+analysis currently requires `OPENAI_API_KEY`; OpenAlex lexical retrieval itself remains available
+without an OpenAlex key. Active jobs cannot be deleted because provider calls cannot be safely
+interrupted. Queued and completed/failed records can be deleted without clearing shared caches.
 
 ## Test
 

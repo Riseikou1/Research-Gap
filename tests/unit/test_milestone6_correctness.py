@@ -5,7 +5,6 @@ from src.analysis.verification import GapVerifier, _idea_match_strength
 from src.extraction.evidence import EvidenceItem, PaperEvidence
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper, RetrievalProvenance
-from src.models.query import RetrievalMode
 from src.retrieval.multi_query import MultiQueryRetriever
 from src.query.deterministic import DeterministicDecomposer
 

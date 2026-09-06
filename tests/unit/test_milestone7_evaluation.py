@@ -8,7 +8,6 @@ from src.evaluation import (
     AblationVariant,
     AnnotationRecord,
     EvaluationRunner,
-    ExtractionEvaluationCase,
     RetrievalEvaluationCase,
     RetrievalJudgment,
     VerificationEvaluationCase,

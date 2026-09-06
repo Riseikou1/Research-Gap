@@ -120,6 +120,8 @@ class PipelineIntegrationTest(unittest.TestCase):
 
         result = pipeline.run("RAG using LoRA", top_k=10)
 
+        self.assertEqual(result.retrieved_paper_ids, [paper.id for paper in result.papers])
+
         self.assertGreater(len(result.queries), 1)
         self.assertEqual(result.candidate_count, 2)
         self.assertEqual(result.ranking_mode, "hybrid")

@@ -33,6 +33,7 @@ class ResearchResult:
     queries: list[SearchQuery]
     candidate_count: int
     papers: list[Paper]
+    retrieved_paper_ids: list[str] = field(default_factory=list)
     retrieval_failures: list[RetrievalFailure] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
     ranking_mode: Literal["hybrid", "lexical_only"] = "lexical_only"
@@ -58,6 +59,7 @@ class ResearchResult:
             "idea": self.idea.model_dump(mode="json"),
             "queries": [query.model_dump(mode="json") for query in self.queries],
             "candidate_count": self.candidate_count,
+            "retrieved_paper_ids": list(self.retrieved_paper_ids),
             "papers": [paper.model_dump(mode="json") for paper in self.papers],
             "retrieval_failures": [
                 failure.to_dict() for failure in self.retrieval_failures
@@ -235,6 +237,7 @@ class ResearchPipeline:
             queries=queries,
             candidate_count=len(retrieval.papers),
             papers=selected,
+            retrieved_paper_ids=[paper.id for paper in retrieval.papers],
             retrieval_failures=retrieval.failures,
             notices=notices,
             ranking_mode=ranking.mode,

@@ -39,6 +39,12 @@ def cache_dir() -> Path:
     return Path(value).expanduser() if value else PROJECT_ROOT / "data" / "cache"
 
 
+def database_path() -> Path:
+    """Return the durable analysis-history database path."""
+    value = os.getenv("RESEARCH_GAP_DATABASE_PATH", "").strip()
+    return Path(value).expanduser() if value else PROJECT_ROOT / "data" / "research_gap.sqlite3"
+
+
 class ConfigurationError(ValueError):
     """Raised when environment configuration is malformed or out of bounds."""
 
@@ -76,6 +82,8 @@ class Settings:
     extraction_workers: int
     extraction_batch_size: int
     cache_directory: Path = field(default_factory=cache_dir)
+    analysis_database_path: Path = field(default_factory=database_path)
+    max_analysis_workers: int = 2
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -141,4 +149,6 @@ class Settings:
             extraction_workers=integer("RESEARCH_GAP_EXTRACTION_WORKERS", 4),
             extraction_batch_size=integer("RESEARCH_GAP_EXTRACTION_BATCH_SIZE", 3),
             cache_directory=cache_dir(),
+            analysis_database_path=database_path(),
+            max_analysis_workers=integer("RESEARCH_GAP_MAX_ANALYSIS_WORKERS", 2, maximum=8),
         )
