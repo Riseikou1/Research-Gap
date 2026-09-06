@@ -1,5 +1,4 @@
 import unittest
-from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
@@ -15,7 +14,7 @@ from src.analysis.verification import (
 )
 from src.extraction.evidence import EvidenceItem, PaperEvidence
 from src.models.idea import ResearchIdea
-from src.models.paper import Paper, RetrievalProvenance
+from src.models.paper import Paper
 from src.ranking.semantic import OpenAIEmbeddingProvider
 from src.ranking.lexical import LexicalScorer
 from src.retrieval.multi_query import MultiQueryRetriever

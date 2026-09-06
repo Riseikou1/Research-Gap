@@ -2,7 +2,6 @@ import unittest
 
 from src.query.deterministic import (
     DeterministicDecomposer,
-    clean_idea_text,
 )
 
 

@@ -1,14 +1,12 @@
 import unittest
 import json
 from io import BytesIO
-from types import SimpleNamespace
 
 from src.analysis.comparison import classify_study_type, to_paper_features
 from src.analysis.models import GapCandidate, LandscapeBasis
 from src.analysis.verification import GapVerifier
 from src.extraction.evidence import EvidenceItem, PaperEvidence
 from src.models.idea import ResearchIdea
-from src.models.paper import Paper
 from src.retrieval.multi_query import MultiQueryRetriever
 from src.retrieval.openalex import OpenAlexRetriever, _serialize_provider_query
 from src.models.query import RetrievalMode, SearchQuery

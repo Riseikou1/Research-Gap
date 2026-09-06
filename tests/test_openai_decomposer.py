@@ -1,8 +1,6 @@
 import unittest
 from typing import Any
 
-from pydantic import ValidationError
-
 from src.query.openai_decomposer import (
     OpenAIDecomposer,
     OpenAIDecompositionError,
