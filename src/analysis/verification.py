@@ -8,11 +8,9 @@ from time import perf_counter
 
 from src.analysis.comparison import (
     dataset_types,
-    normalize_constraint,
     normalize_dataset,
     normalize_method_family,
     normalize_metric,
-    normalize_problem,
 )
 from src.analysis.models import (
     EvidenceRole,
@@ -381,58 +379,6 @@ def _explicit_synonym_item_matches(
     )
 
 
-def _synonym_requirement_keys(
-    idea: ResearchIdea,
-    value: str,
-    dimension: str,
-) -> set[str]:
-    """Return all explicit equivalents associated with one requirement."""
-
-    keys = {
-        _requirement_key(
-            value,
-            dimension,
-        )
-    }
-
-    value_key = canonical_evidence_key(
-        value
-    )
-
-    for canonical, alternatives in idea.synonyms.items():
-        linked = [
-            canonical,
-            *alternatives,
-        ]
-
-        linked_raw_keys = {
-            canonical_evidence_key(item)
-            for item in linked
-        }
-
-        linked_requirement_keys = {
-            _requirement_key(
-                item,
-                dimension,
-            )
-            for item in linked
-        }
-
-        if (
-            value_key in linked_raw_keys
-            or keys & linked_requirement_keys
-        ):
-            keys.update(
-                linked_requirement_keys
-            )
-
-    return {
-        key
-        for key in keys
-        if key
-    }
-
-
 def _linked_requirement_values(
     idea: ResearchIdea,
     value: str,
@@ -560,19 +506,6 @@ def _idea_requirement_groups(
         )
         for group in groups
     ]
-
-
-def _all_requirement_groups_match(
-    groups: Sequence[Sequence[str]],
-    matcher,
-) -> bool:
-    return bool(groups) and all(
-        any(
-            matcher(value)
-            for value in group
-        )
-        for group in groups
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -2345,17 +2278,6 @@ def _idea_facet_groups(
     ]
 
 
-def _candidate_facet_phrases(
-    candidate: GapCandidate,
-) -> list[str]:
-    return [
-        value
-        for group in _candidate_facet_groups(candidate)
-        for value in group
-        if value and is_concrete_entity(value)
-    ]
-
-
 def _pre_screen_papers(
     papers: Sequence[Paper],
     phrases: Sequence[str] | Sequence[Sequence[str]],
@@ -2950,26 +2872,6 @@ def _comparison_matches(
     )
 
 
-def _outcome_evidence_items(
-    record: PaperEvidence,
-) -> list[EvidenceItem]:
-    result: list[EvidenceItem] = []
-
-    if record.research_objective:
-        result.append(
-            record.research_objective
-        )
-
-    result.extend(
-        record.main_findings
-    )
-    result.extend(
-        record.evaluation_metrics
-    )
-
-    return result
-
-
 def _outcome_matches(
     idea: ResearchIdea,
     record: PaperEvidence,
@@ -3069,36 +2971,6 @@ def _idea_match_strength(
 # ---------------------------------------------------------------------------
 # Evidence shown for direct matches
 # ---------------------------------------------------------------------------
-
-
-def _matching_requirement_items(
-    idea: ResearchIdea,
-    values: Sequence[str],
-    items: Sequence[EvidenceItem],
-    dimension: str,
-) -> list[EvidenceItem]:
-    groups = _idea_requirement_groups(
-        idea,
-        values,
-        dimension,
-    )
-
-    result: list[EvidenceItem] = []
-
-    for group in groups:
-        for item in items:
-            matched = any(
-                _requirement_item_matches(idea, value, item, dimension)
-                for value in group
-            )
-
-            if matched:
-                result.append(
-                    item
-                )
-                break
-
-    return result
 
 
 def _idea_evidence(

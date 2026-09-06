@@ -641,13 +641,6 @@ class _GenerationContext:
             self.semantic_cache[key] = cached
         return cached
 
-    def observed_combination(self, basis: Sequence[LandscapeBasis]) -> bool:
-        if not basis:
-            return False
-        return self.observed_combination_keys(
-            tuple((item.dimension, self.concept_key(item.value)) for item in basis)
-        )
-
     def observed_combination_keys(
         self,
         combination_key: Sequence[tuple[str, str]],
@@ -1690,72 +1683,6 @@ def _item_matches_basis(
 
     return target_terms <= observed_terms or bool(
         target_terms & observed_terms
-    )
-
-
-def _observed_pairs(
-    landscape: LiteratureLandscape,
-    left_dimension: str,
-    right_dimension: str,
-) -> set[tuple[str, str]]:
-    result: set[tuple[str, str]] = set()
-
-    for combination in landscape.combinations:
-        left = combination.dimensions.get(
-            left_dimension
-        )
-        right = combination.dimensions.get(
-            right_dimension
-        )
-
-        if not left or not right:
-            continue
-
-        result.add(
-            (
-                _concept_key(left),
-                _concept_key(right),
-            )
-        )
-
-    return result
-
-
-def _paper_dimension_values(
-    paper,
-    dimension: str,
-) -> set[str]:
-    field_name = _COMBINATION_FIELDS.get(dimension)
-    if field_name is None:
-        return set()
-
-    return {
-        _concept_key(value)
-        for value in getattr(paper, field_name, [])
-        if is_concrete_entity(value)
-    }
-
-
-def _combination_observed_in_papers(
-    landscape: LiteratureLandscape,
-    basis: Sequence[LandscapeBasis],
-) -> bool:
-    """Return whether every basis value occurs in the same paper.
-
-    `LandscapeBasis.count` deliberately is not used here: independent global
-    frequencies cannot establish a joint observation.
-    """
-
-    if not basis:
-        return False
-
-    return any(
-        all(
-            _concept_key(item.value)
-            in _paper_dimension_values(paper, item.dimension)
-            for item in basis
-        )
-        for paper in landscape.papers
     )
 
 

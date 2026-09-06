@@ -11,7 +11,6 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
-import time
 
 from src.models.paper import Paper
 from src.models.query import RetrievalMode, SearchQuery

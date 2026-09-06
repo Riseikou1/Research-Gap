@@ -18,18 +18,11 @@ load_dotenv(PROJECT_ROOT / ".env")
 # ------------------------------------------------------------------
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY")
-OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO")
 
 
 # ------------------------------------------------------------------
 # Models
 # ------------------------------------------------------------------
-
-OPENAI_MODEL = os.getenv(
-    "OPENAI_MODEL",
-    "gpt-5.6-luna",
-)
 
 OPENAI_EMBEDDING_MODEL = os.getenv(
     "OPENAI_EMBEDDING_MODEL",
@@ -146,27 +139,8 @@ class Settings:
         )
 
 
-# ------------------------------------------------------------------
-# Retrieval
-# ------------------------------------------------------------------
-
-PER_ROUTE_LIMIT = 20
-MAX_CANDIDATES = 100
-RETRIEVAL_WORKERS = 4
-
-OPENALEX_TIMEOUT_SECONDS = 20.0
-OPENALEX_MAX_RETRIES = 2
-
-
-# ------------------------------------------------------------------
-# Ranking
-# ------------------------------------------------------------------
-
-LEXICAL_WEIGHT = 0.4
-SEMANTIC_WEIGHT = 0.6
+# Default for direct embedding-provider construction; CLI values come from Settings.
 EMBEDDING_BATCH_SIZE = 100
-
-SEMANTIC_FALLBACK = "lexical"
 
 
 # ------------------------------------------------------------------

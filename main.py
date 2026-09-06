@@ -18,7 +18,6 @@ from src.analysis.gap_candidates import GapCandidateGenerator, is_concrete_entit
 from src.analysis.verification import GapVerifier
 from src.extraction.paper_extractor import PaperExtractor
 from src.models.paper import Paper
-from src.models.query import SearchQuery
 from src.pipeline import PipelineError, ResearchPipeline, ResearchResult
 from src.query.deterministic import DeterministicDecomposer
 from src.query.openai_decomposer import (

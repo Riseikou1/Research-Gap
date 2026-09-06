@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from .models import FieldMetrics, Label, VerificationEvaluationCase, VerificationMetrics
+from .models import FieldMetrics, VerificationEvaluationCase, VerificationMetrics
 
 LABELS = ("well_studied", "uncertain", "promising_gap")
 
