@@ -1,0 +1,24 @@
+{"_meta":
+    {"dataset_version":"cross-disciplinary-draft-v1"}
+}
+
+{"gold_duplicate_pairs":[["crossref:10.1038/s41586-019-1666-5","publisher:10.1038/s41586-019-1666-5"]],"id":"dedup-001-quantum-computing-supremacy"}
+{"gold_duplicate_pairs":[["crossref:10.1073/pnas.98.2.676","publisher:10.1073/pnas.98.2.676"]],"id":"dedup-002-neuroscience-default-mode"}
+{"gold_duplicate_pairs":[["crossref:10.2307/1914185","publisher:10.2307/1914185"]],"id":"dedup-003-behavioral-economics-prospect-theory"}
+{"gold_duplicate_pairs":[["crossref:10.1111/j.1540-6261.1992.tb04398.x","publisher:10.1111/j.1540-6261.1992.tb04398.x"]],"id":"dedup-004-finance-asset-pricing"}
+{"gold_duplicate_pairs":[["crossref:10.1287/orsc.2.1.71","publisher:10.1287/orsc.2.1.71"]],"id":"dedup-005-management-organizational-learning"}
+{"gold_duplicate_pairs":[["crossref:10.1002/nav.3800020109","publisher:10.1002/nav.3800020109"]],"id":"dedup-006-operations-research-assignment"}
+{"gold_duplicate_pairs":[["crossref:10.1112/plms/s2-42.1.230","publisher:10.1112/plms/s2-42.1.230"]],"id":"dedup-007-mathematics-computability"}
+{"gold_duplicate_pairs":[["crossref:10.1111/j.1469-1809.1936.tb02137.x","publisher:10.1111/j.1469-1809.1936.tb02137.x"]],"id":"dedup-008-statistics-discriminant-analysis"}
+{"gold_duplicate_pairs":[["crossref:10.1002/1521-3773(20010601)40:11<2004::aid-anie2004>3.0.co;2-5","publisher:10.1002/1521-3773(20010601)40:11<2004::aid-anie2004>3.0.co;2-5"]],"id":"dedup-009-chemistry-click-reactions"}
+{"gold_duplicate_pairs":[["crossref:10.1056/nejm199805143382001","publisher:10.1056/nejm199805143382001"]],"id":"dedup-010-pharmacology-sildenafil"}
+{"gold_duplicate_pairs":[["crossref:10.1056/nejmoa1200690","publisher:10.1056/nejmoa1200690"]],"id":"dedup-011-oncology-pd1-immunotherapy"}
+{"gold_duplicate_pairs":[["crossref:10.1056/nejmoa1211721","publisher:10.1056/nejmoa1211721"]],"id":"dedup-012-virology-mers-coronavirus"}
+{"gold_duplicate_pairs":[["crossref:10.1371/journal.pmed.1000406","publisher:10.1371/journal.pmed.1000406"]],"id":"dedup-013-global-health-malaria-eradication"}
+{"gold_duplicate_pairs":[["crossref:10.1029/2007gl032916","publisher:10.1029/2007gl032916"]],"id":"dedup-014-remote-sensing-amazon-drought"}
+{"gold_duplicate_pairs":[["crossref:10.1001/archinternmed.2009.6","publisher:10.1001/archinternmed.2009.6"]],"id":"dedup-015-nutritional-epidemiology-red-meat"}
+{"gold_duplicate_pairs":[["crossref:10.1016/s0140-6736(16)30370-1","publisher:10.1016/s0140-6736(16)30370-1"]],"id":"dedup-016-exercise-epidemiology-physical-activity"}
+{"gold_duplicate_pairs":[["crossref:10.1371/journal.pone.0007487","publisher:10.1371/journal.pone.0007487"]],"id":"dedup-017-music-cognition-emotion"}
+{"gold_duplicate_pairs":[["crossref:10.1126/science.1241224","publisher:10.1126/science.1241224"]],"id":"dedup-018-sleep-glymphatic-clearance"}
+{"gold_duplicate_pairs":[["crossref:10.1126/science.1215039","publisher:10.1126/science.1215039"]],"id":"dedup-019-entomology-pesticide-foraging"}
+{"gold_duplicate_pairs":[["crossref:10.1038/35087589","publisher:10.1038/35087589"]],"id":"dedup-020-demography-population-growth"}
