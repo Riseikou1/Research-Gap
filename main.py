@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from time import perf_counter
 from typing import Any, Iterator
 
-from src.config import CACHE_DIR, ConfigurationError, Settings
+from src.config import ConfigurationError, Settings, cache_dir
 from src.analysis.gap_candidates import GapCandidateGenerator, is_concrete_entity
 from src.analysis.verification import GapVerifier
 from src.extraction.paper_extractor import PaperExtractor
@@ -172,7 +172,7 @@ def build_decomposer(
         return OpenAIDecomposer(
             api_key=settings.openai_api_key if settings else None,
             model=settings.openai_model if settings else None,
-            cache_path=CACHE_DIR / "research_gap.sqlite3",
+            cache_path=(settings.cache_directory if settings else cache_dir()) / "research_gap.sqlite3",
         )
     raise ValueError(f"Unsupported decomposer: {name}")
 
@@ -191,7 +191,7 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         max_candidates=openalex.max_candidates,
         per_route_limit=openalex.per_route_limit,
         max_workers=openalex.max_workers,
-        cache_path=CACHE_DIR / "research_gap.sqlite3",
+        cache_path=settings.cache_directory / "research_gap.sqlite3",
         retrieval_cache_ttl_seconds=openalex.retrieval_cache_ttl_seconds,
     )
 
@@ -210,12 +210,13 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         lexical_weight=settings.ranking.lexical_weight,
         semantic_weight=settings.ranking.semantic_weight,
         constraint_weight=settings.ranking.constraint_weight,
+        semantic_fallback=settings.ranking.semantic_fallback,
     )
     llm_generator = (
         OpenAIQueryGenerator(
             api_key=settings.openai_api_key,
             model=settings.openai_model,
-            cache_path=CACHE_DIR / "research_gap.sqlite3",
+            cache_path=settings.cache_directory / "research_gap.sqlite3",
         )
         if args.query_generator == "openai"
         else None
@@ -226,7 +227,7 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
         evidence_limit=settings.evidence_limit,
         max_workers=settings.extraction_workers,
         batch_size=settings.extraction_batch_size,
-        cache_path=CACHE_DIR / "research_gap.sqlite3",
+        cache_path=settings.cache_directory / "research_gap.sqlite3",
     ) if (args.show_evidence or show_gaps or show_landscape) else None
     gap_generator = GapCandidateGenerator() if show_gaps else None
     gap_verifier = GapVerifier(

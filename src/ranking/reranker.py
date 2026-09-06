@@ -6,6 +6,7 @@ import logging
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
@@ -22,7 +23,7 @@ DEFAULT_CONSTRAINT_WEIGHT = 0.15
 @dataclass(frozen=True, slots=True)
 class RankingResult:
     papers: list[Paper]
-    mode: str
+    mode: Literal["hybrid", "lexical_only"]
     notice: str | None = None
 
 
@@ -37,6 +38,7 @@ class HybridReranker:
         lexical_weight: float = 0.4,
         semantic_weight: float = 0.6,
         constraint_weight: float = DEFAULT_CONSTRAINT_WEIGHT,
+        semantic_fallback: Literal["lexical", "error"] = "lexical",
     ) -> None:
         if lexical_weight < 0 or semantic_weight < 0:
             raise ValueError("ranking weights must be non-negative")
@@ -44,12 +46,15 @@ class HybridReranker:
             raise ValueError("at least one ranking weight must be positive")
         if not 0 <= constraint_weight <= 1:
             raise ValueError("constraint_weight must be between 0 and 1")
+        if semantic_fallback not in {"lexical", "error"}:
+            raise ValueError("semantic_fallback must be 'lexical' or 'error'")
 
         self.lexical_scorer = lexical_scorer
         self.semantic_scorer = semantic_scorer
         self.lexical_weight = lexical_weight
         self.semantic_weight = semantic_weight
         self.constraint_weight = constraint_weight
+        self.semantic_fallback = semantic_fallback
 
     def rerank(self, idea: ResearchIdea, papers: Sequence[Paper]) -> RankingResult:
         if not papers:
@@ -69,10 +74,14 @@ class HybridReranker:
                 semantic_raw = self.semantic_scorer.score_many(idea.original_text, ranked)
                 semantic_scores = _normalize_scores(semantic_raw)
             except SemanticScoringError as exc:
+                if self.semantic_fallback == "error":
+                    raise
                 notice = "Semantic scoring failed; using lexical-only ranking."
                 LOGGER.warning("%s error=%s", notice, exc)
 
         elif self.semantic_weight > 0:
+            if self.semantic_fallback == "error":
+                raise SemanticScoringError("semantic scorer is required but unavailable")
             notice = "Semantic scorer is unavailable; using lexical-only ranking."
             LOGGER.warning(notice)
 

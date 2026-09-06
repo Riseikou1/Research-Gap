@@ -2,6 +2,7 @@ import unittest
 
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
+from src.ranking.lexical import LexicalScorer
 from src.ranking.reranker import HybridReranker
 from src.ranking.semantic import SemanticScoringError
 
@@ -18,6 +19,14 @@ class FakeScorer:
 
 
 class ConstraintRerankingTest(unittest.TestCase):
+    def test_strict_semantic_fallback_rejects_missing_scorer(self) -> None:
+        reranker = HybridReranker(LexicalScorer(), None, semantic_fallback="error")
+        with self.assertRaisesRegex(SemanticScoringError, "required"):
+            reranker.rerank(
+                ResearchIdea(original_text="example"),
+                [Paper(id="p", title="Example paper")],
+            )
+
     papers = [Paper(id="A", title="Crop disease ViT"), Paper(id="B", title="Crop disease ViT")]
 
     def test_constraint_match_boosts_similarly_relevant_paper(self):

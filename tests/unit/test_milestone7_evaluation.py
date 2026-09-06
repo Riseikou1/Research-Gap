@@ -241,7 +241,8 @@ class DatasetAndRunnerTest(unittest.TestCase):
             return ["p"]
 
         report = EvaluationRunner(dataset_version="m7-v1").run(retrieval_cases=cases, executor=executor)
-        self.assertEqual(report.retrieval["cases"], 1)
+        self.assertEqual(report.retrieval["cases"], 2)
+        self.assertEqual(report.retrieval["cases_scored"], 1)
         self.assertEqual(report.performance.cases_failed, 1)
         self.assertEqual(report.failures[0].stage, "execution")
 

@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from src.config import CACHE_DIR, openai_api_key, openai_model
+from src.config import cache_dir, openai_api_key, openai_model
 from src.models.idea import ResearchIdea
 from src.query.deterministic import clean_idea_text
 from src.query.openai_support import (
@@ -227,7 +227,7 @@ class OpenAIDecomposer:
             max_retries=max_retries,
         )
         self.planning_store = PlanningStore(
-            cache_path if cache_path is not None else CACHE_DIR / "research_gap.sqlite3"
+            cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3"
         )
 
     def decompose(self, idea: str) -> ResearchIdea:

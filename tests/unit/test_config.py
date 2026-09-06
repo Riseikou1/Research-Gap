@@ -14,6 +14,7 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(settings.ranking.semantic_weight, 0.6)
         self.assertEqual(settings.ranking.semantic_fallback, "lexical")
         self.assertEqual(settings.extraction_workers, 4)
+        self.assertEqual(settings.cache_directory.name, "cache")
 
     def test_environment_overrides_are_validated(self) -> None:
         with patch.dict(
@@ -58,6 +59,19 @@ class ConfigurationTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ConfigurationError, "positive"):
                 Settings.from_env()
+
+    def test_runtime_bounds_and_fallback_are_validated(self) -> None:
+        invalid = {
+            "OPENALEX_CANDIDATE_LIMIT": "101",
+            "RESEARCH_GAP_RETRIEVAL_WORKERS": "17",
+            "OPENALEX_TIMEOUT_SECONDS": "inf",
+            "RESEARCH_GAP_LEXICAL_WEIGHT": "-1",
+            "RESEARCH_GAP_SEMANTIC_FALLBACK": "silent",
+        }
+        for name, value in invalid.items():
+            with self.subTest(name=name), patch.dict(os.environ, {name: value}, clear=True):
+                with self.assertRaises(ConfigurationError):
+                    Settings.from_env()
 
 
 if __name__ == "__main__":

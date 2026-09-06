@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 Label = Literal["well_studied", "uncertain", "promising_gap"]
+EvaluationType = Literal["retrieval", "deduplication", "extraction", "verification"]
 
 
 class StrictModel(BaseModel):
@@ -66,6 +67,7 @@ class ExtractionMetrics(StrictModel):
 
 class RetrievalAggregateMetrics(StrictModel):
     cases: int = Field(ge=0)
+    cases_scored: int = Field(default=0, ge=0)
     recall_at_10: float | None = Field(default=None, ge=0, le=1)
     recall_at_50: float | None = Field(default=None, ge=0, le=1)
     mrr: float | None = Field(default=None, ge=0, le=1)
@@ -134,12 +136,13 @@ class PerformanceMetrics(StrictModel):
 
 class EvaluationFailure(StrictModel):
     case_id: str = Field(min_length=1)
+    evaluation_type: EvaluationType | None = None
     stage: str = Field(min_length=1)
     error: str = Field(min_length=1)
 
 
 class EvaluationReport(StrictModel):
-    schema_version: str = "m7-v1"
+    schema_version: str = "m7-v2"
     dataset_version: str = "unspecified"
     timestamp: str
     cases_total: int = Field(ge=0, default=0)
