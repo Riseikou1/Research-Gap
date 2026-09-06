@@ -1,4 +1,4 @@
-"""Application service orchestrating retrieval through Milestone 5 analysis."""
+"""Application service orchestrating retrieval through Milestone 6 verification."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ class ResearchResult:
         gap_payloads = []
         for item in self.gaps:
             payload = item.model_dump(mode="json")
-            # This legacy/internal field is not a novelty probability and is
+            # Internal ranking signals are not novelty probabilities and are
             # intentionally omitted from user-facing JSON.
             payload.pop("confidence", None)
             payload.pop("idea_relevance", None)
@@ -315,7 +315,7 @@ def _build_work_metrics(
         )
     else:
         # Preserve useful accounting for lightweight/custom extractors that
-        # implement the legacy extract_many interface without metrics.
+        # implement the extract_many interface without metrics.
         evidence_requested = len(selected_papers)
 
     evidence_requested += _metric_delta(

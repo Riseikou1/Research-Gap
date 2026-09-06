@@ -340,4 +340,3 @@ def normalize_feature(value: str, dimension: str) -> str:
 
 
 method_family = normalize_method_family
-normalize_method_family_value = normalize_method_family

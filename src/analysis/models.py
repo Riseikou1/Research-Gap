@@ -189,15 +189,6 @@ class VerificationFailure(BaseModel):
     error: str = Field(min_length=1)
 
 
-# ---------------------------------------------------------------------------
-# Temporary cross-paper synthesis models
-#
-# These are still retained because EvidenceSynthesizer and ResearchResult
-# currently expose synthesis data. They can be removed together if that
-# legacy synthesis path is deleted from the pipeline.
-# ---------------------------------------------------------------------------
-
-
 class GapVerification(BaseModel):
     """Evidence and coverage outcome of verifying one candidate."""
 

@@ -107,6 +107,9 @@ cache/
 # ML / model artifacts
 # -------------------------
 models/
+# Python schemas are source code, not downloaded model weights.
+!src/models/
+!src/models/*.py
 checkpoints/
 weights/
 
