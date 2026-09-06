@@ -141,8 +141,10 @@ python -m src.evaluation.runner \
 ```
 
 Metric computation is fully offline. Provider failures are recorded by case and stage rather than
-silently removed from denominators. Reports carry dataset/schema metadata, raw numeric JSON metrics,
+silently removed from denominators; malformed or missing predictions therefore contribute zero for
+the affected case. Reports use schema `m7-v2` and carry dataset metadata, raw numeric JSON metrics,
 existing pipeline timings, provider request counters, token metadata when exposed, and cache hit
-rates. Do not place evaluation examples in production prompts or benchmark-specific normalization
-logic. Absence of direct evidence remains `uncertain` and never proves global novelty; assessments
-describe retrieved and verified evidence only.
+rates. The CLI exits with status 1 when any case fails and status 2 for invalid input or
+configuration, so it can be used safely in CI. Do not place evaluation examples in production
+prompts or benchmark-specific normalization logic. Absence of direct evidence remains `uncertain`
+and never proves global novelty; assessments describe retrieved and verified evidence only.

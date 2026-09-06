@@ -21,7 +21,7 @@ def format_report(report: EvaluationReport) -> str:
     retrieval = report.retrieval
     if retrieval:
         lines += ["", "Retrieval", "---------"]
-        for key in ("cases", "recall_at_10", "recall_at_50", "mrr", "ndcg_at_10"):
+        for key in ("cases", "cases_scored", "recall_at_10", "recall_at_50", "mrr", "ndcg_at_10"):
             value = getattr(retrieval, key, None)
             if value is not None:
                 lines.append(f"{key}: {value}")

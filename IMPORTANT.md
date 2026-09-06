@@ -170,8 +170,9 @@ cache hit rates. It can export candidate contexts for later expert 1–5 ratings
 human usefulness/correctness scores. Provider failures are recorded by case and stage. Token usage
 and cost remain unavailable when the provider does not expose reliable usage metadata, and pricing
 is supplied through `ModelPricing` rather than fetched at runtime. All reports carry a dataset
-version and schema version. Scores describe retrieved and verified evidence only and do not prove
-global novelty.
+version and schema version. Starting with report schema `m7-v2`, missing and malformed predictions
+remain in metric denominators instead of making failed cases disappear. Scores describe retrieved
+and verified evidence only and do not prove global novelty.
 
 ## 7. Milestone 1 — basic retrieval (complete)
 

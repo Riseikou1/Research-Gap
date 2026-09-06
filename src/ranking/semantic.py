@@ -11,7 +11,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Protocol
 
-from src.config import CACHE_DIR, OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL, EMBEDDING_BATCH_SIZE
+from src.config import DEFAULT_EMBEDDING_MODEL, cache_dir, openai_api_key
 from src.models.paper import Paper
 
 
@@ -44,8 +44,8 @@ class OpenAIEmbeddingProvider:
         *,
         client: Any | None = None,
         api_key: str | None = None,
-        model: str = OPENAI_EMBEDDING_MODEL,
-        batch_size: int = EMBEDDING_BATCH_SIZE,
+        model: str = DEFAULT_EMBEDDING_MODEL,
+        batch_size: int = 100,
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
         cache_path: str | Path | None = None,
@@ -80,7 +80,7 @@ class OpenAIEmbeddingProvider:
         if client is not None:
             self.client = client
         else:
-            key = api_key or OPENAI_API_KEY
+            key = api_key or openai_api_key()
 
             if not key:
                 raise EmbeddingConfigurationError(
@@ -101,7 +101,7 @@ class OpenAIEmbeddingProvider:
             )
 
         if self._embedding_cache_path is None and client is None:
-            self._embedding_cache_path = CACHE_DIR / "research_gap.sqlite3"
+            self._embedding_cache_path = cache_dir() / "research_gap.sqlite3"
 
         if self._embedding_cache_path is not None:
             self._embedding_cache_path.parent.mkdir(parents=True, exist_ok=True)

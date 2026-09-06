@@ -10,10 +10,14 @@ LABELS = ("well_studied", "uncertain", "promising_gap")
 
 
 def _normalize_ids(values: object) -> set[str]:
+    if values is None:
+        return set()
     if isinstance(values, str):
         values = [values]
-    if not isinstance(values, Sequence):
-        return set()
+    if not isinstance(values, Sequence) or isinstance(values, bytes):
+        raise ValueError("counterexample IDs must be a sequence of strings")
+    if any(not isinstance(value, str) or not value.strip() for value in values):
+        raise ValueError("counterexample IDs must be non-empty strings")
     return {
         normalized
         for value in values
@@ -21,25 +25,37 @@ def _normalize_ids(values: object) -> set[str]:
     }
 
 
-def _prediction(value: object) -> tuple[str | None, set[str], set[str], dict[str, str]]:
+def parse_verification_prediction(value: object) -> tuple[str | None, set[str], set[str], dict[str, str]]:
+    """Validate a saved assessment without converting invalid labels to uncertain."""
+    if value is None:
+        return None, set(), set(), {}
     if isinstance(value, str):
-        return value, set(), set(), {}
-    if isinstance(value, Mapping):
+        label = value
+        searched_ids, confirmed_ids, candidates = set(), set(), {}
+    elif isinstance(value, Mapping):
         label = value.get("label") or value.get("final_label")
         searched_ids = _normalize_ids(value.get("searched_paper_ids", []))
         confirmed_ids = (
             _normalize_ids(value.get("counterexample_paper_ids", []))
             | _normalize_ids(value.get("contradicting_paper_ids", []))
         )
-        candidates = value.get("candidate_labels") or {}
-        return label if isinstance(label, str) else None, searched_ids, confirmed_ids, dict(candidates)
-    label = getattr(value, "label", None) or getattr(value, "final_label", None)
-    searched_ids = _normalize_ids(getattr(value, "searched_paper_ids", []))
-    confirmed_ids = (
-        _normalize_ids(getattr(value, "counterexample_paper_ids", []))
-        | _normalize_ids(getattr(value, "contradicting_paper_ids", []))
-    )
-    return label, searched_ids, confirmed_ids, {}
+        candidates = value.get("candidate_labels", {})
+    else:
+        label = getattr(value, "label", None) or getattr(value, "final_label", None)
+        searched_ids = _normalize_ids(getattr(value, "searched_paper_ids", []))
+        confirmed_ids = (
+            _normalize_ids(getattr(value, "counterexample_paper_ids", []))
+            | _normalize_ids(getattr(value, "contradicting_paper_ids", []))
+        )
+        candidates = getattr(value, "candidate_labels", {})
+    if not isinstance(label, str) or label not in LABELS:
+        raise ValueError(f"assessment label must be one of {LABELS}")
+    if not isinstance(candidates, Mapping) or any(
+        not isinstance(key, str) or not key.strip() or not isinstance(item, str) or item not in LABELS
+        for key, item in candidates.items()
+    ):
+        raise ValueError("candidate_labels must map candidate IDs to valid assessment labels")
+    return label, searched_ids, confirmed_ids, dict(candidates)
 
 
 def counterexample_discovery_rate(known_ids: Sequence[str], discovered_ids: Sequence[str]) -> float | None:
@@ -69,11 +85,17 @@ def evaluate_verification(
     false_positive = 0
     well_studied_cases = 0
     candidate_total = candidate_correct = 0
+    unscored = dict.fromkeys(LABELS, 0)
     for case in cases:
-        label, searched_ids, confirmed_ids, candidate_labels = _prediction(predictions.get(case.id))
+        try:
+            label, searched_ids, confirmed_ids, candidate_labels = parse_verification_prediction(predictions.get(case.id))
+        except (TypeError, ValueError):
+            label, searched_ids, confirmed_ids, candidate_labels = None, set(), set(), {}
         if label in LABELS:
             matrix[case.expected_label][label] += 1
             scored += 1
+        else:
+            unscored[case.expected_label] += 1
         known_ids = _normalize_ids(case.known_counterexample_ids)
         if known_ids:
             counterexample_cases += 1
@@ -89,7 +111,7 @@ def evaluate_verification(
     for label in LABELS:
         tp = matrix[label][label]
         fp = sum(matrix[other][label] for other in LABELS if other != label)
-        fn = sum(matrix[label][other] for other in LABELS if other != label)
+        fn = sum(matrix[label][other] for other in LABELS if other != label) + unscored[label]
         p = tp / (tp + fp) if tp + fp else 0.0
         r = tp / (tp + fn) if tp + fn else 0.0
         per_label[label] = FieldMetrics(
@@ -97,10 +119,11 @@ def evaluate_verification(
             recall=r,
             f1=2 * p * r / (p + r) if p + r else 0.0,
             support=tp + fn,
+            true_positive=tp, false_positive=fp, false_negative=fn,
         )
     return VerificationMetrics(
         cases_total=len(cases), cases_scored=scored,
-        accuracy=sum(matrix[x][x] for x in LABELS) / scored if scored else None,
+        accuracy=sum(matrix[x][x] for x in LABELS) / len(cases) if cases else None,
         confusion_matrix=matrix, per_label=per_label,
         counterexample_cases=counterexample_cases,
         known_counterexamples=known_counterexamples,

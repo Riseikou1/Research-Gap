@@ -13,8 +13,7 @@ from typing import Any, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from src.config import openai_api_key, openai_extraction_model
-from src.config import CACHE_DIR
+from src.config import cache_dir, openai_api_key, openai_extraction_model
 from src.models.paper import Paper
 
 from .evidence import EvidenceItem, LimitationEvidence, PaperEvidence, StudyType, canonical_evidence_key
@@ -444,7 +443,7 @@ class PaperExtractor:
 
         self.client = OpenAI(api_key=key)
         self.evidence_store = EvidenceStore(
-            cache_path if cache_path is not None else CACHE_DIR / "research_gap.sqlite3"
+            cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3"
         )
 
     @staticmethod

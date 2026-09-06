@@ -1,49 +1,46 @@
-"""Configuration for the Research GAP pipeline."""
+"""Validated runtime configuration for the Research GAP pipeline."""
 
 from __future__ import annotations
 
+import math
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
-from dataclasses import dataclass
+from typing import Literal
 
 from dotenv import load_dotenv
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
-
-# ------------------------------------------------------------------
-# API credentials
-# ------------------------------------------------------------------
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-
-# ------------------------------------------------------------------
-# Models
-# ------------------------------------------------------------------
-
-OPENAI_EMBEDDING_MODEL = os.getenv(
-    "OPENAI_EMBEDDING_MODEL",
-    "text-embedding-3-small",
-)
+DEFAULT_OPENAI_MODEL = "gpt-5.6-luna"
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def openai_api_key() -> str | None:
-    return os.getenv("OPENAI_API_KEY") or None
+    return os.getenv("OPENAI_API_KEY", "").strip() or None
 
 
 def openai_model() -> str:
-    return os.getenv("OPENAI_MODEL") or "gpt-5.6-luna"
+    return os.getenv("OPENAI_MODEL", "").strip() or DEFAULT_OPENAI_MODEL
 
 
 def openai_extraction_model() -> str:
-    return os.getenv("OPENAI_EXTRACTION_MODEL") or openai_model()
+    return os.getenv("OPENAI_EXTRACTION_MODEL", "").strip() or openai_model()
+
+
+def openai_embedding_model() -> str:
+    return os.getenv("OPENAI_EMBEDDING_MODEL", "").strip() or DEFAULT_EMBEDDING_MODEL
+
+
+def cache_dir() -> Path:
+    """Resolve the cache when a component is built, not when its module is imported."""
+    value = os.getenv("RESEARCH_GAP_CACHE_DIR", "").strip()
+    return Path(value).expanduser() if value else PROJECT_ROOT / "data" / "cache"
 
 
 class ConfigurationError(ValueError):
-    """Raised when environment configuration cannot be parsed."""
+    """Raised when environment configuration is malformed or out of bounds."""
 
 
 @dataclass(frozen=True)
@@ -65,7 +62,7 @@ class RankingSettings:
     lexical_weight: float
     semantic_weight: float
     constraint_weight: float
-    semantic_fallback: str
+    semantic_fallback: Literal["lexical", "error"]
 
 
 @dataclass(frozen=True)
@@ -78,78 +75,70 @@ class Settings:
     evidence_limit: int
     extraction_workers: int
     extraction_batch_size: int
+    cache_directory: Path = field(default_factory=cache_dir)
 
     @classmethod
     def from_env(cls) -> "Settings":
-        def integer(name: str, default: int) -> int:
+        def integer(name: str, default: int, *, minimum: int = 1, maximum: int | None = None) -> int:
             try:
-                return int(os.getenv(name, str(default)))
+                value = int(os.getenv(name, str(default)))
             except ValueError as exc:
                 raise ConfigurationError(f"{name} must be an integer") from exc
+            if value < minimum:
+                requirement = "positive" if minimum == 1 else f"at least {minimum}"
+                raise ConfigurationError(f"{name} must be {requirement}")
+            if maximum is not None and value > maximum:
+                raise ConfigurationError(f"{name} must not exceed {maximum}")
+            return value
 
-        def number(name: str, default: float) -> float:
+        def number(name: str, default: float, *, positive: bool = False) -> float:
             try:
-                return float(os.getenv(name, str(default)))
+                value = float(os.getenv(name, str(default)))
             except ValueError as exc:
                 raise ConfigurationError(f"{name} must be a number") from exc
+            if not math.isfinite(value):
+                raise ConfigurationError(f"{name} must be finite")
+            if value < 0 or (positive and value == 0):
+                requirement = "positive" if positive else "non-negative"
+                raise ConfigurationError(f"{name} must be {requirement}")
+            return value
 
         lexical = number("RESEARCH_GAP_LEXICAL_WEIGHT", 0.4)
         semantic = number("RESEARCH_GAP_SEMANTIC_WEIGHT", 0.6)
-        constraint_weight = number("RESEARCH_GAP_CONSTRAINT_WEIGHT", 0.15)
         if lexical == 0 and semantic == 0:
             raise ConfigurationError("weights cannot both be zero")
-        if not 0 <= constraint_weight <= 1:
+        if not math.isfinite(lexical + semantic):
+            raise ConfigurationError("combined ranking weights must be finite")
+        constraint_weight = number("RESEARCH_GAP_CONSTRAINT_WEIGHT", 0.15)
+        if constraint_weight > 1:
             raise ConfigurationError("RESEARCH_GAP_CONSTRAINT_WEIGHT must be between 0 and 1")
-        extraction_workers = integer("RESEARCH_GAP_EXTRACTION_WORKERS", 4)
-        if extraction_workers <= 0:
-            raise ConfigurationError("RESEARCH_GAP_EXTRACTION_WORKERS must be positive")
-        extraction_batch_size = integer("RESEARCH_GAP_EXTRACTION_BATCH_SIZE", 3)
-        if extraction_batch_size <= 0:
-            raise ConfigurationError("RESEARCH_GAP_EXTRACTION_BATCH_SIZE must be positive")
-        retrieval_cache_ttl_seconds = number(
-            "RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS", 6 * 60 * 60
-        )
-        if retrieval_cache_ttl_seconds <= 0:
-            raise ConfigurationError(
-                "RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS must be positive"
-            )
+        fallback = os.getenv("RESEARCH_GAP_SEMANTIC_FALLBACK", "lexical").strip()
+        if fallback not in {"lexical", "error"}:
+            raise ConfigurationError("RESEARCH_GAP_SEMANTIC_FALLBACK must be 'lexical' or 'error'")
+
         return cls(
             openai_api_key=openai_api_key(), openai_model=openai_model(),
             extraction_model=openai_extraction_model(),
             openalex=OpenAlexSettings(
                 api_key=os.getenv("OPENALEX_API_KEY") or None,
                 mailto=os.getenv("OPENALEX_MAILTO") or None,
-                per_route_limit=integer("OPENALEX_CANDIDATE_LIMIT", 20),
-                max_candidates=integer("RESEARCH_GAP_MAX_CANDIDATES", 100),
-                max_workers=integer("RESEARCH_GAP_RETRIEVAL_WORKERS", 4),
-                timeout_seconds=number("OPENALEX_TIMEOUT_SECONDS", 20.0),
-                max_retries=integer("OPENALEX_MAX_RETRIES", 2),
-                retrieval_cache_ttl_seconds=retrieval_cache_ttl_seconds,
+                per_route_limit=integer("OPENALEX_CANDIDATE_LIMIT", 20, maximum=100),
+                max_candidates=integer("RESEARCH_GAP_MAX_CANDIDATES", 100, maximum=500),
+                max_workers=integer("RESEARCH_GAP_RETRIEVAL_WORKERS", 4, maximum=16),
+                timeout_seconds=number("OPENALEX_TIMEOUT_SECONDS", 20.0, positive=True),
+                max_retries=integer("OPENALEX_MAX_RETRIES", 2, minimum=0),
+                retrieval_cache_ttl_seconds=number(
+                    "RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS", 21600, positive=True,
+                ),
             ),
             ranking=RankingSettings(
-                embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+                embedding_model=openai_embedding_model(),
                 embedding_batch_size=integer("RESEARCH_GAP_EMBEDDING_BATCH_SIZE", 100),
                 lexical_weight=lexical, semantic_weight=semantic,
-                constraint_weight=constraint_weight,
-                semantic_fallback=os.getenv("RESEARCH_GAP_SEMANTIC_FALLBACK", "lexical"),
+                constraint_weight=constraint_weight, semantic_fallback=fallback,
             ),
-            evidence_limit=integer("RESEARCH_GAP_EVIDENCE_LIMIT", 10),
-            extraction_workers=extraction_workers,
-            extraction_batch_size=extraction_batch_size,
+            evidence_limit=integer("RESEARCH_GAP_EVIDENCE_LIMIT", 10, minimum=0),
+            extraction_workers=integer("RESEARCH_GAP_EXTRACTION_WORKERS", 4),
+            extraction_batch_size=integer("RESEARCH_GAP_EXTRACTION_BATCH_SIZE", 3),
+            cache_directory=cache_dir(),
         )
-
-
-# Default for direct embedding-provider construction; CLI values come from Settings.
-EMBEDDING_BATCH_SIZE = 100
-
-
-# ------------------------------------------------------------------
-# Cache
-# ------------------------------------------------------------------
-
-CACHE_DIR = Path(
-    os.getenv(
-        "RESEARCH_GAP_CACHE_DIR",
-        str(PROJECT_ROOT / "data" / "cache"),
-    )
-).expanduser()

@@ -36,8 +36,9 @@ def _values(record: PaperEvidence | Mapping[str, object], field: str) -> list[st
             text = item.get("value")
         else:
             text = item
-        if isinstance(text, str) and text.strip():
-            output.append(normalize_value(text))
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"{field} predictions must contain non-empty text values")
+        output.append(normalize_value(text))
     return list(dict.fromkeys(output))
 
 
@@ -92,6 +93,12 @@ def _field_metrics(predicted: list[str], gold: list[str]) -> FieldMetrics:
 
 
 def evaluate_extraction(predicted: PaperEvidence | Mapping[str, object], gold: Mapping[str, Sequence[str]]) -> ExtractionMetrics:
+    if not isinstance(predicted, (PaperEvidence, Mapping)):
+        raise TypeError("extraction prediction must be a PaperEvidence or field mapping")
+    if isinstance(predicted, Mapping):
+        unknown = set(predicted) - set(PaperEvidence.model_fields)
+        if unknown:
+            raise ValueError(f"unknown extraction fields: {sorted(unknown, key=str)}")
     per_field = {
         field: _field_metrics(_values(predicted, field), _gold_values(gold, field))
         for field in EVIDENCE_FIELDS
@@ -106,7 +113,8 @@ def evaluate_extraction(predicted: PaperEvidence | Mapping[str, object], gold: M
 
 
 def _contains(haystack: str, needle: str) -> bool:
-    return normalize_value(needle) in normalize_value(haystack)
+    normalized = normalize_value(needle)
+    return bool(normalized) and normalized in normalize_value(haystack)
 
 
 def evaluate_attribution(
