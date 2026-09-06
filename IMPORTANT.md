@@ -151,8 +151,8 @@ Create files and folders only when their milestone begins. Do not add empty arch
 | 4. Structured evidence extraction | Complete | Methods, datasets, populations, findings, limitations |
 | 5. Literature comparison and clustering | Complete | Research landscape and comparable paper groups |
 | 6. Gap candidate generation and verification | Implemented; live smoke blocked | Evidence-backed, qualified gap hypotheses |
-| 7. Evaluation harness | Planned | Retrieval and report-quality measurements |
-| 8. Local API and persistence | Planned | FastAPI plus PostgreSQL/pgvector if justified |
+| 7. Evaluation harness | Complete | Offline retrieval, extraction, deduplication, verification, and performance scoring |
+| 8. Local API and persistence | Complete | FastAPI, bounded local jobs, migrations, and durable SQLite analysis history |
 | 9. Web interface | Planned | Interactive application and evidence views |
 | 10. Citation graph and deployment | Planned | Graph exploration, packaging, monitoring |
 
@@ -863,19 +863,23 @@ Keep an evaluation set separate from prompt examples and tuning decisions.
 
 ## 14. Milestone 8 — local service and persistence
 
-After the CLI pipeline is useful:
+Milestone 8 exposes the existing `ResearchPipeline` through FastAPI without creating a second
+analysis workflow. The CLI and API share pipeline construction in `src.application`. API requests
+create UUID analysis records and return immediately while a bounded local executor runs the work.
+States are `pending`, `running`, `completed`, and `failed`; interrupted running jobs are marked failed
+at startup and pending jobs are resumed.
 
-1. Wrap application services with FastAPI.
+Durable history uses a separate SQLite database managed by ordered migrations. One analysis row
+stores public inputs, timestamps, a secret-free configuration snapshot, the structured final
+`ResearchResult`, or a safe failure message. The result contains generated queries, all retrieved
+paper IDs, normalized selected papers, evidence, landscape, candidate gaps, direct assessment,
+verification information, and work/timing metadata. Deleting a record never clears provider caches.
 
-2. Add job IDs for long analyses.
-
-3. Persist ideas, queries, raw provider IDs, normalized papers, evidence, and reports.
-
-4. Begin with SQLite if one-user local persistence is sufficient.
-
-5. Move to PostgreSQL/pgvector only when concurrency or vector-scale requirements justify it.
-
-6. Add migrations, configuration validation, and health checks.
+Endpoints are `POST /analyses`, `GET /analyses`, `GET /analyses/{analysis_id}`,
+`DELETE /analyses/{analysis_id}`, and `GET /health`. Configure persistence with
+`RESEARCH_GAP_DATABASE_PATH` and bounded execution with `RESEARCH_GAP_MAX_ANALYSIS_WORKERS`.
+Apply schema changes with `python -m src.persistence.migrate` and start the service with
+`uvicorn src.api.app:app --reload`.
 
 ## 15. Milestone 9 — web interface
 

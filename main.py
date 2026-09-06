@@ -13,31 +13,21 @@ from contextlib import contextmanager
 from time import perf_counter
 from typing import Any, Iterator
 
-from src.config import ConfigurationError, Settings, cache_dir
-from src.analysis.gap_candidates import GapCandidateGenerator, is_concrete_entity
-from src.analysis.verification import GapVerifier
-from src.extraction.paper_extractor import PaperExtractor
+from src.analysis.gap_candidates import is_concrete_entity
+from src.application.analysis_service import (
+    PipelineOptions,
+    build_decomposer as build_application_decomposer,
+    build_pipeline as build_application_pipeline,
+)
+from src.config import ConfigurationError, Settings
 from src.models.paper import Paper
 from src.pipeline import PipelineError, ResearchPipeline, ResearchResult
-from src.query.deterministic import DeterministicDecomposer
 from src.query.openai_decomposer import (
     OpenAIConfigurationError,
-    OpenAIDecomposer,
     OpenAIDecompositionError,
 )
-from src.query.openai_generator import (
-    OpenAIQueryGenerationError,
-    OpenAIQueryGenerator,
-)
-from src.ranking.lexical import LexicalScorer
-from src.ranking.reranker import HybridReranker
-from src.ranking.semantic import (
-    OpenAIEmbeddingProvider,
-    SemanticScorer,
-    SemanticScoringError,
-)
-from src.retrieval.multi_query import MultiQueryRetriever
-from src.retrieval.openalex import OpenAlexRetriever
+from src.query.openai_generator import OpenAIQueryGenerationError
+from src.ranking.semantic import SemanticScoringError
 from src.reporting.landscape import format_landscape
 
 
@@ -162,87 +152,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_decomposer(
-    name: str,
-    settings: Settings | None = None,
-) -> DeterministicDecomposer | OpenAIDecomposer:
-    if name == "deterministic":
-        return DeterministicDecomposer()
-    if name == "openai":
-        return OpenAIDecomposer(
-            api_key=settings.openai_api_key if settings else None,
-            model=settings.openai_model if settings else None,
-            cache_path=(settings.cache_directory if settings else cache_dir()) / "research_gap.sqlite3",
-        )
-    raise ValueError(f"Unsupported decomposer: {name}")
+def build_decomposer(name: str, settings: Settings | None = None):
+    """Compatibility wrapper around the shared application decomposer factory."""
+    return build_application_decomposer(name, settings or Settings.from_env())
 
 
 def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipeline:
-    show_gaps = getattr(args, "show_gaps", False)
-    show_landscape = getattr(args, "show_landscape", False)
-    openalex = settings.openalex
-    retriever = MultiQueryRetriever(
-        OpenAlexRetriever(
-            timeout=openalex.timeout_seconds,
-            mailto=openalex.mailto,
-            api_key=openalex.api_key,
-            max_retries=openalex.max_retries,
+    """Compatibility wrapper around the shared application pipeline factory."""
+    return build_application_pipeline(
+        PipelineOptions(
+            decomposer=args.decomposer,
+            query_generator=args.query_generator,
+            include_evidence=args.show_evidence,
+            include_landscape=args.show_landscape,
+            include_gaps=args.show_gaps,
         ),
-        max_candidates=openalex.max_candidates,
-        per_route_limit=openalex.per_route_limit,
-        max_workers=openalex.max_workers,
-        cache_path=settings.cache_directory / "research_gap.sqlite3",
-        retrieval_cache_ttl_seconds=openalex.retrieval_cache_ttl_seconds,
-    )
-
-    semantic_scorer: SemanticScorer | None = None
-    if settings.openai_api_key:
-        semantic_scorer = SemanticScorer(
-            OpenAIEmbeddingProvider(
-                api_key=settings.openai_api_key,
-                model=settings.ranking.embedding_model,
-                batch_size=settings.ranking.embedding_batch_size,
-            )
-        )
-    reranker = HybridReranker(
-        LexicalScorer(),
-        semantic_scorer,
-        lexical_weight=settings.ranking.lexical_weight,
-        semantic_weight=settings.ranking.semantic_weight,
-        constraint_weight=settings.ranking.constraint_weight,
-        semantic_fallback=settings.ranking.semantic_fallback,
-    )
-    llm_generator = (
-        OpenAIQueryGenerator(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model,
-            cache_path=settings.cache_directory / "research_gap.sqlite3",
-        )
-        if args.query_generator == "openai"
-        else None
-    )
-    extractor = PaperExtractor(
-        api_key=settings.openai_api_key,
-        model=settings.extraction_model,
-        evidence_limit=settings.evidence_limit,
-        max_workers=settings.extraction_workers,
-        batch_size=settings.extraction_batch_size,
-        cache_path=settings.cache_directory / "research_gap.sqlite3",
-    ) if (args.show_evidence or show_gaps or show_landscape) else None
-    gap_generator = GapCandidateGenerator() if show_gaps else None
-    gap_verifier = GapVerifier(
-        retriever,
-        extractor,
-    ) if show_gaps and extractor is not None else None
-    return ResearchPipeline(
-        decomposer=build_decomposer(args.decomposer, settings),
-        retriever=retriever,
-        reranker=reranker,
-        llm_generator=llm_generator,
-        extractor=extractor,
-        gap_generator=gap_generator,
-        gap_verifier=gap_verifier,
-        evidence_limit=settings.evidence_limit,
+        settings,
     )
 
 

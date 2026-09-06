@@ -9,7 +9,6 @@ from src.extraction.evidence import EvidenceItem, PaperEvidence
 from src.extraction.paper_extractor import (
     PaperExtractor,
     _BatchExtractionResult,
-    _ExtractionResult,
 )
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
