@@ -24,6 +24,25 @@ _VAGUE_VALUES = {
     "not reported",
 }
 
+_EFFICIENCY_METRIC_TERMS = (
+    "latency",
+    "inference time",
+    "training time",
+    "execution time",
+    "runtime",
+    "throughput",
+    "memory usage",
+    "memory consumption",
+    "energy consumption",
+    "power consumption",
+    "parameter count",
+    "number of parameters",
+    "model size",
+    "flops",
+    "computational cost",
+    "compute cost",
+)
+
 _GENERIC_METHOD_VALUES = {
     "method",
     "methods",
@@ -173,6 +192,9 @@ def metric_kind(value: str) -> str | None:
 
     if not normalized:
         return None
+
+    if any(term in normalized for term in _EFFICIENCY_METRIC_TERMS):
+        return "efficiency"
 
     return "performance"
 
