@@ -1,6 +1,6 @@
 """Cross-paper literature analysis and research-gap verification."""
 
-from .clustering import LandscapeAnalyzer
+from .landscape import LandscapeAnalyzer
 from .comparison import method_family, normalize_feature, to_paper_features
 from .gap_candidates import (
     GapCandidateGenerator,

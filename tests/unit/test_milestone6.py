@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from src.analysis.clustering import LandscapeAnalyzer
+from src.analysis.landscape import LandscapeAnalyzer
 from src.analysis.gap_candidates import (
     GapCandidateGenerator,
     consolidate_candidates,

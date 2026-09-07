@@ -1,6 +1,6 @@
 import unittest
 
-from src.analysis.clustering import LandscapeAnalyzer
+from src.analysis.landscape import LandscapeAnalyzer
 from src.analysis.comparison import (
     normalize_constraint,
     normalize_dataset,

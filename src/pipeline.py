@@ -9,7 +9,7 @@ from typing import Literal
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
 from src.models.query import SearchQuery
-from src.analysis.clustering import LandscapeAnalyzer
+from src.analysis.landscape import LandscapeAnalyzer
 from src.analysis.gap_candidates import GapCandidateGenerator
 from src.analysis.models import GapCandidate, IdeaAssessment
 from src.analysis.verification import GapVerifier

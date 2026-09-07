@@ -2,7 +2,7 @@ import unittest
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
-from src.analysis.clustering import LandscapeAnalyzer
+from src.analysis.landscape import LandscapeAnalyzer
 from src.analysis.gap_candidates import GapCandidateGenerator
 from src.analysis.verification import _idea_match_strength
 from src.extraction.evidence import EvidenceItem, PaperEvidence

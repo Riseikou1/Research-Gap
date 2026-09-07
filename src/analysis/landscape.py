@@ -163,11 +163,7 @@ def _field_values(
     else:
         values = list(raw)
 
-    return [
-        value
-        for value in dict.fromkeys(values)
-        if _is_usable_value(value)
-    ]
+    return [value for value in dict.fromkeys(values) if _is_usable_value(value)]
 
 
 def _frequencies(
@@ -206,24 +202,15 @@ def _frequencies(
     )
 
 
-def _combinations(
-    features: Sequence[PaperFeatures],
-    total: int,
-) -> list[CombinationPattern]:
-    grouped: OrderedDict[
-        tuple[tuple[str, str], ...],
-        list[str],
-    ] = OrderedDict()
+def _combinations(features: Sequence[PaperFeatures], total: int) -> list[CombinationPattern]:
+    grouped: OrderedDict[tuple[tuple[str, str], ...], list[str]] = OrderedDict()
 
     for feature in features:
         if feature.study_type not in _COMBINATION_STUDY_TYPES:
             continue
 
         for spec in _COMBINATION_SPECS:
-            value_sets = [
-                _field_values(feature, field_name)
-                for _, field_name in spec
-            ]
+            value_sets = [_field_values(feature, field_name) for _, field_name in spec]
 
             if any(not values for values in value_sets):
                 continue
@@ -283,44 +270,22 @@ def _missing_counts(
     return dict(counts)
 
 
-def _overlap(
-    left: Iterable[str],
-    right: Iterable[str],
-) -> bool:
-    left_values = {
-        value
-        for value in left
-        if _is_usable_value(value)
-    }
-    right_values = {
-        value
-        for value in right
-        if _is_usable_value(value)
-    }
+def _overlap(left: Iterable[str], right: Iterable[str]) -> bool:
+    left_values = {value for value in left if _is_usable_value(value)}
+    right_values = {value for value in right if _is_usable_value(value)}
 
     return bool(left_values & right_values)
 
 
-def _optional_context_matches(
-    left: Sequence[str],
-    right: Sequence[str],
-) -> bool:
+def _optional_context_matches(left: Sequence[str], right: Sequence[str]) -> bool:
     """Require overlap when both studies report the contextual dimension.
 
     Missing context does not establish comparability, so asymmetric coverage
     remains conservatively incomparable.
     """
 
-    left_values = [
-        value
-        for value in left
-        if _is_usable_value(value)
-    ]
-    right_values = [
-        value
-        for value in right
-        if _is_usable_value(value)
-    ]
+    left_values = [value for value in left if _is_usable_value(value)]
+    right_values = [value for value in right if _is_usable_value(value)]
 
     if bool(left_values) != bool(right_values):
         return False
@@ -331,10 +296,7 @@ def _optional_context_matches(
     return _overlap(left_values, right_values)
 
 
-def _contexts_comparable(
-    left: PaperFeatures,
-    right: PaperFeatures,
-) -> bool:
+def _contexts_comparable(left: PaperFeatures, right: PaperFeatures) -> bool:
     """Require explicitly comparable experimental contexts."""
 
     if left.study_type not in _COMBINATION_STUDY_TYPES:
@@ -364,9 +326,7 @@ def _contexts_comparable(
     return True
 
 
-def _finding_polarity(
-    finding: str,
-) -> int | None:
+def _finding_polarity(finding: str) -> int | None:
     """Return only explicit comparative polarity.
 
     +1 = explicit favorable comparison
@@ -385,9 +345,7 @@ def _finding_polarity(
     return None
 
 
-def _finding_polarities(
-    findings: Sequence[str],
-) -> set[int]:
+def _finding_polarities(findings: Sequence[str]) -> set[int]:
     return {
         polarity
         for finding in findings
@@ -395,9 +353,7 @@ def _finding_polarities(
     }
 
 
-def _conflicts(
-    features: Sequence[PaperFeatures],
-) -> list[EvidenceConflict]:
+def _conflicts(features: Sequence[PaperFeatures]) -> list[EvidenceConflict]:
     conflicts: list[EvidenceConflict] = []
 
     for index, left in enumerate(features):
