@@ -906,9 +906,7 @@ def _remove_generic_primary_methods(
         return items
 
     generic = [
-        item
-        for item in items
-        if _GENERIC_METHOD_DETAIL_PATTERN.search(item.value)
+        item for item in items if _GENERIC_METHOD_DETAIL_PATTERN.search(item.value)
     ]
 
     if not generic or len(generic) == len(items):
@@ -919,11 +917,7 @@ def _remove_generic_primary_methods(
         for item in generic
     }
 
-    return [
-        item
-        for item in items
-        if canonical_evidence_key(item.value) not in generic_keys
-    ]
+    return [item for item in items if canonical_evidence_key(item.value) not in generic_keys]
 
 
 def _clean_methods(
@@ -953,11 +947,7 @@ def _clean_future_work(
 ) -> list[EvidenceItem]:
     supported = _clean_items(items, paper)
 
-    return [
-        item
-        for item in supported
-        if _FUTURE_ACTION_PATTERN.search(item.evidence_text)
-    ]
+    return [item for item in supported if _FUTURE_ACTION_PATTERN.search(item.evidence_text)]
 
 
 def _same_role_entity(
@@ -993,15 +983,20 @@ def _clean_constraints(
 
     Semantic constraint-specific rules are handled downstream where the
     research idea is known, such as explicit low-label matching.
+
+    Simply, filters out invalid constraint collisions. For example, 
+    
+        method     : LoRa, 
+        constraint : LoRa  
+    
+    gets rejected.
     """
 
     supported = _clean_items(items, paper)
     scientific_entities = [*methods, *comparisons]
 
     return [
-        item
-        for item in supported
-        if not any(
+        item for item in supported if not any(
             _same_role_entity(item.value, entity.value)
             for entity in scientific_entities
         )

@@ -142,9 +142,7 @@ class MultiQueryRetriever:
 
         papers, failures = self._execute(requests)
 
-        unique = deduplicate_paper_models(
-            papers
-        )
+        unique = deduplicate_paper_models(papers)
 
         LOGGER.info(
             "retrieval merge raw_count=%d "
