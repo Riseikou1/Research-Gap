@@ -96,6 +96,7 @@ _REVIEW_PATTERN = re.compile(
     re.I,
 )
 
+
 def normalize_problem(value: str) -> str:
     """Canonicalize representation while preserving the user's terminology."""
 
@@ -126,10 +127,9 @@ def normalize_method(value: str) -> str:
     return normalized if normalized not in _GENERIC_METHOD_VALUES else ""
 
 
-def normalize_method_family(value: str) -> str:
-    """Return the supplied method phrase without assigning a family."""
-
-    return normalize_method(value)
+# No family inference is performed here. Keep the established public name as
+# an alias so callers share one normalization implementation.
+normalize_method_family = normalize_method
 
 
 # ---------------------------------------------------------------------------
@@ -274,13 +274,7 @@ def to_paper_features(
             normalize_method,
         )
 
-        families: list[str] = []
-
-        for method in methods:
-            family = normalize_method_family(method)
-
-            if family and family not in families:
-                families.append(family)
+        families = methods.copy()
 
         performance_metrics = _values(
             (
@@ -330,7 +324,7 @@ def normalize_feature(value: str, dimension: str) -> str:
     normalizers = {
         "problem": normalize_problem,
         "method": normalize_method,
-        "method_family": normalize_method_family,
+        "method_family": normalize_method,
         "dataset": normalize_dataset,
         "metric": normalize_metric,
         "constraint": normalize_constraint,
@@ -339,4 +333,4 @@ def normalize_feature(value: str, dimension: str) -> str:
     return normalizers.get(dimension, _clean)(value)
 
 
-method_family = normalize_method_family
+method_family = normalize_method
