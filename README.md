@@ -34,6 +34,7 @@ python main.py "your idea" --limit 10 --json
 python main.py "your idea" --decomposer openai
 python main.py "your idea" --query-generator openai --show-queries
 python main.py "your idea" --show-gaps --show-evidence
+python main.py "your idea" --show-evidence --full-text
 ```
 
 `--query-generator openai` adds up to three validated LLM expansions to the original and
@@ -61,6 +62,15 @@ Provider-backed planning and raw retrieval results use the local SQLite cache un
 planning configuration; retrieval rows expire after `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS`.
 Evidence and paper embeddings use the same database, while ranking and gap reasoning still run on
 every invocation.
+
+Full-text enrichment is opt-in with `--full-text`. It runs only for the already selected
+`RESEARCH_GAP_EVIDENCE_LIMIT` papers, follows metadata-declared open-access locations, and accepts
+bounded text-layer PDFs, JATS/XML, or structured article HTML. Each paper falls back independently
+to title/abstract extraction when no usable document is available. Evidence from full text carries
+the original heading, normalized section role, and stable section/chunk ID. Coverage reports make
+unavailable, fetch-failed, parse-failed, and truncated documents explicit; an empty evidence field
+means “not extracted,” not “not reported by the paper.” Downloads and parsed documents use the
+existing SQLite cache with a parser-versioned key.
 
 ## Semantic behavior and fallback
 
@@ -98,6 +108,14 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_CACHE_DIR` | `data/cache` | Local SQLite cache directory |
 | `RESEARCH_GAP_DATABASE_PATH` | `data/research_gap.sqlite3` | Durable analysis-history database |
 | `RESEARCH_GAP_MAX_ANALYSIS_WORKERS` | `2` | Maximum concurrent API analysis jobs |
+| `RESEARCH_GAP_FULL_TEXT_TIMEOUT_SECONDS` | `12` | Per-document request timeout |
+| `RESEARCH_GAP_FULL_TEXT_MAX_BYTES` | `8000000` | Maximum streamed response bytes |
+| `RESEARCH_GAP_FULL_TEXT_MAX_DOCUMENT_CHARS` | `120000` | Maximum normalized document characters |
+| `RESEARCH_GAP_FULL_TEXT_MAX_SECTION_CHARS` | `20000` | Maximum characters retained per section |
+| `RESEARCH_GAP_FULL_TEXT_MAX_CHUNK_CHARS` | `8000` | Fallback chunk size without headings |
+| `RESEARCH_GAP_FULL_TEXT_MAX_CONTEXT_CHARS` | `30000` | Maximum full-text extraction context |
+| `RESEARCH_GAP_FULL_TEXT_MAX_REDIRECTS` | `3` | Maximum validated HTTP redirects |
+| `RESEARCH_GAP_FULL_TEXT_NEGATIVE_CACHE_TTL_SECONDS` | `3600` | Cache lifetime for failed/unavailable locations |
 
 ## Architecture
 
@@ -137,7 +155,7 @@ Start an analysis:
 ```bash
 curl -X POST http://127.0.0.1:8000/analyses \
   -H "Content-Type: application/json" \
-  -d '{"research_idea":"federated learning for adaptive traffic signal control"}'
+  -d '{"research_idea":"federated learning for adaptive traffic signal control","full_text":false}'
 ```
 
 Use the returned ID to inspect status and retrieve the final result:

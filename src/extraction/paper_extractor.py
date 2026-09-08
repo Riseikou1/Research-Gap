@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import logging
 import re
 from time import perf_counter
@@ -17,6 +18,9 @@ from src.config import cache_dir, openai_api_key, openai_extraction_model
 from src.models.paper import Paper
 
 from .evidence import EvidenceItem, LimitationEvidence, PaperEvidence, StudyType, canonical_evidence_key
+from .evidence import ExtractionCoverage
+from .document import PaperDocument, PaperSection, build_extraction_context
+from .full_text import PARSER_VERSION, FullTextClient
 from .store import EvidenceStore
 
 
@@ -25,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Increment when the structured extraction contract or its compatibility
 # assumptions change. Old cache rows remain harmless misses after a bump.
-EVIDENCE_SCHEMA_VERSION = 4
+EVIDENCE_SCHEMA_VERSION = 5
 
 
 class PaperExtractionError(RuntimeError):
@@ -315,6 +319,20 @@ If a paper cannot be extracted reliably, omit only that paper so it can be
 retried individually; valid sibling items must still be returned.
 """
 
+_FULL_TEXT_INSTRUCTIONS = _INSTRUCTIONS.replace(
+    "ONLY from the supplied title and abstract",
+    "ONLY from the supplied title, abstract, and bounded full-text sections",
+).replace(
+    'source must be exactly "title" or "abstract";',
+    'source must be "title", "abstract", or "full_text"; for full_text, copy the section id, original heading, and one listed semantic section type;',
+) + """
+
+Full-text blocks are explicitly labeled with a stable section id, semantic types,
+and original heading. For full-text claims, section_id and section_heading must be
+copied exactly and section_type must be one of that block's listed types. Do not
+claim that an unextracted field is absent from the paper.
+"""
+
 
 _GENERIC_DATASET_VALUES = {
     "dataset",
@@ -391,6 +409,8 @@ class PaperExtractor:
         cache_path: str | Path | None = None,
         batch_size: int = 1,
         max_batch_input_chars: int = 24000,
+        full_text_client: FullTextClient | None = None,
+        max_full_text_context_chars: int = 30000,
     ) -> None:
         if (
             max_output_tokens <= 0
@@ -398,6 +418,7 @@ class PaperExtractor:
             or max_workers <= 0
             or batch_size <= 0
             or max_batch_input_chars <= 0
+            or max_full_text_context_chars <= 0
         ):
             raise ValueError(
                 "max_output_tokens must be positive, evidence_limit non-negative, "
@@ -410,6 +431,8 @@ class PaperExtractor:
         self.max_workers = max_workers
         self.batch_size = batch_size
         self.max_batch_input_chars = max_batch_input_chars
+        self.full_text_client = full_text_client
+        self.max_full_text_context_chars = max_full_text_context_chars
         self.failures: list[PaperExtractionError] = []
         self._cache_lock = RLock()
         self._cache: dict[tuple[str, str, str, str], PaperEvidence] = {}
@@ -446,14 +469,25 @@ class PaperExtractor:
             cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3"
         )
 
-    @staticmethod
     def _cache_key(
+        self,
         paper: Paper,
         model: str,
+        document: PaperDocument | None = None,
     ) -> tuple[str, str, str, str]:
+        content_hash = EvidenceStore.content_hash(paper)
+        if self.full_text_client is not None:
+            full_text_identity = "\0".join(
+                [PARSER_VERSION, *(item.url for item in paper.full_text_locations)]
+            )
+            if document is not None:
+                full_text_identity += "\0" + document.model_dump_json()
+            content_hash = hashlib.sha256(
+                f"{content_hash}\0{full_text_identity}".encode("utf-8")
+            ).hexdigest()
         return (
             paper.id,
-            EvidenceStore.content_hash(paper),
+            content_hash,
             model,
             str(EVIDENCE_SCHEMA_VERSION),
         )
@@ -482,7 +516,25 @@ class PaperExtractor:
 
         return self.extract_many(papers, limit=limit)
 
-    def _extract_uncached(self, paper: Paper) -> PaperEvidence:
+    def _load_document(self, paper: Paper) -> PaperDocument:
+        """Resolve one paper independently; acquisition errors become coverage."""
+
+        if self.full_text_client is None:
+            return PaperDocument(paper_id=paper.id, status="not_attempted")
+        try:
+            return self.full_text_client.load(paper)
+        except Exception as exc:
+            LOGGER.info("full-text enrichment failed paper=%s error=%s", paper.id, exc)
+            return PaperDocument(
+                paper_id=paper.id, status="fetch_failed",
+                notices=[f"full-text enrichment failed: {str(exc)[:240]}"],
+            )
+
+    def _extract_uncached(
+        self,
+        paper: Paper,
+        document: PaperDocument | None = None,
+    ) -> PaperEvidence:
         title = paper.title.strip()
         abstract = paper.abstract.strip() if paper.abstract else None
 
@@ -492,6 +544,18 @@ class PaperExtractor:
         source = f"Title:\n{title}"
         if abstract:
             source += f"\n\nAbstract:\n{abstract}"
+
+        document = document or self._load_document(paper)
+        inspected_sections: list[PaperSection] = []
+        context_truncated = False
+        instructions = _INSTRUCTIONS
+        if document.status == "usable":
+            context, inspected_sections, context_truncated = build_extraction_context(
+                document, max_chars=self.max_full_text_context_chars,
+            )
+            if context:
+                source += f"\n\n{context}"
+                instructions = _FULL_TEXT_INSTRUCTIONS
 
         try:
             with self._cache_lock:
@@ -505,7 +569,7 @@ class PaperExtractor:
                 reasoning={"effort": "low"},
                 store=False,
                 max_output_tokens=self.max_output_tokens,
-                instructions=_INSTRUCTIONS,
+                instructions=instructions,
                 input=source,
                 text_format=_ExtractionResult,
             )
@@ -518,7 +582,11 @@ class PaperExtractor:
             if not isinstance(payload, _ExtractionResult):
                 raise PaperExtractionError("OpenAI returned no parsed evidence payload.")
 
-            return _to_evidence(paper, payload)
+            return _to_evidence(
+                paper, payload, document=document,
+                inspected_sections=inspected_sections,
+                context_truncated=context_truncated,
+            )
 
         except PaperExtractionError:
             raise
@@ -634,8 +702,9 @@ class PaperExtractor:
     def _reserve(
         self,
         paper: Paper,
+        document: PaperDocument | None = None,
     ) -> tuple[tuple[str, str, str, str], PaperEvidence | None, Future[PaperEvidence] | None, bool]:
-        cache_key = self._cache_key(paper, self.model)
+        cache_key = self._cache_key(paper, self.model, document)
         content_hash = cache_key[1]
         with self._cache_lock:
             self._metrics["evidence_requested"] += 1
@@ -701,7 +770,8 @@ class PaperExtractor:
     def extract(self, paper: Paper) -> PaperEvidence:
         """Extract one paper, reusing completed or in-progress work safely."""
 
-        cache_key, cached, pending, is_owner = self._reserve(paper)
+        document = self._load_document(paper)
+        cache_key, cached, pending, is_owner = self._reserve(paper, document)
         if cached is not None:
             return cached
 
@@ -710,7 +780,7 @@ class PaperExtractor:
             return pending.result()
 
         try:
-            result = self._extract_uncached(paper)
+            result = self._extract_uncached(paper, document)
         except BaseException as exc:
             assert pending is not None
             self._finish_failure(cache_key, exc, pending)
@@ -732,7 +802,7 @@ class PaperExtractor:
 
         selected = list(papers)[: self.evidence_limit if limit is None else limit]
 
-        if self.batch_size > 1 and len(selected) > 1:
+        if self.full_text_client is None and self.batch_size > 1 and len(selected) > 1:
             return self._extract_many_batched(selected)
 
         results: list[PaperEvidence] = []
@@ -817,10 +887,29 @@ def _normalize(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
-def _is_supported(item: EvidenceItem, paper: Paper) -> bool:
+def _is_supported(
+    item: EvidenceItem,
+    paper: Paper,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
+) -> bool:
     """Require evidence_text to exist verbatim in its declared source."""
 
-    source_text = paper.title if item.source == "title" else paper.abstract or ""
+    if item.source == "title":
+        source_text = paper.title
+    elif item.source == "abstract":
+        source_text = paper.abstract or ""
+    else:
+        section = document.section(item.section_id or "") if document else None
+        source_text = section.text if section is not None else ""
+        if (
+            section is None
+            or inspected_section_ids is not None
+            and section.id not in inspected_section_ids
+            or item.section_heading != section.heading
+            or item.section_type not in section.section_types
+        ):
+            source_text = ""
     supported = _normalize(item.evidence_text) in _normalize(source_text)
 
     if not supported:
@@ -838,12 +927,14 @@ def _clean_items(
     paper: Paper,
     *,
     drop_generic_datasets: bool = False,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
 ) -> list[EvidenceItem]:
     cleaned: list[EvidenceItem] = []
     seen: set[str] = set()
 
     for item in items:
-        if not _is_supported(item, paper):
+        if not _is_supported(item, paper, document, inspected_section_ids):
             continue
 
         key = canonical_evidence_key(item.canonical_value or item.value)
@@ -863,8 +954,10 @@ def _clean_items(
 def _clean_single(
     item: EvidenceItem | None,
     paper: Paper,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
 ) -> EvidenceItem | None:
-    if item is None or not _is_supported(item, paper):
+    if item is None or not _is_supported(item, paper, document, inspected_section_ids):
         return None
 
     return item
@@ -890,10 +983,12 @@ def _is_explicit_comparison(item: EvidenceItem) -> bool:
 def _clean_comparisons(
     items: Sequence[EvidenceItem],
     paper: Paper,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
 ) -> list[EvidenceItem]:
     return _clean_items(
         [item for item in items if _is_explicit_comparison(item)],
-        paper,
+        paper, document=document, inspected_section_ids=inspected_section_ids,
     )
 
 
@@ -923,17 +1018,19 @@ def _remove_generic_primary_methods(
 def _clean_methods(
     items: Sequence[_MethodClaim],
     paper: Paper,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
 ) -> tuple[list[EvidenceItem], list[EvidenceItem]]:
     primary = _remove_generic_primary_methods(
         _clean_items(
             [item for item in items if item.role == "primary"],
-            paper,
+            paper, document=document, inspected_section_ids=inspected_section_ids,
         )
     )
 
     comparisons = _clean_comparisons(
         [item for item in items if item.role == "comparison"],
-        paper,
+        paper, document, inspected_section_ids,
     )
 
     # Supporting claims intentionally disappear from PaperEvidence.methods.
@@ -944,8 +1041,10 @@ def _clean_methods(
 def _clean_future_work(
     items: Sequence[EvidenceItem],
     paper: Paper,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
 ) -> list[EvidenceItem]:
-    supported = _clean_items(items, paper)
+    supported = _clean_items(items, paper, document=document, inspected_section_ids=inspected_section_ids)
 
     return [item for item in supported if _FUTURE_ACTION_PATTERN.search(item.evidence_text)]
 
@@ -970,6 +1069,8 @@ def _clean_constraints(
     *,
     methods: Sequence[EvidenceItem],
     comparisons: Sequence[EvidenceItem],
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
 ) -> list[EvidenceItem]:
     """Validate constraints without maintaining a model-name blacklist.
 
@@ -992,7 +1093,7 @@ def _clean_constraints(
     gets rejected.
     """
 
-    supported = _clean_items(items, paper)
+    supported = _clean_items(items, paper, document=document, inspected_section_ids=inspected_section_ids)
     scientific_entities = [*methods, *comparisons]
 
     return [
@@ -1044,7 +1145,12 @@ def _unique_items(
 def _to_evidence(
     paper: Paper,
     payload: _ExtractionResult,
+    *,
+    document: PaperDocument | None = None,
+    inspected_sections: Sequence[PaperSection] = (),
+    context_truncated: bool = False,
 ) -> PaperEvidence:
+    inspected_section_ids = {section.id for section in inspected_sections}
     limitations = [
         LimitationEvidence(
             value=item.value,
@@ -1052,19 +1158,22 @@ def _to_evidence(
             evidence_text=item.evidence_text,
             source=item.source,
             confidence=item.confidence,
+            section_type=item.section_type,
+            section_heading=item.section_heading,
+            section_id=item.section_id,
         )
         for item in payload.limitations
-        if item.author_stated and _is_supported(item, paper)
+        if item.author_stated and _is_supported(item, paper, document, inspected_section_ids)
     ]
 
     methods, role_comparisons = _clean_methods(
         payload.method_or_intervention,
-        paper,
+        paper, document, inspected_section_ids,
     )
 
     explicit_comparisons = _clean_comparisons(
         payload.comparison_or_baseline,
-        paper,
+        paper, document, inspected_section_ids,
     )
 
     primary_keys = {
@@ -1083,11 +1192,15 @@ def _to_evidence(
         paper,
         methods=methods,
         comparisons=comparisons,
+        document=document,
+        inspected_section_ids=inspected_section_ids,
     )
 
     sample_size = _clean_single(
         payload.sample_size,
         paper,
+        document,
+        inspected_section_ids,
     )
 
     if sample_size is None:
@@ -1099,37 +1212,54 @@ def _to_evidence(
         study_type=payload.study_type,
         research_objective=_clean_single(
             payload.research_objective,
-            paper,
+            paper, document, inspected_section_ids,
         ),
         population_or_setting=_clean_items(
             payload.population_or_setting,
-            paper,
+            paper, document=document, inspected_section_ids=inspected_section_ids,
         ),
         method_or_intervention=methods,
         comparison_or_baseline=comparisons,
         data_or_modality=_clean_items(
             payload.data_or_modality,
-            paper,
+            paper, document=document, inspected_section_ids=inspected_section_ids,
         ),
         datasets=_clean_items(
             payload.datasets,
-            paper,
+            paper, document=document, inspected_section_ids=inspected_section_ids,
             drop_generic_datasets=True,
         ),
         sample_size=sample_size,
         evaluation_metrics=_clean_items(
             payload.evaluation_metrics,
-            paper,
+            paper, document=document, inspected_section_ids=inspected_section_ids,
         ),
         main_findings=_clean_items(
             payload.main_findings,
-            paper,
+            paper, document=document, inspected_section_ids=inspected_section_ids,
         ),
         constraints=constraints,
         limitations=limitations,
         future_work=_clean_future_work(
             payload.future_work,
-            paper,
+            paper, document, inspected_section_ids,
         ),
         extraction_confidence=payload.extraction_confidence,
+        coverage=ExtractionCoverage(
+            source_level=(
+                "full_text" if document and document.status == "usable"
+                else "abstract" if paper.abstract else "metadata_only"
+            ),
+            full_text_status=document.status if document else "not_attempted",
+            inspected_section_types=list(dict.fromkeys(
+                role for section in inspected_sections for role in section.section_types
+            )),
+            structure_available=bool(document and document.structure_available),
+            truncated=bool(
+                context_truncated
+                or document and document.truncated
+                or any(section.truncated for section in inspected_sections)
+            ),
+            notices=list(document.notices) if document else [],
+        ),
     )

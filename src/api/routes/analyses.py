@@ -28,6 +28,7 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
         decomposer=payload.decomposer,
         query_generator=payload.query_generator,
         paper_limit=payload.paper_limit,
+        full_text=payload.full_text,
     )
     record = components.repository.create(
         NewAnalysis(

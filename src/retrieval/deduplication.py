@@ -236,6 +236,15 @@ def _merge_paper(target: Paper, incoming: Paper) -> None:
 
     target.authors = authors
 
+    location_urls = {
+        item.url.casefold().rstrip("/") for item in target.full_text_locations
+    }
+    for location in incoming.full_text_locations:
+        key = location.url.casefold().rstrip("/")
+        if key not in location_urls:
+            target.full_text_locations.append(location.model_copy(deep=True))
+            location_urls.add(key)
+
     # Fill metadata missing from the first-seen record.
     for field_name in (
         "openalex_id",

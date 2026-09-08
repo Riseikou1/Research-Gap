@@ -298,14 +298,9 @@ def to_paper_features(
 
         families = methods.copy()
 
-        performance_metrics = _values(
-            (
-                item
-                for item in record.evaluation_metrics
-                if metric_kind(item.value) == "performance"
-            ),
-            normalize_metric,
-        )
+        # Preserve all reported evaluation measures in the general performance
+        # view while retaining the efficiency subset for specialized summaries.
+        performance_metrics = _values(record.evaluation_metrics, normalize_metric)
 
         efficiency_metrics = _values(
             (

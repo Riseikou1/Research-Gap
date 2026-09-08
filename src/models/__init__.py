@@ -8,11 +8,12 @@ from .landscape import (
     LiteratureLandscape,
     PaperFeatures,
 )
-from .paper import Paper, RetrievalProvenance
+from .paper import FullTextLocation, Paper, RetrievalProvenance
 from .query import QueryOrigin, RetrievalMode, SearchQuery
 
 __all__ = [
     "Paper",
+    "FullTextLocation",
     "PaperFeatures",
     "FeatureFrequency",
     "CombinationPattern",

@@ -45,6 +45,7 @@ def create_app(
             decomposer=record.decomposer,
             query_generator=record.query_generator,
             paper_limit=record.paper_limit,
+            full_text=record.configuration.get("full_text") is True,
         )
 
     runner = AnalysisJobRunner(

@@ -9,6 +9,7 @@ from src.analysis.gap_candidates import GapCandidateGenerator
 from src.analysis.verification import GapVerifier
 from src.config import Settings
 from src.extraction.paper_extractor import PaperExtractor
+from src.extraction.full_text import FullTextClient
 from src.pipeline import ResearchPipeline
 from src.query.deterministic import DeterministicDecomposer
 from src.query.openai_decomposer import OpenAIDecomposer
@@ -31,6 +32,7 @@ class PipelineOptions:
     include_evidence: bool = False
     include_landscape: bool = False
     include_gaps: bool = False
+    full_text: bool = False
 
 
 def build_decomposer(name: DecomposerName, settings: Settings):
@@ -87,9 +89,25 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
             cache_path=settings.cache_directory / "research_gap.sqlite3",
         )
 
-    needs_evidence = options.include_evidence or options.include_landscape or options.include_gaps
+    needs_evidence = (
+        options.include_evidence or options.include_landscape
+        or options.include_gaps or options.full_text
+    )
     extractor = None
     if needs_evidence:
+        full_text_client = None
+        if options.full_text:
+            config = settings.full_text
+            full_text_client = FullTextClient(
+                timeout=config.timeout_seconds,
+                max_bytes=config.max_bytes,
+                max_document_chars=config.max_document_chars,
+                max_section_chars=config.max_section_chars,
+                max_chunk_chars=config.max_chunk_chars,
+                max_redirects=config.max_redirects,
+                negative_ttl_seconds=config.negative_cache_ttl_seconds,
+                cache_path=settings.cache_directory / "research_gap.sqlite3",
+            )
         extractor = PaperExtractor(
             api_key=settings.openai_api_key,
             model=settings.extraction_model,
@@ -97,6 +115,8 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
             max_workers=settings.extraction_workers,
             batch_size=settings.extraction_batch_size,
             cache_path=settings.cache_directory / "research_gap.sqlite3",
+            full_text_client=full_text_client,
+            max_full_text_context_chars=settings.full_text.max_context_chars,
         )
     gap_generator = GapCandidateGenerator() if options.include_gaps else None
     gap_verifier = GapVerifier(retriever, extractor) if options.include_gaps and extractor else None
@@ -120,6 +140,7 @@ class AnalysisService:
 
     def configuration_snapshot(
         self, *, decomposer: DecomposerName, query_generator: QueryGeneratorName, paper_limit: int,
+        full_text: bool = False,
     ) -> dict[str, object]:
         settings = self.settings
         return {
@@ -127,6 +148,7 @@ class AnalysisService:
             "decomposer": decomposer,
             "query_generator": query_generator,
             "paper_limit": paper_limit,
+            "full_text": full_text,
             "providers": {
                 "decomposition": decomposer,
                 "query_generation": query_generator,
@@ -150,17 +172,21 @@ class AnalysisService:
                 "evidence": settings.evidence_limit,
                 "retrieval_workers": settings.openalex.max_workers,
                 "extraction_workers": settings.extraction_workers,
+                "full_text_max_bytes": settings.full_text.max_bytes,
+                "full_text_max_document_chars": settings.full_text.max_document_chars,
+                "full_text_max_context_chars": settings.full_text.max_context_chars,
             },
         }
 
     def run(self, research_idea: str, *, decomposer: DecomposerName, query_generator: QueryGeneratorName,
-            paper_limit: int) -> dict[str, object]:
+            paper_limit: int, full_text: bool = False) -> dict[str, object]:
         options = PipelineOptions(
             decomposer=decomposer,
             query_generator=query_generator,
             include_evidence=True,
             include_landscape=True,
             include_gaps=True,
+            full_text=full_text,
         )
         result = build_pipeline(options, self.settings).run(research_idea, top_k=paper_limit)
         return result.to_dict()

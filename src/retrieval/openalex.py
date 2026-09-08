@@ -16,7 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from src.models.paper import Paper, RetrievalProvenance
+from src.models.paper import FullTextLocation, Paper, RetrievalProvenance
 from src.models.query import RetrievalMode
 from src.retrieval.base import (
     RetrievalConfigurationError,
@@ -34,7 +34,7 @@ OPENALEX_SEMANTIC_MAX_RESULTS = 50
 
 SELECT_FIELDS = (
     "id,display_name,title,abstract_inverted_index,authorships,"
-    "publication_year,publication_date,doi,primary_location,"
+    "publication_year,publication_date,doi,primary_location,best_oa_location,locations,"
     "cited_by_count,relevance_score"
 )
 
@@ -373,7 +373,58 @@ def _parse_work(
         citation_count=max(_optional_int(work.get("cited_by_count")) or 0, 0),
         source=_optional_string(source.get("display_name")),
         url=(_optional_string(location.get("landing_page_url")) or openalex_id),
+        full_text_locations=_full_text_locations(work),
     )
+
+
+def _full_text_locations(work: Mapping[str, Any]) -> list[FullTextLocation]:
+    """Parse OpenAlex Location objects in preferred, stable order."""
+
+    candidates: list[tuple[Mapping[str, Any], bool]] = []
+    best = work.get("best_oa_location")
+    primary = work.get("primary_location")
+    others = work.get("locations")
+    if isinstance(best, Mapping):
+        candidates.append((best, True))
+    if isinstance(primary, Mapping):
+        candidates.append((primary, primary.get("is_oa") is True))
+    if isinstance(others, list):
+        candidates.extend(
+            (item, item.get("is_oa") is True)
+            for item in others if isinstance(item, Mapping)
+        )
+
+    result: list[FullTextLocation] = []
+    seen: set[str] = set()
+    # Prefer every explicit direct PDF before trying OA article pages.
+    for field in ("pdf_url", "landing_page_url"):
+        for location, is_oa in candidates:
+            if not is_oa:
+                continue
+            url = _optional_string(location.get(field))
+            if not url:
+                continue
+            key = url.casefold().rstrip("/")
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(FullTextLocation(
+                url=url,
+                source_format=_location_format(url, field),
+                is_open_access=True,
+            ))
+    return result
+
+
+def _location_format(url: str, field: str) -> str:
+    path = url.casefold().split("?", 1)[0]
+    if field == "pdf_url" or path.endswith(".pdf"):
+        return "pdf"
+    if path.endswith((".xml", ".jats", ".nxml")):
+        return "xml"
+    if path.endswith((".html", ".htm")):
+        return "html"
+    return "unknown"
 
 
 def _authors(work: Mapping[str, Any]) -> list[str]:

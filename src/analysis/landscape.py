@@ -14,6 +14,7 @@ from src.models.landscape import (
     FeatureFrequency,
     LiteratureLandscape,
     PaperFeatures,
+    SourceCoverageSummary,
 )
 from src.models.paper import Paper
 
@@ -144,8 +145,32 @@ class LandscapeAnalyzer:
             frequencies=_frequencies(features, total),
             combinations=_combinations(features, total),
             missing_field_counts=_missing_counts(evidence, features),
+            source_coverage=_source_coverage(evidence),
             conflicts=_conflicts(features),
         )
+
+
+def _source_coverage(evidence: Sequence[PaperEvidence]) -> SourceCoverageSummary:
+    source_levels = {"full_text": 0, "abstract": 0, "metadata_only": 0}
+    outcomes = {
+        "usable": 0, "unavailable": 0, "fetch_failed": 0,
+        "parse_failed": 0, "not_attempted": 0,
+    }
+    truncated = 0
+    for record in evidence:
+        coverage = record.coverage
+        if coverage is None:
+            # Backward-compatible fixtures predate explicit coverage.
+            continue
+        source_levels[coverage.source_level] += 1
+        outcomes[coverage.full_text_status] += 1
+        if coverage.full_text_status == "usable" and coverage.truncated:
+            truncated += 1
+    return SourceCoverageSummary(
+        source_levels=source_levels,
+        full_text_outcomes=outcomes,
+        truncated_full_text_documents=truncated,
+    )
 
 
 def _is_usable_value(value: str) -> bool:

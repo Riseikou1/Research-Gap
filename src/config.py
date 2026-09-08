@@ -72,12 +72,25 @@ class RankingSettings:
 
 
 @dataclass(frozen=True)
+class FullTextSettings:
+    timeout_seconds: float
+    max_bytes: int
+    max_document_chars: int
+    max_section_chars: int
+    max_chunk_chars: int
+    max_context_chars: int
+    max_redirects: int
+    negative_cache_ttl_seconds: float
+
+
+@dataclass(frozen=True)
 class Settings:
     openai_api_key: str | None
     openai_model: str
     extraction_model: str
     openalex: OpenAlexSettings
     ranking: RankingSettings
+    full_text: FullTextSettings
     evidence_limit: int
     extraction_workers: int
     extraction_batch_size: int
@@ -99,7 +112,13 @@ class Settings:
                 raise ConfigurationError(f"{name} must not exceed {maximum}")
             return value
 
-        def number(name: str, default: float, *, positive: bool = False) -> float:
+        def number(
+            name: str,
+            default: float,
+            *,
+            positive: bool = False,
+            maximum: float | None = None,
+        ) -> float:
             try:
                 value = float(os.getenv(name, str(default)))
             except ValueError as exc:
@@ -109,6 +128,8 @@ class Settings:
             if value < 0 or (positive and value == 0):
                 requirement = "positive" if positive else "non-negative"
                 raise ConfigurationError(f"{name} must be {requirement}")
+            if maximum is not None and value > maximum:
+                raise ConfigurationError(f"{name} must not exceed {maximum:g}")
             return value
 
         lexical = number("RESEARCH_GAP_LEXICAL_WEIGHT", 0.4)
@@ -144,6 +165,22 @@ class Settings:
                 embedding_batch_size=integer("RESEARCH_GAP_EMBEDDING_BATCH_SIZE", 100),
                 lexical_weight=lexical, semantic_weight=semantic,
                 constraint_weight=constraint_weight, semantic_fallback=fallback,
+            ),
+            full_text=FullTextSettings(
+                timeout_seconds=number(
+                    "RESEARCH_GAP_FULL_TEXT_TIMEOUT_SECONDS", 12.0,
+                    positive=True, maximum=120,
+                ),
+                max_bytes=integer("RESEARCH_GAP_FULL_TEXT_MAX_BYTES", 8_000_000, maximum=25_000_000),
+                max_document_chars=integer("RESEARCH_GAP_FULL_TEXT_MAX_DOCUMENT_CHARS", 120_000, maximum=500_000),
+                max_section_chars=integer("RESEARCH_GAP_FULL_TEXT_MAX_SECTION_CHARS", 20_000, maximum=100_000),
+                max_chunk_chars=integer("RESEARCH_GAP_FULL_TEXT_MAX_CHUNK_CHARS", 8_000, maximum=30_000),
+                max_context_chars=integer("RESEARCH_GAP_FULL_TEXT_MAX_CONTEXT_CHARS", 30_000, maximum=100_000),
+                max_redirects=integer("RESEARCH_GAP_FULL_TEXT_MAX_REDIRECTS", 3, minimum=0, maximum=10),
+                negative_cache_ttl_seconds=number(
+                    "RESEARCH_GAP_FULL_TEXT_NEGATIVE_CACHE_TTL_SECONDS", 3600,
+                    positive=True, maximum=604800,
+                ),
             ),
             evidence_limit=integer("RESEARCH_GAP_EVIDENCE_LIMIT", 10, minimum=0),
             extraction_workers=integer("RESEARCH_GAP_EXTRACTION_WORKERS", 4),

@@ -5,10 +5,12 @@ from __future__ import annotations
 import re
 from typing import Literal
 
+from .document import FullTextStatus, SectionType
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-EvidenceSource = Literal["title", "abstract"]
+EvidenceSource = Literal["title", "abstract", "full_text"]
 StudyType = Literal["empirical", "review", "survey", "methodological", "other"]
 
 
@@ -30,6 +32,31 @@ class EvidenceItem(BaseModel):
     evidence_text: str = Field(min_length=1)
     source: EvidenceSource
     confidence: float = Field(ge=0.0, le=1.0)
+    section_type: SectionType | None = None
+    section_heading: str | None = None
+    section_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> "EvidenceItem":
+        values = (self.section_type, self.section_heading, self.section_id)
+        if self.source == "full_text" and any(value is None for value in values):
+            raise ValueError("full_text evidence requires section type, heading, and identifier")
+        if self.source != "full_text" and any(value is not None for value in values):
+            raise ValueError("section provenance is only valid for full_text evidence")
+        return self
+
+
+class ExtractionCoverage(BaseModel):
+    """What sources were inspected, distinct from whether a field was extracted."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+    source_level: Literal["metadata_only", "abstract", "full_text"]
+    full_text_status: FullTextStatus = "not_attempted"
+    inspected_section_types: list[SectionType] = Field(default_factory=list)
+    structure_available: bool = False
+    truncated: bool = False
+    notices: list[str] = Field(default_factory=list)
 
 
 class LimitationEvidence(EvidenceItem):
@@ -60,6 +87,7 @@ class PaperEvidence(BaseModel):
     future_work: list[EvidenceItem] = Field(default_factory=list)
     extraction_confidence: float = Field(ge=0.0, le=1.0)
     missing_fields: list[str] = Field(default_factory=list)
+    coverage: ExtractionCoverage | None = None
 
     @model_validator(mode="after")
     def normalize_evidence(self) -> "PaperEvidence":

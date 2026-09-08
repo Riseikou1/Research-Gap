@@ -126,6 +126,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Extract and display structured evidence for the top papers",
     )
     parser.add_argument(
+        "--full-text",
+        action="store_true",
+        help="Opt in to bounded open-access full-text enrichment for evidence papers",
+    )
+    parser.add_argument(
         "--show-gaps",
         action="store_true",
         help="Extract evidence and display cautious candidate research gaps",
@@ -166,6 +171,7 @@ def build_pipeline(args: argparse.Namespace, settings: Settings) -> ResearchPipe
             include_evidence=args.show_evidence,
             include_landscape=args.show_landscape,
             include_gaps=args.show_gaps,
+            full_text=args.full_text,
         ),
         settings,
     )
@@ -290,6 +296,15 @@ def print_evidence(result: ResearchResult) -> None:
             for value in values:
                 print(f"    - {value.value}")
         print(f"  Missing: {', '.join(item.missing_fields) or 'none'}")
+        if item.coverage:
+            coverage = item.coverage
+            print(
+                "  Inspection coverage: "
+                f"{coverage.source_level}; full text {coverage.full_text_status}; "
+                f"truncated={'yes' if coverage.truncated else 'no'}"
+            )
+            for notice in coverage.notices:
+                print(f"    Notice: {notice}")
     for failure in result.extraction_failures:
         print(f"Warning: {failure}", file=sys.stderr)
 
@@ -494,7 +509,7 @@ def main() -> int:
 
             if args.show_queries:
                 payload = result.to_dict()
-            elif args.show_evidence or args.show_gaps or args.show_landscape:
+            elif args.show_evidence or args.show_gaps or args.show_landscape or args.full_text:
                 payload = result.to_dict()
             else:
                 payload = [_paper_json(paper) for paper in result.papers]
@@ -513,7 +528,7 @@ def main() -> int:
 
             print_papers(result.papers, show_scores=args.show_scores)
 
-            if args.show_evidence:
+            if args.show_evidence or args.full_text:
                 print_evidence(result)
 
             if args.show_gaps:

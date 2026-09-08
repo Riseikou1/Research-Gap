@@ -69,6 +69,16 @@ class EvidenceConflict(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class SourceCoverageSummary(BaseModel):
+    """Paper-level inspection depth and full-text outcomes."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    source_levels: dict[str, int] = Field(default_factory=dict)
+    full_text_outcomes: dict[str, int] = Field(default_factory=dict)
+    truncated_full_text_documents: int = Field(default=0, ge=0)
+
+
 class LiteratureLandscape(BaseModel):
     """Complete deterministic Milestone-5 result for an analyzed paper set."""
 
@@ -79,4 +89,5 @@ class LiteratureLandscape(BaseModel):
     frequencies: list[FeatureFrequency] = Field(default_factory=list)
     combinations: list[CombinationPattern] = Field(default_factory=list)
     missing_field_counts: dict[str, int] = Field(default_factory=dict)
+    source_coverage: SourceCoverageSummary = Field(default_factory=SourceCoverageSummary)
     conflicts: list[EvidenceConflict] = Field(default_factory=list)

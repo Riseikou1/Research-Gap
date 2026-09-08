@@ -11,6 +11,11 @@ uvicorn>=0.30.0,<1
 # FastAPI's in-process test client.
 httpx>=0.27.0,<1
 
+# Milestone 9 bounded full-text parsing.
+beautifulsoup4>=4.12.0,<5
+defusedxml>=0.7.1,<1
+pypdf>=6.0.0,<7
+
 # Optional provider for decomposition, query generation, extraction, and embeddings.
 # Deterministic search and lexical ranking need no OpenAI key.
 openai>=2.0.0,<4

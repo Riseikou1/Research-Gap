@@ -15,8 +15,9 @@ def format_landscape(landscape: LiteratureLandscape) -> str:
         "",
         f"Evidence papers analyzed: {landscape.total_papers}",
         "",
-        "Evidence Coverage",
-        "-----------------",
+        "Extraction Coverage",
+        "-------------------",
+        "Empty fields mean evidence was not extracted; they do not prove the paper omitted it.",
     ]
     for label, field_name in (
         ("Research objective", "research_objective"),
@@ -34,6 +35,24 @@ def format_landscape(landscape: LiteratureLandscape) -> str:
         missing = landscape.missing_field_counts.get(field_name, 0)
         available = landscape.total_papers - missing
         lines.append(f"{label}: {available}/{landscape.total_papers}")
+
+    coverage = landscape.source_coverage
+    levels = coverage.source_levels
+    outcomes = coverage.full_text_outcomes
+    lines.extend([
+        "",
+        "Evidence sources: "
+        f"{levels.get('full_text', 0)} full-text, "
+        f"{levels.get('abstract', 0)} abstract-only, "
+        f"{levels.get('metadata_only', 0)} metadata-only",
+        "Full-text outcomes: "
+        f"{outcomes.get('usable', 0)} usable, "
+        f"{outcomes.get('unavailable', 0)} unavailable, "
+        f"{outcomes.get('fetch_failed', 0)} fetch failure, "
+        f"{outcomes.get('parse_failed', 0)} parse failure, "
+        f"{outcomes.get('not_attempted', 0)} not attempted",
+        f"Truncated full-text documents: {coverage.truncated_full_text_documents}",
+    ])
 
     for heading, dimension in (
         ("Problems", "problem"),

@@ -17,6 +17,16 @@ from pydantic import (
 from src.models.query import RetrievalMode, SearchQuery
 
 
+class FullTextLocation(BaseModel):
+    """Metadata-declared open-access full-text candidate."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+    url: str = Field(min_length=1, max_length=4000)
+    source_format: Literal["pdf", "xml", "html", "unknown"] = "unknown"
+    is_open_access: bool = True
+
+
 class RetrievalProvenance(BaseModel):
     """One concrete route by which a provider returned a paper."""
 
@@ -73,6 +83,7 @@ class Paper(BaseModel):
 
     source: str | None = None
     url: str | None = None
+    full_text_locations: list[FullTextLocation] = Field(default_factory=list)
 
     provenance: list[RetrievalProvenance] = Field(default_factory=list)
 
@@ -141,6 +152,20 @@ class Paper(BaseModel):
 
         return result
 
+    @field_validator("full_text_locations", mode="after")
+    @classmethod
+    def deduplicate_full_text_locations(
+        cls, value: list[FullTextLocation]
+    ) -> list[FullTextLocation]:
+        result: list[FullTextLocation] = []
+        seen: set[str] = set()
+        for location in value:
+            key = location.url.casefold().rstrip("/")
+            if key not in seen:
+                seen.add(key)
+                result.append(location)
+        return result
+
     @computed_field
     @property
     def matched_queries(self) -> list[str]:
@@ -207,6 +232,9 @@ class Paper(BaseModel):
             "doi": self.doi,
             "url": self.url,
             "citation_count": self.citation_count,
+            "full_text_locations": [
+                item.model_dump(mode="json") for item in self.full_text_locations
+            ],
             "provenance": [
                 {
                     "query": item.query.text,

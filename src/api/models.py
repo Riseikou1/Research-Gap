@@ -18,6 +18,7 @@ class CreateAnalysisRequest(StrictApiModel):
     decomposer: Literal["deterministic", "openai"] = "deterministic"
     query_generator: Literal["deterministic", "openai"] = "deterministic"
     paper_limit: int = Field(default=20, ge=1, le=100)
+    full_text: bool = False
 
 
 class AnalysisCreated(StrictApiModel):
