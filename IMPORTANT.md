@@ -153,7 +153,7 @@ Create files and folders only when their milestone begins. Do not add empty arch
 | 6. Gap candidate generation and verification | Implemented; live smoke blocked | Evidence-backed, qualified gap hypotheses |
 | 7. Evaluation harness | Complete | Offline retrieval, extraction, deduplication, verification, and performance scoring |
 | 8. Local API and persistence | Complete | FastAPI, bounded local jobs, migrations, and durable SQLite analysis history |
-| 9. Web interface | Planned | Interactive application and evidence views |
+| 9. Web interface | Implemented; external setup pending | Private multi-user web app, quotas, admin, and Stripe test boundary |
 | 10. Citation graph and deployment | Planned | Graph exploration, packaging, monitoring |
 
 ## 8. Milestone 7 — evaluation harness
@@ -883,7 +883,27 @@ Apply schema changes with `python -m src.persistence.migrate` and start the serv
 
 ## 15. Milestone 9 — web interface
 
-Build the interface only after retrieval and analysis metrics are acceptable. The UI should expose:
+Milestone 9 adds a separate Next.js application under `web/` while retaining FastAPI as the only
+analysis boundary. The home page contains product, limitation, and editable About Me copy; the
+working form lives on `/analyze`. Results progressively expose the actual serialized pipeline
+fields for overview, gaps, papers, evidence, landscape, coverage, technical metrics, and private
+JSON/Markdown exports.
+
+Every analysis has one server-owned mode and one owner principal. Explicit unauthenticated web
+requests receive a signed, isolated guest identity; pre-migration records with no owner are never
+publicly readable. Quick Search constructs deterministic planning and lexical ranking only, with no
+paid OpenAI, evidence, gap, verification, or full-text component. Verified accounts receive exactly
+two lifetime full-analysis credits. An append-only SQLite ledger reserves before queueing, settles a
+usable result, and releases a failed job. Stripe test invoice events grant the configured recurring
+allowance idempotently; Checkout redirects never grant credits. Server-side Supabase JWT
+verification and stored account roles protect ownership and `/admin`.
+
+External Supabase/SMTP/Stripe accounts, a test Price, webhook endpoint, administrator credential,
+and bank onboarding remain owner actions and are not represented as complete. Follow
+`docs/MILESTONE_9_OWNER_SETUP.md`. The placeholder $1/month for five credits is test/demo pricing
+and must not be enabled live without measured costs and explicit acknowledgement.
+
+The interface exposes:
 
 - Idea editor
 

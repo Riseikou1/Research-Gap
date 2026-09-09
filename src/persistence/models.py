@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 AnalysisStatus = Literal["pending", "running", "completed", "failed"]
+AnalysisMode = Literal["quick", "full"]
+OwnerKind = Literal["user", "guest", "local"]
 
 
 class StrictPersistenceModel(BaseModel):
@@ -21,6 +23,12 @@ class NewAnalysis(StrictPersistenceModel):
     query_generator: Literal["deterministic", "openai"]
     paper_limit: int = Field(ge=1, le=100)
     configuration: dict[str, object]
+    owner_kind: OwnerKind | None = None
+    owner_id: str | None = None
+    mode: AnalysisMode = "full"
+    stage: str = "preparing"
+    progress: dict[str, object] = Field(default_factory=dict)
+    reservation_id: str | None = None
 
 
 class AnalysisRecord(NewAnalysis):
@@ -42,6 +50,8 @@ class AnalysisHistoryItem(StrictPersistenceModel):
     status: AnalysisStatus
     created_at: AwareDatetime
     completed_at: AwareDatetime | None = None
+    mode: AnalysisMode = "full"
+    stage: str = "preparing"
 
 
 def parse_timestamp(value: str | None) -> datetime | None:

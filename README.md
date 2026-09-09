@@ -172,6 +172,40 @@ analysis currently requires `OPENAI_API_KEY`; OpenAlex lexical retrieval itself 
 without an OpenAlex key. Active jobs cannot be deleted because provider calls cannot be safely
 interrupted. Queued and completed/failed records can be deleted without clearing shared caches.
 
+## Milestone 9 web application
+
+Milestone 9 is the multi-user web interface (full-text enrichment is already part of the pipeline).
+It adds signed guest Quick Search, verified Supabase accounts, private histories, two lifetime free
+Full Gap Analysis credits, an auditable transactional ledger, Stripe test subscriptions, durable
+job stages, owner-only exports, profiles/avatars, and a server-authorized admin dashboard. Quick
+Search never constructs paid OpenAI decomposition, embedding, extraction, gap, verification, or
+full-text components. Full Analysis remains the existing Python pipeline; the Next.js client does
+not reproduce scientific logic.
+
+Start the backend and frontend in separate terminals:
+
+```bash
+python -m src.persistence.migrate
+uvicorn src.api.app:app --reload --host 127.0.0.1 --port 8000
+```
+
+```bash
+cd web
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`. Authentication, email, avatar uploads, payments, and the administrator
+require owner-managed Supabase/Stripe test configuration; they are not represented as externally
+complete. Every manual action, environment value, webhook URL, payout warning, cost worksheet,
+deployment step, and pre-launch check is in
+[`docs/MILESTONE_9_OWNER_SETUP.md`](docs/MILESTONE_9_OWNER_SETUP.md).
+
+The historical unauthenticated single-owner API is available only when
+`RESEARCH_GAP_TRUSTED_LOCAL_MODE=true`; use it solely on a loopback-bound local service. The safe
+default treats unauthenticated web requests as isolated guests.
+
 ## Test
 
 ```bash

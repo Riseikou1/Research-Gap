@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Callable, Literal
 
 from src.analysis.gap_candidates import GapCandidateGenerator
 from src.analysis.verification import GapVerifier
@@ -33,6 +33,7 @@ class PipelineOptions:
     include_landscape: bool = False
     include_gaps: bool = False
     full_text: bool = False
+    quick: bool = False
 
 
 def build_decomposer(name: DecomposerName, settings: Settings):
@@ -65,7 +66,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
     )
 
     semantic_scorer = None
-    if settings.openai_api_key:
+    if settings.openai_api_key and not options.quick:
         semantic_scorer = SemanticScorer(
             OpenAIEmbeddingProvider(
                 api_key=settings.openai_api_key,
@@ -140,11 +141,13 @@ class AnalysisService:
 
     def configuration_snapshot(
         self, *, decomposer: DecomposerName, query_generator: QueryGeneratorName, paper_limit: int,
-        full_text: bool = False,
+        full_text: bool = False, mode: Literal["quick", "full"] = "full",
     ) -> dict[str, object]:
         settings = self.settings
         return {
             "pipeline_version": PIPELINE_VERSION,
+            "api_schema_version": "m9-v1",
+            "mode": mode,
             "decomposer": decomposer,
             "query_generator": query_generator,
             "paper_limit": paper_limit,
@@ -153,13 +156,13 @@ class AnalysisService:
                 "decomposition": decomposer,
                 "query_generation": query_generator,
                 "literature": "openalex",
-                "extraction": "openai",
-                "embeddings": "openai" if settings.openai_api_key else None,
+                "extraction": "openai" if mode == "full" else None,
+                "embeddings": "openai" if settings.openai_api_key and mode == "full" else None,
             },
             "models": {
                 "planning": settings.openai_model if decomposer == "openai" or query_generator == "openai" else None,
-                "extraction": settings.extraction_model,
-                "embedding": settings.ranking.embedding_model if settings.openai_api_key else None,
+                "extraction": settings.extraction_model if mode == "full" else None,
+                "embedding": settings.ranking.embedding_model if settings.openai_api_key and mode == "full" else None,
             },
             "ranking": {
                 "lexical_weight": settings.ranking.lexical_weight,
@@ -179,14 +182,21 @@ class AnalysisService:
         }
 
     def run(self, research_idea: str, *, decomposer: DecomposerName, query_generator: QueryGeneratorName,
-            paper_limit: int, full_text: bool = False) -> dict[str, object]:
+            paper_limit: int, full_text: bool = False, mode: Literal["quick", "full"] = "full",
+            progress: Callable[[str, dict[str, object] | None], object] | None = None) -> dict[str, object]:
+        quick = mode == "quick"
         options = PipelineOptions(
-            decomposer=decomposer,
-            query_generator=query_generator,
-            include_evidence=True,
-            include_landscape=True,
-            include_gaps=True,
-            full_text=full_text,
+            decomposer="deterministic" if quick else decomposer,
+            query_generator="deterministic" if quick else query_generator,
+            include_evidence=not quick,
+            include_landscape=not quick,
+            include_gaps=not quick,
+            full_text=full_text and not quick,
+            quick=quick,
         )
-        result = build_pipeline(options, self.settings).run(research_idea, top_k=paper_limit)
-        return result.to_dict()
+        result = build_pipeline(options, self.settings).run(
+            research_idea, top_k=paper_limit, progress=progress,
+        )
+        payload = result.to_dict()
+        payload["mode"] = mode
+        return payload

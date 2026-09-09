@@ -1,0 +1,2 @@
+import React from "react";import {render,screen}from"@testing-library/react";import{describe,it,expect}from"vitest";import Home from"./page";
+describe("home",()=>{it("renders About Me and links to analyze without a search form",()=>{const{container}=render(<Home/>);expect(screen.getByText(/I’m Temuujin/)).toBeInTheDocument();expect(screen.getByRole("link",{name:/Investigate an idea/})).toHaveAttribute("href","/analyze");expect(container.querySelector("form")).toBeNull()})});

@@ -38,7 +38,10 @@ class PersistenceTest(unittest.TestCase):
             versions = connection.execute(
                 "SELECT version FROM schema_migrations ORDER BY version"
             ).fetchall()
-        self.assertEqual([row["version"] for row in versions], ["0001_create_analyses"])
+        self.assertEqual(
+            [row["version"] for row in versions],
+            ["0001_create_analyses", "0002_web_accounts_billing"],
+        )
 
     def test_create_and_load_round_trip(self) -> None:
         created = self.repository.create(new_analysis())

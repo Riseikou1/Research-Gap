@@ -1,0 +1,1 @@
+import {AuthForm} from "@/components/auth-form";export default function SignIn(){return <div className="page auth-wrap"><p className="eyebrow">Welcome back</p><h1>Sign in</h1><AuthForm mode="sign-in"/></div>}

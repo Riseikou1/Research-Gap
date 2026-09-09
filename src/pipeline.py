@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Literal
+from typing import Callable, Literal
 
 from src.models.idea import ResearchIdea
 from src.models.paper import Paper
@@ -109,7 +109,8 @@ class ResearchPipeline:
         self.landscape_analyzer = landscape_analyzer or LandscapeAnalyzer()
         self.evidence_limit = evidence_limit
 
-    def run(self, idea_text: str, *, top_k: int = 20) -> ResearchResult:
+    def run(self, idea_text: str, *, top_k: int = 20,
+            progress: Callable[[str, dict[str, object] | None], object] | None = None) -> ResearchResult:
         if not 1 <= top_k <= self.retriever.max_candidates:
             raise ValueError(
                 f"top_k must be between 1 and {self.retriever.max_candidates}"
@@ -128,6 +129,8 @@ class ResearchPipeline:
         retriever_before = _component_metrics(self.retriever)
         stage_timings: dict[str, float] = {}
 
+        notify = progress or (lambda _stage, _details=None: None)
+        notify("preparing", None)
         started = perf_counter()
         idea = self.decomposer.decompose(idea_text)
         deterministic = self.deterministic_generator.generate(idea)
@@ -135,6 +138,7 @@ class ResearchPipeline:
         queries = self.query_planner.plan(idea, deterministic, llm)
         stage_timings["planning"] = perf_counter() - started
 
+        notify("searching", {"query_count": len(queries)})
         started = perf_counter()
         retrieval = self.retriever.retrieve_hybrid(queries)
         stage_timings["initial_retrieval"] = perf_counter() - started
@@ -146,6 +150,7 @@ class ResearchPipeline:
             )
             raise PipelineError(f"all retrieval routes failed: {details}")
 
+        notify("ranking", {"candidate_count": len(retrieval.papers)})
         started = perf_counter()
         ranking = self.reranker.rerank(idea, retrieval.papers)
         stage_timings["ranking_embeddings"] = perf_counter() - started
@@ -163,6 +168,7 @@ class ResearchPipeline:
         landscape: LiteratureLandscape | None = None
         idea_assessment: IdeaAssessment | None = None
         if self.extractor:
+            notify("reading_selected_papers", {"paper_count": len(selected)})
             get_many = getattr(
                 self.extractor,
                 "get_many_or_extract",
@@ -184,10 +190,12 @@ class ResearchPipeline:
                 ),
             )
             extraction_failures = [str(error) for error in self.extractor.failures]
+            notify("building_landscape", {"evidence_count": len(evidence)})
             started = perf_counter()
             landscape = self.landscape_analyzer.analyze(evidence, selected)
             stage_timings["landscape"] = perf_counter() - started
             if self.gap_verifier:
+                notify("verifying_gaps", None)
                 prime_evidence = getattr(self.gap_verifier, "prime_evidence", None)
                 if prime_evidence is not None:
                     prime_evidence(selected, evidence)
@@ -203,6 +211,7 @@ class ResearchPipeline:
                 stage_timings["candidate_generation"] = perf_counter() - started
                 analysis_notices.extend(self.gap_generator.notices)
                 if self.gap_verifier:
+                    notify("verifying_gaps", {"candidate_count": len(gaps)})
                     started = perf_counter()
                     gaps = self.gap_verifier.verify_many(idea, gaps, evidence)
                     stage_timings["candidate_verification"] = perf_counter() - started
@@ -232,6 +241,7 @@ class ResearchPipeline:
         )
         stage_timings.update(_component_timings(self.gap_verifier))
 
+        notify("finalizing", {"paper_count": len(selected), "gap_count": len(gaps)})
         return ResearchResult(
             idea=idea,
             queries=queries,

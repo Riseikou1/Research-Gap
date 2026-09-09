@@ -84,6 +84,32 @@ class FullTextSettings:
 
 
 @dataclass(frozen=True)
+class WebSettings:
+    app_url: str
+    allowed_origins: tuple[str, ...]
+    auth_url: str | None
+    auth_anon_key: str | None
+    auth_service_role_key: str | None
+    auth_jwt_audience: str
+    auth_jwt_issuer: str | None
+    guest_cookie_secret: str
+    secure_cookies: bool
+    guest_retention_hours: int
+    guest_quick_limit: int
+    user_quick_daily_limit: int
+    max_active_analyses_per_principal: int
+    free_lifetime_credits: int
+    paid_cycle_credits: int
+    paid_price_usd: float
+    stripe_secret_key: str | None
+    stripe_webhook_secret: str | None
+    stripe_price_id: str | None
+    stripe_test_mode: bool
+    acknowledge_live_pricing: bool
+    trusted_local_mode: bool
+
+
+@dataclass(frozen=True)
 class Settings:
     openai_api_key: str | None
     openai_model: str
@@ -97,6 +123,7 @@ class Settings:
     cache_directory: Path = field(default_factory=cache_dir)
     analysis_database_path: Path = field(default_factory=database_path)
     max_analysis_workers: int = 2
+    web: WebSettings | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -145,6 +172,50 @@ class Settings:
         if fallback not in {"lexical", "error"}:
             raise ConfigurationError("RESEARCH_GAP_SEMANTIC_FALLBACK must be 'lexical' or 'error'")
 
+        app_url = os.getenv("RESEARCH_GAP_APP_URL", "http://localhost:3000").strip().rstrip("/")
+        origins = tuple(
+            origin.strip().rstrip("/") for origin in
+            os.getenv("RESEARCH_GAP_ALLOWED_ORIGINS", app_url).split(",") if origin.strip()
+        )
+        if "*" in origins:
+            raise ConfigurationError("RESEARCH_GAP_ALLOWED_ORIGINS cannot contain '*' with credentials")
+        secure_cookies = os.getenv("RESEARCH_GAP_SECURE_COOKIES", "false").lower() in {"1", "true", "yes"}
+        stripe_secret = os.getenv("STRIPE_SECRET_KEY", "").strip() or None
+        stripe_test_mode = not bool(stripe_secret and stripe_secret.startswith("sk_live_"))
+        acknowledge_live = os.getenv("RESEARCH_GAP_ACKNOWLEDGE_LIVE_PRICING", "false").lower() in {"1", "true", "yes"}
+        price_id = os.getenv("STRIPE_PRICE_ID", "").strip() or None
+        if not stripe_test_mode and not acknowledge_live:
+            raise ConfigurationError(
+                "Live Stripe keys require RESEARCH_GAP_ACKNOWLEDGE_LIVE_PRICING=true; "
+                "the $1/5-credit plan is test placeholder pricing"
+            )
+        guest_secret = os.getenv("RESEARCH_GAP_GUEST_COOKIE_SECRET", "local-development-only-change-me")
+        if secure_cookies and guest_secret == "local-development-only-change-me":
+            raise ConfigurationError("Set a strong RESEARCH_GAP_GUEST_COOKIE_SECRET before secure production use")
+        web = WebSettings(
+            app_url=app_url,
+            allowed_origins=origins,
+            auth_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/") or None,
+            auth_anon_key=os.getenv("SUPABASE_ANON_KEY", "").strip() or None,
+            auth_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None,
+            auth_jwt_audience=os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated").strip(),
+            auth_jwt_issuer=os.getenv("SUPABASE_JWT_ISSUER", "").strip().rstrip("/") or None,
+            guest_cookie_secret=guest_secret,
+            secure_cookies=secure_cookies,
+            guest_retention_hours=integer("RESEARCH_GAP_GUEST_RETENTION_HOURS", 72),
+            guest_quick_limit=integer("RESEARCH_GAP_GUEST_QUICK_LIMIT", 1),
+            user_quick_daily_limit=integer("RESEARCH_GAP_USER_QUICK_DAILY_LIMIT", 10),
+            max_active_analyses_per_principal=integer("RESEARCH_GAP_MAX_ACTIVE_PER_PRINCIPAL", 2),
+            free_lifetime_credits=2,
+            paid_cycle_credits=integer("RESEARCH_GAP_PAID_CYCLE_CREDITS", 5),
+            paid_price_usd=number("RESEARCH_GAP_PAID_PRICE_DISPLAY_USD", 1.0, positive=True),
+            stripe_secret_key=stripe_secret,
+            stripe_webhook_secret=os.getenv("STRIPE_WEBHOOK_SECRET", "").strip() or None,
+            stripe_price_id=price_id,
+            stripe_test_mode=stripe_test_mode,
+            acknowledge_live_pricing=acknowledge_live,
+            trusted_local_mode=os.getenv("RESEARCH_GAP_TRUSTED_LOCAL_MODE", "false").lower() in {"1", "true", "yes"},
+        )
         return cls(
             openai_api_key=openai_api_key(), openai_model=openai_model(),
             extraction_model=openai_extraction_model(),
@@ -188,4 +259,5 @@ class Settings:
             cache_directory=cache_dir(),
             analysis_database_path=database_path(),
             max_analysis_workers=integer("RESEARCH_GAP_MAX_ANALYSIS_WORKERS", 2, maximum=8),
+            web=web,
         )

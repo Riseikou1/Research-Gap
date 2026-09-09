@@ -1,0 +1,1 @@
+import {AuthForm} from "@/components/auth-form";export default function SignUp(){return <div className="page auth-wrap"><p className="eyebrow">Two lifetime credits</p><h1>Create an account</h1><p className="hint">Email verification is required before full analysis. Quick Search remains available in guest mode.</p><AuthForm mode="sign-up"/></div>}

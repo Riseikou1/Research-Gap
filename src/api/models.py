@@ -19,6 +19,7 @@ class CreateAnalysisRequest(StrictApiModel):
     query_generator: Literal["deterministic", "openai"] = "deterministic"
     paper_limit: int = Field(default=20, ge=1, le=100)
     full_text: bool = False
+    mode: Literal["quick", "full"] | None = None
 
 
 class AnalysisCreated(StrictApiModel):
@@ -32,6 +33,8 @@ class AnalysisSummary(StrictApiModel):
     status: AnalysisStatus
     created_at: AwareDatetime
     completed_at: AwareDatetime | None = None
+    mode: Literal["quick", "full"] = "full"
+    stage: str = "preparing"
 
     @classmethod
     def from_record(cls, record: AnalysisRecord | AnalysisHistoryItem) -> "AnalysisSummary":
@@ -41,6 +44,8 @@ class AnalysisSummary(StrictApiModel):
             status=record.status,
             created_at=record.created_at,
             completed_at=record.completed_at,
+            mode=record.mode,
+            stage=record.stage,
         )
 
 
@@ -52,6 +57,7 @@ class AnalysisDetail(AnalysisSummary):
     configuration: dict[str, object]
     result: dict[str, object] | None = None
     error_message: str | None = None
+    progress: dict[str, object] = Field(default_factory=dict)
 
     @classmethod
     def from_record(cls, record: AnalysisRecord) -> "AnalysisDetail":
@@ -68,6 +74,9 @@ class AnalysisDetail(AnalysisSummary):
             configuration=record.configuration,
             result=record.result,
             error_message=record.error_message,
+            mode=record.mode,
+            stage=record.stage,
+            progress=record.progress,
         )
 
 

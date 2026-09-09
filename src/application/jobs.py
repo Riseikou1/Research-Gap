@@ -41,6 +41,8 @@ class AnalysisJobRunner:
         self._futures: dict[str, Future[None]] = {}
         self._lock = Lock()
         self._closed = False
+        self.on_success: Callable[[str], object] | None = None
+        self.on_failure: Callable[[str], object] | None = None
 
     def submit(self, analysis_id: str) -> bool:
         with self._lock:
@@ -89,11 +91,15 @@ class AnalysisJobRunner:
             result = self.analysis_executor(record)
             if not isinstance(result, dict):
                 raise TypeError("analysis executor must return a dictionary")
+            if self.on_success:
+                self.on_success(analysis_id)
             self.repository.mark_completed(analysis_id, result)
         except Exception as exc:
             message = safe_error_message(exc)
             LOGGER.warning("analysis failed id=%s error=%s", analysis_id, message)
             try:
+                if self.on_failure:
+                    self.on_failure(analysis_id)
                 self.repository.mark_failed(analysis_id, message)
             except Exception as persistence_error:
                 LOGGER.error(

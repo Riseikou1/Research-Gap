@@ -7,8 +7,9 @@
 # Secrets / Environment
 # -------------------------
 .env
-#.env.*
-#!.env.example
+.env.*
+!.env.example
+!web/.env.example
 
 *.pem
 *.key
@@ -47,6 +48,9 @@ htmlcov/
 # -------------------------
 build/
 dist/
+web/.next/
+web/node_modules/
+*.tsbuildinfo
 *.egg-info/
 .eggs/
 *.egg
