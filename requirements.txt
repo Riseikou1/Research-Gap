@@ -22,3 +22,6 @@ pypdf>=6.0.0,<7
 # Optional provider for decomposition, query generation, extraction, and embeddings.
 # Deterministic search and lexical ranking need no OpenAI key.
 openai>=2.0.0,<4
+
+# Postgres client
+psycopg[binary]>=3.2.0,<4
