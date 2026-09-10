@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import GUEST_COOKIE, principal_for, require_user
 from src.auth import verify_guest_cookie
 from src.storage import AvatarError, validate_avatar
+from src.auth import AuthenticationError
+
+LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(tags=["account"])
 
@@ -25,11 +30,14 @@ def me(request: Request) -> dict[str, object]:
                 "role": "user", "credits": 0, "profile": None}
     components = request.app.state.components
     account = components.security.account(principal.principal_id) or {}
+    subscription_status = components.security.subscription_status(principal.principal_id)
     return {
         "kind": "user", "signed_in": True, "verified": principal.email_verified,
         "role": principal.role, "credits": components.security.balance(principal.principal_id),
         "profile": {"display_name": account.get("display_name", ""),
                     "avatar_url": account.get("avatar_url"), "email": account.get("email")},
+        "subscription_status": subscription_status,
+        "plan_label": "Paid researcher" if subscription_status in {"active", "trialing"} else "Free",
         "plan": {"test_mode": components.settings.web.stripe_test_mode,
                  "price_usd": components.settings.web.paid_price_usd,
                  "credits_per_cycle": components.settings.web.paid_cycle_credits},
@@ -87,6 +95,27 @@ def delete_account(request: Request) -> None:
     components = request.app.state.components
     if components.repository.count_active_for_owner("user", principal.principal_id):
         raise HTTPException(status_code=409, detail="Wait for active analyses to finish before deleting the account.")
+    if components.security.has_active_paid_subscription(principal.principal_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Manage or cancel the active subscription before deleting this account.",
+        )
+    if components.auth_provider is None:
+        raise HTTPException(status_code=503, detail="Account deletion is temporarily unavailable.")
+    try:
+        components.auth_provider.delete_user(principal.principal_id)
+    except AuthenticationError as exc:
+        LOGGER.error(
+            "auth identity deletion failed user_id=%s error_type=%s",
+            principal.principal_id, type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail="Account deletion is temporarily unavailable.")
     if components.avatar_storage:
-        components.avatar_storage.delete(principal.principal_id)
+        try:
+            components.avatar_storage.delete(principal.principal_id)
+        except AvatarError as exc:
+            LOGGER.warning(
+                "avatar deletion failed user_id=%s error_type=%s",
+                principal.principal_id, type(exc).__name__,
+            )
     components.security.delete_account_data(principal.principal_id)

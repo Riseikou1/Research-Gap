@@ -1,1 +1,1 @@
-import {AuthForm} from "@/components/auth-form";export default function SignIn(){return <div className="page auth-wrap"><p className="eyebrow">Welcome back</p><h1>Sign in</h1><AuthForm mode="sign-in"/></div>}
+import {AuthForm} from "@/components/auth-form";export default function SignIn(){return <div className="page auth-wrap"><div className="auth-intro"><p className="eyebrow">Welcome back</p><h1>Continue your research.</h1><p>Sign in to use credits, revisit saved analyses, and manage your account.</p></div><AuthForm mode="sign-in"/></div>}

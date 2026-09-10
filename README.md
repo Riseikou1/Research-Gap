@@ -201,7 +201,19 @@ Open `http://localhost:3000`. Authentication, email, avatar uploads, payments, a
 require owner-managed Supabase/Stripe test configuration; they are not represented as externally
 complete. Every manual action, environment value, webhook URL, payout warning, cost worksheet,
 deployment step, and pre-launch check is in
-[`docs/MILESTONE_9_OWNER_SETUP.md`](docs/MILESTONE_9_OWNER_SETUP.md).
+[`docs/MILESTONE_10_OWNER_SETUP.md`](docs/MILESTONE_10_OWNER_SETUP.md).
+
+The report UI uses the provider-independent Pydantic serialization through strict Zod contracts and
+presents one vertically readable, citation-connected report. Provider exceptions are retained in
+server logs but removed from normal API responses and exports. Full-text coverage explicitly
+distinguishes successful inspection, abstract fallback, metadata-only evidence, unavailable text,
+fetch/parse failures, and truncation.
+
+Verified email addresses receive the two-credit allowance only once across account recreation. The
+server stores a keyed HMAC identity in `lifetime_credit_identities`; it does not store the deleted
+email there. Account deletion is blocked while an active paid subscription remains, deletes the
+Supabase Auth identity through the server-only Admin API, removes analyses/avatar data, and keeps
+only the minimal pseudonymous anti-abuse marker plus required audit/payment records.
 
 The historical unauthenticated single-owner API is available only when
 `RESEARCH_GAP_TRUSTED_LOCAL_MODE=true`; use it solely on a loopback-bound local service. The safe

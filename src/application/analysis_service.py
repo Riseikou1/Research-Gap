@@ -199,4 +199,5 @@ class AnalysisService:
         )
         payload = result.to_dict()
         payload["mode"] = mode
+        payload["full_text_requested"] = options.full_text
         return payload

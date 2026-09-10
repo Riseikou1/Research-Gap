@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -18,14 +20,27 @@ class QuotaError(RuntimeError):
 
 
 class SecurityRepository:
-    def __init__(self, database: Database, *, free_credits: int = 2) -> None:
+    def __init__(self, database: Database, *, free_credits: int = 2,
+                 lifetime_credit_hmac_secret: str = "local-development-lifetime-credit-secret") -> None:
         self.database = database
         self.free_credits = free_credits
+        self.lifetime_credit_hmac_secret = lifetime_credit_hmac_secret
+
+    def _lifetime_identity(self, email: str) -> str:
+        normalized = email.strip().casefold()
+        return hmac.new(
+            self.lifetime_credit_hmac_secret.encode("utf-8"),
+            normalized.encode("utf-8"), hashlib.sha256,
+        ).hexdigest()
 
     def sync_account(self, user_id: str, *, email: str | None, verified: bool) -> dict[str, object]:
         now = _now().isoformat()
+        identity_hmac = self._lifetime_identity(email) if verified and email else None
+        lock_keys = [f"credit:{user_id}"]
+        if identity_hmac:
+            lock_keys.append(f"lifetime-identity:{identity_hmac}")
         with self.database.connect() as connection:
-            with self.database.transaction(connection, lock_keys=(f"credit:{user_id}",)):
+            with self.database.transaction(connection, lock_keys=tuple(lock_keys)):
                 connection.execute(
                     """INSERT INTO accounts(user_id,email,email_verified,created_at,updated_at)
                        VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET
@@ -37,7 +52,25 @@ class SecurityRepository:
                        updated_at=excluded.updated_at""",
                     (user_id, email, int(verified), now, now),
                 )
-                if verified:
+                grant_allowed = False
+                if identity_hmac:
+                    existing_identity = connection.execute(
+                        "SELECT 1 FROM lifetime_credit_identities WHERE identity_hmac=?",
+                        (identity_hmac,),
+                    ).fetchone()
+                    if existing_identity is None:
+                        connection.execute(
+                            """INSERT INTO lifetime_credit_identities
+                               (identity_hmac,first_user_id,granted_at) VALUES(?,?,?)
+                               ON CONFLICT(identity_hmac) DO NOTHING""",
+                            (identity_hmac, user_id, now),
+                        )
+                        marker = connection.execute(
+                            "SELECT first_user_id FROM lifetime_credit_identities WHERE identity_hmac=?",
+                            (identity_hmac,),
+                        ).fetchone()
+                        grant_allowed = bool(marker and marker["first_user_id"] == user_id)
+                if grant_allowed:
                     connection.execute(
                         """INSERT INTO credit_ledger
                            (entry_id,user_id,amount,kind,source,payment_reference,reason,created_at)
@@ -233,6 +266,18 @@ class SecurityRepository:
                     "status='deleted',updated_at=? WHERE user_id=?",
                     (_now().isoformat(), user_id),
                 )
+
+    def subscription_status(self, user_id: str) -> str:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT status FROM subscriptions WHERE user_id=?", (user_id,)
+            ).fetchone()
+        return str(row["status"]) if row else "none"
+
+    def has_active_paid_subscription(self, user_id: str) -> bool:
+        return self.subscription_status(user_id) in {
+            "active", "trialing", "past_due", "unpaid", "incomplete"
+        }
 
     def set_role(self, user_id: str, role: str) -> None:
         if role not in {"user", "admin"}:

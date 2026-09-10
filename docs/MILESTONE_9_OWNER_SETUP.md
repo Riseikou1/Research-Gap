@@ -62,6 +62,7 @@ Backend `.env` values:
 | `STRIPE_PRICE_ID` | non-secret identifier | Server-authoritative recurring Price ID |
 | `RESEARCH_GAP_PAID_PRICE_DISPLAY_USD` | non-secret | Display-only amount; must match the configured Stripe Price |
 | `RESEARCH_GAP_GUEST_COOKIE_SECRET` | critical secret | Generate with `python -c 'import secrets; print(secrets.token_urlsafe(48))'` |
+| `RESEARCH_GAP_LIFETIME_CREDIT_HMAC_SECRET` | critical secret | Separate key for pseudonymous one-time-credit identities; never send to Vercel |
 | `RESEARCH_GAP_APP_URL` | public | Frontend origin, without trailing slash |
 | `RESEARCH_GAP_ALLOWED_ORIGINS` | public | Comma-separated exact origins; never `*` |
 | `RESEARCH_GAP_SECURE_COOKIES` | non-secret | `false` for HTTP localhost, `true` behind production HTTPS |
@@ -179,4 +180,4 @@ Ask qualified Korean/Mongolian/business-location professionals about tax residen
 
 ## Account deletion and retained audit data
 
-The API blocks deletion during active analyses, deletes the account’s analyses, attempts avatar deletion, and anonymizes the local account. Ledger/payment/audit rows may retain a provider/user reference needed for financial/security reconciliation; define a lawful retention period before launch. The owner must also delete/disable the Supabase Auth identity through the provider dashboard or a future privileged deletion integration. Guest sessions expire after `RESEARCH_GAP_GUEST_RETENTION_HOURS` (default 72) and their analyses are removed by cleanup. Pre-Milestone-9 analyses have no owner and are intentionally unreadable through public APIs.
+The API blocks deletion during active analyses or while a paid subscription remains active. It then deletes the Supabase Auth identity through the server-only Admin API, attempts avatar deletion, removes analyses, and anonymizes the local account. A keyed HMAC marker remains so the same normalized verified email cannot receive the lifetime allowance twice; the registry contains no plaintext deleted email. Ledger/payment/audit rows may retain a provider/user reference needed for financial/security reconciliation; define a lawful retention period before launch. Guest sessions expire after `RESEARCH_GAP_GUEST_RETENTION_HOURS` (default 72) and their analyses are removed by cleanup. Pre-Milestone-9 analyses have no owner and are intentionally unreadable through public APIs.

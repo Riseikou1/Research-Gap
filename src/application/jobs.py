@@ -96,7 +96,7 @@ class AnalysisJobRunner:
             self.repository.mark_completed(analysis_id, result)
         except Exception as exc:
             message = safe_error_message(exc)
-            LOGGER.warning("analysis failed id=%s error=%s", analysis_id, message)
+            LOGGER.exception("analysis failed id=%s error=%s", analysis_id, message)
             try:
                 if self.on_failure:
                     self.on_failure(analysis_id)

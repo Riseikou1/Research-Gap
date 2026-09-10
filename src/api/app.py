@@ -55,7 +55,10 @@ def create_app(
     )
     repository = AnalysisRepository(database)
     web_settings = runtime_settings.web
-    security = SecurityRepository(database, free_credits=web_settings.free_lifetime_credits)
+    security = SecurityRepository(
+        database, free_credits=web_settings.free_lifetime_credits,
+        lifetime_credit_hmac_secret=web_settings.lifetime_credit_hmac_secret,
+    )
     service = AnalysisService(runtime_settings)
 
     configured_auth = auth_provider

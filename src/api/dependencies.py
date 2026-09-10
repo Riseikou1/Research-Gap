@@ -26,7 +26,12 @@ def principal_for(request: Request, *, force_guest: bool = False) -> Principal:
             identity.user_id, email=identity.email, verified=identity.email_verified,
         )
         if account["status"] != "active":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is suspended.")
+            detail = (
+                "This account has been deleted."
+                if account["status"] == "deleted"
+                else "This account is suspended."
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
         return Principal(
             "user", identity.user_id, identity.email, bool(account["email_verified"]),
             str(account["role"]), str(account["status"]),

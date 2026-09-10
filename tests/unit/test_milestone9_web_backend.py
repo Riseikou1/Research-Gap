@@ -14,7 +14,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
-from src.auth import AuthIdentity, StaticAuthProvider
+from src.auth import AuthenticationError, AuthIdentity, StaticAuthProvider
 from src.billing import BillingError
 from src.config import Settings
 from src.persistence.database import Database
@@ -22,6 +22,7 @@ from src.persistence.security import QuotaError, SecurityRepository
 from src.persistence.models import NewAnalysis
 from src.storage import AvatarError, validate_avatar
 from src.application.analysis_service import PipelineOptions, build_pipeline
+from src.api.routes.analyses import _markdown_report
 
 
 def result_for(record):
@@ -107,6 +108,34 @@ def test_concurrent_account_sync_grants_lifetime_credit_once():
                 ("same-user",),
             ).fetchone()
         assert row["count"] == 1
+
+
+def test_same_normalized_email_never_receives_second_lifetime_grant():
+    with tempfile.TemporaryDirectory() as directory:
+        database = Database(Path(directory) / "identity.sqlite")
+        database.migrate()
+        security = SecurityRepository(database, lifetime_credit_hmac_secret="dedicated-test-secret")
+        security.sync_account("old-user", email="  Person@Example.Test ", verified=True)
+        security.delete_account_data("old-user")
+        security.sync_account("new-user", email="person@example.test", verified=True)
+        assert security.balance("old-user") == 2
+        assert security.balance("new-user") == 0
+        with database.connect() as connection:
+            marker = connection.execute("SELECT * FROM lifetime_credit_identities").fetchall()
+        assert len(marker) == 1
+        assert "person@example.test" not in str(dict(marker[0])).lower()
+
+
+def test_concurrent_different_users_with_same_email_only_grant_once():
+    with tempfile.TemporaryDirectory() as directory:
+        database = Database(Path(directory) / "same-email.sqlite")
+        database.migrate()
+        security = SecurityRepository(database, lifetime_credit_hmac_secret="dedicated-test-secret")
+        def sync(index: int):
+            security.sync_account(f"user-{index}", email="Same@Example.Test", verified=True)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(sync, [1, 2]))
+        assert security.balance("user-1") + security.balance("user-2") == 2
 
 
 def test_credit_settlement_and_refund_are_idempotent():
@@ -206,6 +235,14 @@ def test_quick_pipeline_never_initializes_paid_openai_components():
         assert pipeline.extractor is None and pipeline.gap_verifier is None
 
 
+def test_full_text_pipeline_option_builds_a_full_text_client():
+    with tempfile.TemporaryDirectory() as directory:
+        settings = settings_for(Path(directory)/"full-text.sqlite")
+        pipeline = build_pipeline(PipelineOptions(include_evidence=True, full_text=True), settings)
+        assert pipeline.extractor is not None
+        assert pipeline.extractor.full_text_client is not None
+
+
 def test_guest_can_claim_only_its_own_still_valid_history():
     auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
     with tempfile.TemporaryDirectory() as directory:
@@ -217,3 +254,92 @@ def test_guest_can_claim_only_its_own_still_valid_history():
             history = client.get("/analyses", headers={"Authorization":"Bearer u"}).json()
             assert [item["analysis_id"] for item in history] == [created.json()["analysis_id"]]
             assert client.post("/account/claim-guest", headers={"Authorization":"Bearer u"}).json()["claimed"] == 0
+
+
+def test_account_deletion_removes_auth_identity_and_reregistration_gets_no_free_grant():
+    auth = StaticAuthProvider({"old": AuthIdentity("old", "same@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(settings=settings_for(Path(directory)/"delete.sqlite"), analysis_executor=result_for, auth_provider=auth)) as client:
+            headers = {"Authorization": "Bearer old"}
+            assert client.get("/me", headers=headers).json()["credits"] == 2
+            assert client.delete("/account", headers=headers).status_code == 204
+            assert client.get("/me", headers=headers).status_code == 401
+            with client.app.state.components.database.connect() as connection:
+                account = connection.execute("SELECT * FROM accounts WHERE user_id='old'").fetchone()
+            assert account["status"] == "deleted" and account["email"] is None
+            auth.identities["new"] = AuthIdentity("new", " SAME@example.test ", True)
+            assert client.get("/me", headers={"Authorization":"Bearer new"}).json()["credits"] == 0
+
+
+def test_active_subscription_blocks_account_deletion():
+    auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(settings=settings_for(Path(directory)/"active-sub.sqlite"), analysis_executor=result_for, auth_provider=auth)) as client:
+            headers = {"Authorization":"Bearer u"}; client.get("/me", headers=headers)
+            with client.app.state.components.database.connect() as connection:
+                connection.execute(
+                    "INSERT INTO subscriptions(user_id,status,last_event_created,updated_at) VALUES(?,?,?,?)",
+                    ("u", "active", 0, "2026-01-01T00:00:00+00:00"),
+                ); connection.commit()
+            response = client.delete("/account", headers=headers)
+            assert response.status_code == 409
+            assert "subscription" in response.json()["detail"].lower()
+            assert client.get("/me", headers=headers).status_code == 200
+
+
+def test_auth_deletion_failure_keeps_local_account_active():
+    class FailingAuth(StaticAuthProvider):
+        def delete_user(self, user_id: str) -> None:
+            raise AuthenticationError("technical provider body")
+    auth = FailingAuth({"u": AuthIdentity("u", "u@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(settings=settings_for(Path(directory)/"delete-fail.sqlite"), analysis_executor=result_for, auth_provider=auth)) as client:
+            headers = {"Authorization":"Bearer u"}; client.get("/me", headers=headers)
+            response = client.delete("/account", headers=headers)
+            assert response.status_code == 503
+            assert response.json()["detail"] == "Account deletion is temporarily unavailable."
+            assert client.get("/me", headers=headers).status_code == 200
+
+
+def test_public_result_hides_provider_errors_and_markdown_uses_real_contract():
+    auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
+    def unsafe_result(record):
+        return {"mode":"full", "full_text_requested":True,
+                "papers":[{"id":"W1","title":"Paper","publication_year":2025}],
+                "evidence":[], "gaps":[], "retrieval_failures":[{"error":"OpenAI traceback secret"}],
+                "extraction_failures":["http://internal:9000 stack trace"]}
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(settings=settings_for(Path(directory)/"safe.sqlite"), analysis_executor=unsafe_result, auth_provider=auth)) as client:
+            headers={"Authorization":"Bearer u"}
+            created=client.post("/analyses",headers=headers,json={"research_idea":"safe public result","mode":"full"}).json()
+            record=wait(client,created["analysis_id"],"u")
+            serialized=json.dumps(record)
+            assert "traceback" not in serialized and "internal:9000" not in serialized
+            assert record["result"]["failure_summary"] == {"retrieval":1,"extraction":1}
+    report = _markdown_report("An idea", "full", {
+        "full_text_requested": True,
+        "idea_assessment":{"label":"uncertain","rationale":"Coverage is bounded."},
+        "papers":[{"id":"W1","title":"Correct year paper","publication_year":2025}],
+        "evidence":[{"paper_id":"W1","research_objective":{"value":"Study the problem"},
+                     "limitations":[{"value":"Small cohort"}],"future_work":[]}],
+        "gaps":[{"title":"A candidate","description":"Description","rationale":"Rationale","supporting_paper_ids":["W1"]}],
+    })
+    assert "Coverage is bounded." in report and "Correct year paper (2025)" in report
+    assert "Small cohort" in report and "paper.get('year')" not in report
+
+
+def test_full_text_request_is_persisted_for_the_pipeline_executor():
+    auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
+    seen: dict[str, object] = {}
+    def inspect(record):
+        seen.update(record.configuration)
+        return {"mode":"full", "full_text_requested":record.configuration.get("full_text"),
+                "papers":[], "evidence":[], "gaps":[]}
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(settings=settings_for(Path(directory)/"full-text-flag.sqlite"), analysis_executor=inspect, auth_provider=auth)) as client:
+            created = client.post("/analyses", headers={"Authorization":"Bearer u"}, json={
+                "research_idea":"full text propagation", "mode":"full", "full_text":True,
+            })
+            record = wait(client, created.json()["analysis_id"], "u")
+        assert seen["full_text"] is True
+        assert record["result"]["full_text_requested"] is True

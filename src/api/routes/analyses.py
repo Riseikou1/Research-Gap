@@ -12,6 +12,7 @@ from src.api.models import AnalysisCreated, AnalysisDetail, AnalysisSummary, Cre
 from src.auth import network_rate_key
 from src.persistence.models import NewAnalysis
 from src.persistence.security import QuotaError
+from src.api.safety import public_analysis_result
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -109,7 +110,7 @@ def export_analysis(analysis_id: str, request: Request,
     ):
         raise HTTPException(status_code=429, detail="Export rate limit reached. Try again later.")
     if format == "json":
-        return Response(json.dumps(record.result, ensure_ascii=False, indent=2), media_type="application/json",
+        return Response(json.dumps(public_analysis_result(record.result), ensure_ascii=False, indent=2), media_type="application/json",
                         headers={"Content-Disposition": f'attachment; filename="research-gap-{analysis_id}.json"'})
     return Response(_markdown_report(record.research_idea, record.mode, record.result),
                     media_type="text/markdown; charset=utf-8", headers={
@@ -130,20 +131,74 @@ def delete_analysis(analysis_id: str, request: Request) -> None:
 
 
 def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
-    assessment = result.get("idea_assessment") or {}
+    public = public_analysis_result(result)
+    assessment = public.get("idea_assessment") or {}
     label = assessment.get("label", "not performed") if isinstance(assessment, dict) else "not performed"
+    rationale = assessment.get("rationale") if isinstance(assessment, dict) else None
     lines = ["# Research GAP report", "", f"**Idea:** {idea}", f"**Mode:** {mode}",
-             f"**Assessment:** {label}", "", "## Relevant papers", ""]
-    papers = result.get("papers", [])
+             f"**Assessment:** {str(label).replace('_', ' ')}"]
+    if rationale:
+        lines.extend(["", "## Executive summary", "", str(rationale)])
+
+    evidence = public.get("evidence", [])
+    if isinstance(evidence, list) and evidence:
+        _markdown_evidence_section(lines, "What the literature already studies well", evidence, "research_objective")
+        _markdown_evidence_section(lines, "Common methods", evidence, "method_or_intervention")
+        _markdown_evidence_section(lines, "Main findings", evidence, "main_findings")
+        _markdown_evidence_section(lines, "Important limitations and future work", evidence, "limitations", "future_work")
+
+    gaps = public.get("gaps", [])
+    if mode == "full" and isinstance(gaps, list) and gaps:
+        lines.extend(["", "## Candidate research gaps", ""])
+        for gap in gaps:
+            if not isinstance(gap, dict):
+                continue
+            lines.append(f"### {gap.get('title') or 'Candidate gap'}")
+            lines.extend(["", str(gap.get("description") or ""), "", str(gap.get("rationale") or "")])
+            paper_ids = gap.get("supporting_paper_ids") or []
+            if isinstance(paper_ids, list) and paper_ids:
+                lines.extend(["", "Supporting papers: " + ", ".join(map(str, paper_ids))])
+            verification = gap.get("verification") or {}
+            if isinstance(verification, dict) and verification.get("reason"):
+                lines.extend(["", "Verification: " + str(verification["reason"])])
+
+    landscape = public.get("landscape") or {}
+    coverage = landscape.get("source_coverage") or {} if isinstance(landscape, dict) else {}
+    levels = coverage.get("source_levels") or {} if isinstance(coverage, dict) else {}
+    outcomes = coverage.get("full_text_outcomes") or {} if isinstance(coverage, dict) else {}
+    lines.extend(["", "## Full-text and evidence coverage", "",
+                  f"Full text requested: {'yes' if public.get('full_text_requested') else 'no'}.",
+                  f"Selected evidence records: {len(evidence) if isinstance(evidence, list) else 0}."])
+    if isinstance(levels, dict):
+        lines.append(
+            f"Full text: {levels.get('full_text', 0)}; abstract fallback: {levels.get('abstract', 0)}; metadata only: {levels.get('metadata_only', 0)}."
+        )
+    if isinstance(outcomes, dict):
+        lines.append(
+            f"Unavailable: {outcomes.get('unavailable', 0)}; fetch failed: {outcomes.get('fetch_failed', 0)}; parse failed: {outcomes.get('parse_failed', 0)}."
+        )
+
+    lines.extend(["", "## Relevant papers", ""])
+    papers = public.get("papers", [])
     for paper in papers if isinstance(papers, list) else []:
         if isinstance(paper, dict):
-            lines.append(f"- {paper.get('title', 'Untitled')} ({paper.get('year') or 'year unavailable'})")
-    if mode == "full":
-        lines.extend(["", "## Candidate research gaps", ""])
-        gaps = result.get("gaps", [])
-        for gap in gaps if isinstance(gaps, list) else []:
-            if isinstance(gap, dict):
-                lines.append(f"- {gap.get('statement') or gap.get('description') or 'Candidate gap'}")
+            lines.append(f"- {paper.get('title', 'Untitled')} ({paper.get('publication_year') or 'year unavailable'})")
     lines.extend(["", "## Coverage limitations", "",
                   "This bounded analysis helps investigate possible gaps; it does not prove global novelty or replace a systematic review.", ""])
     return "\n".join(lines)
+
+
+def _markdown_evidence_section(lines: list[str], heading: str,
+                               evidence: list[object], *fields: str) -> None:
+    values: list[str] = []
+    for record in evidence:
+        if not isinstance(record, dict):
+            continue
+        for field in fields:
+            raw = record.get(field)
+            items = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else []
+            for item in items:
+                if isinstance(item, dict) and item.get("value"):
+                    values.append(f"- {item['value']} — {record.get('paper_id', 'paper ID unavailable')}")
+    if values:
+        lines.extend(["", f"## {heading}", "", *values])

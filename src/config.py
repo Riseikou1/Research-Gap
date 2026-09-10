@@ -96,6 +96,7 @@ class WebSettings:
     auth_jwt_audience: str
     auth_jwt_issuer: str | None
     guest_cookie_secret: str
+    lifetime_credit_hmac_secret: str
     secure_cookies: bool
     guest_retention_hours: int
     guest_quick_limit: int
@@ -194,6 +195,10 @@ class Settings:
                 "the $1/5-credit plan is test placeholder pricing"
             )
         guest_secret = os.getenv("RESEARCH_GAP_GUEST_COOKIE_SECRET", "local-development-only-change-me")
+        lifetime_secret = os.getenv(
+            "RESEARCH_GAP_LIFETIME_CREDIT_HMAC_SECRET",
+            "local-development-lifetime-credit-secret",
+        )
         if secure_cookies and guest_secret == "local-development-only-change-me":
             raise ConfigurationError("Set a strong RESEARCH_GAP_GUEST_COOKIE_SECRET before secure production use")
         web = WebSettings(
@@ -205,6 +210,7 @@ class Settings:
             auth_jwt_audience=os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated").strip(),
             auth_jwt_issuer=os.getenv("SUPABASE_JWT_ISSUER", "").strip().rstrip("/") or None,
             guest_cookie_secret=guest_secret,
+            lifetime_credit_hmac_secret=lifetime_secret,
             secure_cookies=secure_cookies,
             guest_retention_hours=integer("RESEARCH_GAP_GUEST_RETENTION_HOURS", 72),
             guest_quick_limit=integer("RESEARCH_GAP_GUEST_QUICK_LIMIT", 1),

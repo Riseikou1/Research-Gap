@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from src.persistence.models import AnalysisHistoryItem, AnalysisRecord, AnalysisStatus
+from src.api.safety import public_analysis_result, public_job_error
 
 
 class StrictApiModel(BaseModel):
@@ -72,8 +73,8 @@ class AnalysisDetail(AnalysisSummary):
             query_generator=record.query_generator,
             paper_limit=record.paper_limit,
             configuration=record.configuration,
-            result=record.result,
-            error_message=record.error_message,
+            result=public_analysis_result(record.result) if record.result else None,
+            error_message=public_job_error(record.error_message) if record.error_message else None,
             mode=record.mode,
             stage=record.stage,
             progress=record.progress,

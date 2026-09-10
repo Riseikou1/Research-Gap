@@ -14,7 +14,10 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 def plan(request: Request) -> dict[str, object]:
     web = request.app.state.components.settings.web
     return {"price_usd": web.paid_price_usd, "interval": "month", "credits_per_cycle": web.paid_cycle_credits,
-            "test_mode": web.stripe_test_mode, "configured": bool(web.stripe_price_id)}
+            "test_mode": web.stripe_test_mode, "configured": bool(web.stripe_price_id),
+            "guest_quick_limit": web.guest_quick_limit,
+            "user_quick_daily_limit": web.user_quick_daily_limit,
+            "free_lifetime_credits": web.free_lifetime_credits}
 
 
 @router.post("/checkout")

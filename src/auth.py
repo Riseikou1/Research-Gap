@@ -8,7 +8,7 @@ import hmac
 import json
 from dataclasses import dataclass
 from typing import Protocol
-from urllib import error, request
+from urllib import error, parse, request
 from uuid import uuid4
 
 import jwt
@@ -43,6 +43,7 @@ class Principal:
 class AuthProvider(Protocol):
     def verify(self, token: str) -> AuthIdentity: ...
     def create_admin_user(self, email: str, password: str, display_name: str) -> AuthIdentity: ...
+    def delete_user(self, user_id: str) -> None: ...
 
 
 class SupabaseAuthProvider:
@@ -89,6 +90,25 @@ class SupabaseAuthProvider:
             raise AuthenticationError("The managed-auth administrator account could not be created.") from exc
         return AuthIdentity(str(payload["id"]), str(payload.get("email") or email), True)
 
+    def delete_user(self, user_id: str) -> None:
+        """Delete an Auth identity through the privileged server-only Admin API."""
+        if not self.service_role_key:
+            raise AuthenticationError("Managed authentication deletion is unavailable.")
+        req = request.Request(
+            f"{self.url}/auth/v1/admin/users/{parse.quote(user_id, safe='')}", method="DELETE",
+            headers={"apikey": self.service_role_key,
+                     "Authorization": f"Bearer {self.service_role_key}"},
+        )
+        try:
+            with request.urlopen(req, timeout=20):
+                return
+        except error.HTTPError as exc:
+            if exc.code == 404:
+                return
+            raise AuthenticationError("Managed authentication deletion failed.") from exc
+        except error.URLError as exc:
+            raise AuthenticationError("Managed authentication deletion failed.") from exc
+
 
 class StaticAuthProvider:
     """Deterministic provider for local tests; it never accepts arbitrary production tokens."""
@@ -106,6 +126,12 @@ class StaticAuthProvider:
         identity = AuthIdentity(str(uuid4()), email, True)
         self.identities[f"admin:{identity.user_id}"] = identity
         return identity
+
+    def delete_user(self, user_id: str) -> None:
+        self.identities = {
+            token: identity for token, identity in self.identities.items()
+            if identity.user_id != user_id
+        }
 
 
 def sign_guest_id(guest_id: str, secret: str) -> str:
