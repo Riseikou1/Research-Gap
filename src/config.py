@@ -44,6 +44,9 @@ def database_path() -> Path:
     value = os.getenv("RESEARCH_GAP_DATABASE_PATH", "").strip()
     return Path(value).expanduser() if value else PROJECT_ROOT / "data" / "research_gap.sqlite3"
 
+def database_url() -> str | None:
+    """Return the PostgreSQL connection URL when configured."""
+    return os.getenv("DATABASE_URL", "").strip() or None
 
 class ConfigurationError(ValueError):
     """Raised when environment configuration is malformed or out of bounds."""
@@ -121,6 +124,7 @@ class Settings:
     extraction_workers: int
     extraction_batch_size: int
     cache_directory: Path = field(default_factory=cache_dir)
+    database_url: str | None = None
     analysis_database_path: Path = field(default_factory=database_path)
     max_analysis_workers: int = 2
     web: WebSettings | None = None
@@ -257,6 +261,7 @@ class Settings:
             extraction_workers=integer("RESEARCH_GAP_EXTRACTION_WORKERS", 4),
             extraction_batch_size=integer("RESEARCH_GAP_EXTRACTION_BATCH_SIZE", 3),
             cache_directory=cache_dir(),
+            database_url=database_url(),
             analysis_database_path=database_path(),
             max_analysis_workers=integer("RESEARCH_GAP_MAX_ANALYSIS_WORKERS", 2, maximum=8),
             web=web,
