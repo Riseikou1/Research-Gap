@@ -4,7 +4,7 @@ Last checked: 2026-09-08. This is an operational checklist for a non-expert owne
 
 ## What Codex completed
 
-The repository contains a responsive Next.js web application, a private multi-principal FastAPI API, Supabase token verification and avatar-storage boundaries, a signed guest-session system, a transactional append-only credit ledger, server-owned Quick Search and Full Gap Analysis modes, durable job stages, protected exports, Stripe test Checkout/portal/webhooks, a server-stored administrator role and bootstrap command, an owner dashboard, ordered SQLite migrations, cleanup behavior, and deterministic tests. The scientific Milestones 1–8 pipeline and CLI remain shared with the API.
+The repository contains a responsive Next.js web application, a private multi-principal FastAPI API, Supabase token verification and avatar-storage boundaries, a signed guest-session system, a transactional append-only credit ledger, server-owned Quick Search and Full Gap Analysis modes, durable job stages, protected exports, Stripe test Checkout/portal/webhooks, a server-stored administrator role and bootstrap command, an owner dashboard, ordered SQLite/PostgreSQL migrations, cleanup behavior, and deterministic tests. The scientific Milestones 1–8 pipeline and CLI remain shared with the API.
 
 External accounts were not created. No administrator was created, no email was sent, no Stripe product exists yet, no bank account was connected, and no live payment or provider call was made. Those statements must remain true until you complete and verify the steps below.
 
@@ -67,6 +67,7 @@ Backend `.env` values:
 | `RESEARCH_GAP_SECURE_COOKIES` | non-secret | `false` for HTTP localhost, `true` behind production HTTPS |
 | `RESEARCH_GAP_TRUSTED_LOCAL_MODE` | non-secret safety switch | Keep `false`; only the historical single-owner loopback API may set `true` |
 | `RESEARCH_GAP_DATABASE_PATH` | private path | Durable SQLite file on persistent storage |
+| `DATABASE_URL` | critical secret | Supabase Session Pooler PostgreSQL URL; takes precedence over the SQLite path |
 
 Frontend `web/.env.local` contains only `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Never add service-role, Stripe secret/webhook, OpenAI, or OpenAlex keys to `NEXT_PUBLIC_*` variables.
 
@@ -142,14 +143,14 @@ Do not sell five analyses for $1 until measurement shows a safe margin. Replace 
 
 ## Domain, deployment, and operations
 
-Purchase the domain through an owner-controlled registrar account with MFA and renewal protection. Point frontend/API DNS records to chosen services, force HTTPS, set exact production URL/origin/issuer values, set secure cookies, and prefer a reverse proxy/same-origin `/api` deployment to simplify cookies/CORS. Never deploy SQLite to ephemeral disk: attach persistent single-writer storage or deliberately migrate the replaceable repository to managed PostgreSQL in a later milestone.
+Purchase the domain through an owner-controlled registrar account with MFA and renewal protection. Point frontend/API DNS records to chosen services, force HTTPS, set exact production URL/origin/issuer values, set secure cookies, and prefer a reverse proxy/same-origin `/api` deployment to simplify cookies/CORS. Production should set `DATABASE_URL` to the managed PostgreSQL Session Pooler URL; SQLite remains the local/test fallback and must not be placed on ephemeral production storage.
 
 Back up the database and avatar bucket encrypted on a schedule. Before each release: stop writes or snapshot safely, back up, run `python -m src.persistence.migrate`, health-check, and retain a tested application rollback. SQL migrations are forward-only; database rollback means restoring the pre-migration backup after stopping the new service. Quarterly, perform a restore into an isolated environment and verify row counts, ownership, and ledger balance invariants.
 
 Configure structured logs with secret/token/research-idea redaction, error tracking, uptime checks for `/health` and the frontend, alerts for provider/webhook/job failures, disk/backup monitoring, and retention cleanup. Schedule guest cleanup (startup already calls it) from a trusted process:
 
 ```bash
-python -c 'from src.config import Settings; from src.persistence.database import Database; from src.persistence.repositories import AnalysisRepository; s=Settings.from_env(); d=Database(s.analysis_database_path); d.migrate(); print(AnalysisRepository(d).cleanup_expired_guests())'
+python -c 'from src.config import Settings; from src.persistence.database import Database; from src.persistence.repositories import AnalysisRepository; s=Settings.from_env(); d=Database(s.analysis_database_path, url=s.database_url); d.migrate(); print(AnalysisRepository(d).cleanup_expired_guests())'
 ```
 
 Review login, export, Checkout, and global request throttling at the edge/WAF as well as application limits. Signed guest cookies plus pseudonymous network limiting reduce casual abuse; they cannot make guest abuse impossible.

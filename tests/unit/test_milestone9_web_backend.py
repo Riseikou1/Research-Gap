@@ -63,9 +63,10 @@ def test_verified_user_gets_exactly_two_and_third_is_blocked_and_failure_refunds
             first = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"first valid idea","mode":"full"})
             second = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"second valid idea","mode":"full"})
             assert first.status_code == second.status_code == 201
+            wait(client, first.json()["analysis_id"], "verified")
+            wait(client, second.json()["analysis_id"], "verified")
             blocked = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"third valid idea","mode":"full"})
             assert blocked.status_code == 402
-            wait(client, first.json()["analysis_id"], "verified"); wait(client, second.json()["analysis_id"], "verified")
             assert client.get("/me", headers={"Authorization": "Bearer verified"}).json()["credits"] == 0
             client.app.state.components.security.adjust_credit("admin", "u1", 1, "test failure refund")
             failed = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"this fails safely","mode":"full"})
@@ -84,6 +85,46 @@ def test_concurrent_credit_reservations_cannot_overspend():
         with ThreadPoolExecutor(max_workers=2) as pool: outcomes=list(pool.map(reserve,[1,2]))
         assert sum(value is not None for value in outcomes)==1
         assert security.balance("u")==0
+
+
+def test_concurrent_account_sync_grants_lifetime_credit_once():
+    with tempfile.TemporaryDirectory() as directory:
+        database = Database(Path(directory) / "lifetime.sqlite")
+        database.migrate()
+        security = SecurityRepository(database)
+
+        def sync(_index: int):
+            return security.sync_account("same-user", email="u@example.test", verified=True)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(sync, range(16)))
+
+        assert security.balance("same-user") == 2
+        with database.connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM credit_ledger "
+                "WHERE user_id=? AND source='free_lifetime'",
+                ("same-user",),
+            ).fetchone()
+        assert row["count"] == 1
+
+
+def test_credit_settlement_and_refund_are_idempotent():
+    with tempfile.TemporaryDirectory() as directory:
+        database = Database(Path(directory) / "credit-lifecycle.sqlite")
+        database.migrate()
+        security = SecurityRepository(database)
+        security.sync_account("u", email="u@example.test", verified=True)
+
+        security.reserve_credit("u", "settled-analysis")
+        assert security.settle_credit("settled-analysis") is True
+        assert security.settle_credit("settled-analysis") is False
+        assert security.balance("u") == 1
+
+        security.reserve_credit("u", "failed-analysis")
+        assert security.release_credit("failed-analysis") is True
+        assert security.release_credit("failed-analysis") is False
+        assert security.balance("u") == 1
 
 
 def test_guest_quick_limit_is_private_and_network_bounded():

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any, Mapping
 
 from .database import Database
 from .models import AnalysisHistoryItem, AnalysisRecord, NewAnalysis, parse_timestamp
@@ -213,39 +213,43 @@ class AnalysisRepository:
         """Atomically move only this still-valid guest's analyses to its signed-in account."""
         now = utc_now().isoformat()
         with self.database.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            guest = connection.execute(
-                "SELECT claimed_by_user_id, expires_at FROM guest_sessions WHERE guest_id=?", (guest_id,)
-            ).fetchone()
-            if not guest or guest["claimed_by_user_id"] or guest["expires_at"] <= now:
-                connection.rollback()
-                return 0
-            cursor = connection.execute(
-                "UPDATE analyses SET owner_kind='user', owner_id=? WHERE owner_kind='guest' AND owner_id=?",
-                (user_id, guest_id),
-            )
-            connection.execute(
-                "UPDATE guest_sessions SET claimed_by_user_id=?, last_seen_at=? WHERE guest_id=?",
-                (user_id, now, guest_id),
-            )
-            connection.commit()
-            return cursor.rowcount
+            with self.database.transaction(connection, lock_keys=(f"guest:{guest_id}",)):
+                guest = connection.execute(
+                    "SELECT claimed_by_user_id, expires_at FROM guest_sessions WHERE guest_id=?",
+                    (guest_id,),
+                ).fetchone()
+                if not guest or guest["claimed_by_user_id"] or guest["expires_at"] <= now:
+                    return 0
+                cursor = connection.execute(
+                    "UPDATE analyses SET owner_kind='user', owner_id=? "
+                    "WHERE owner_kind='guest' AND owner_id=?",
+                    (user_id, guest_id),
+                )
+                connection.execute(
+                    "UPDATE guest_sessions SET claimed_by_user_id=?, last_seen_at=? WHERE guest_id=?",
+                    (user_id, now, guest_id),
+                )
+                return cursor.rowcount
 
     def cleanup_expired_guests(self) -> int:
         now = utc_now().isoformat()
+        rate_cutoff = (utc_now() - timedelta(days=31)).isoformat()
         with self.database.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            cursor = connection.execute(
-                "DELETE FROM analyses WHERE owner_kind='guest' AND owner_id IN "
-                "(SELECT guest_id FROM guest_sessions WHERE expires_at < ?)", (now,),
-            )
-            connection.execute("DELETE FROM guest_sessions WHERE expires_at < ?", (now,))
-            connection.execute("DELETE FROM rate_events WHERE created_at < datetime('now', '-31 days')")
-            connection.commit()
-            return cursor.rowcount
+            with self.database.transaction(connection, lock_keys=("guest-cleanup",)):
+                cursor = connection.execute(
+                    "DELETE FROM analyses WHERE owner_kind='guest' AND owner_id IN "
+                    "(SELECT guest_id FROM guest_sessions WHERE expires_at < ?)",
+                    (now,),
+                )
+                connection.execute("DELETE FROM guest_sessions WHERE expires_at < ?", (now,))
+                connection.execute(
+                    "DELETE FROM rate_events WHERE created_at < ?",
+                    (rate_cutoff,),
+                )
+                return cursor.rowcount
 
     @staticmethod
-    def _record(row: sqlite3.Row) -> AnalysisRecord:
+    def _record(row: Mapping[str, Any]) -> AnalysisRecord:
         return AnalysisRecord(
             analysis_id=row["analysis_id"],
             research_idea=row["research_idea"],

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import sqlite3
-
 from fastapi import APIRouter, HTTPException, Request, status
 
 from src.api.models import HealthResponse
+from src.persistence.database import DATABASE_ERRORS
 
 router = APIRouter(tags=["health"])
 
@@ -15,7 +14,7 @@ router = APIRouter(tags=["health"])
 def health(request: Request) -> HealthResponse:
     try:
         request.app.state.components.database.check()
-    except (OSError, sqlite3.DatabaseError):
+    except DATABASE_ERRORS:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database is unavailable.",

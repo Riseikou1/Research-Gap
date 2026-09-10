@@ -26,7 +26,10 @@ def main() -> int:
     args = parser.parse_args()
     settings = Settings.from_env()
     web = settings.web
-    database = Database(settings.analysis_database_path)
+    database = Database(
+        settings.analysis_database_path,
+        url=settings.database_url,
+    )
     database.migrate()
     security = SecurityRepository(database, free_credits=web.free_lifetime_credits)
     existing = security.admin_account()

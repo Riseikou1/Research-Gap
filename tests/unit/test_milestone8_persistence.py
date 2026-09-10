@@ -40,7 +40,11 @@ class PersistenceTest(unittest.TestCase):
             ).fetchall()
         self.assertEqual(
             [row["version"] for row in versions],
-            ["0001_create_analyses", "0002_web_accounts_billing"],
+            [
+                "0001_create_analyses",
+                "0002_web_accounts_billing",
+                "0003_unique_lifetime_credit",
+            ],
         )
 
     def test_create_and_load_round_trip(self) -> None:

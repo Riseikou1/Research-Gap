@@ -14,8 +14,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Apply Research GAP database migrations")
     parser.add_argument("--database", type=Path, help="Override RESEARCH_GAP_DATABASE_PATH")
     args = parser.parse_args()
-    path = args.database or Settings.from_env().analysis_database_path
-    applied = Database(path).migrate()
+    settings = Settings.from_env()
+    database = (
+        Database(args.database)
+        if args.database is not None
+        else Database(settings.analysis_database_path, url=settings.database_url)
+    )
+    applied = database.migrate()
     if applied:
         print("Applied migrations: " + ", ".join(applied))
     else:

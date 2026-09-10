@@ -49,7 +49,10 @@ def create_app(
     avatar_storage: AvatarStorage | None = None,
 ) -> FastAPI:
     runtime_settings = settings or Settings.from_env()
-    database = Database(runtime_settings.analysis_database_path)
+    database = Database(
+        runtime_settings.analysis_database_path,
+        url=runtime_settings.database_url,
+    )
     repository = AnalysisRepository(database)
     web_settings = runtime_settings.web
     security = SecurityRepository(database, free_credits=web_settings.free_lifetime_credits)

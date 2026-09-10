@@ -107,6 +107,7 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS` | `21600` | Freshness window for persistent retrieval results |
 | `RESEARCH_GAP_CACHE_DIR` | `data/cache` | Local SQLite cache directory |
 | `RESEARCH_GAP_DATABASE_PATH` | `data/research_gap.sqlite3` | Durable analysis-history database |
+| `DATABASE_URL` | unset | PostgreSQL URL for durable application data; overrides the SQLite path |
 | `RESEARCH_GAP_MAX_ANALYSIS_WORKERS` | `2` | Maximum concurrent API analysis jobs |
 | `RESEARCH_GAP_FULL_TEXT_TIMEOUT_SECONDS` | `12` | Per-document request timeout |
 | `RESEARCH_GAP_FULL_TEXT_MAX_BYTES` | `8000000` | Maximum streamed response bytes |
@@ -138,7 +139,7 @@ queries, every retrieved paper ID, normalized top papers, extracted evidence, la
 candidates, direct assessment, verification details, timings, and work metrics. This durable history
 is stored separately from the expiring provider cache.
 
-Apply the ordered SQLite migrations:
+Apply the ordered SQLite/PostgreSQL migrations (selected by `DATABASE_URL`):
 
 ```bash
 python -m src.persistence.migrate

@@ -27,6 +27,7 @@ class ConfigurationTest(unittest.TestCase):
                 "RESEARCH_GAP_SEMANTIC_WEIGHT": "0.75",
                 "RESEARCH_GAP_EXTRACTION_WORKERS": "3",
                 "RESEARCH_GAP_DATABASE_PATH": "/tmp/research-gap-test.sqlite3",
+                "DATABASE_URL": "postgresql://example.invalid/research_gap",
                 "RESEARCH_GAP_MAX_ANALYSIS_WORKERS": "3",
             },
             clear=True,
@@ -36,6 +37,7 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(settings.ranking.semantic_weight, 0.75)
         self.assertEqual(settings.extraction_workers, 3)
         self.assertEqual(settings.analysis_database_path.name, "research-gap-test.sqlite3")
+        self.assertEqual(settings.database_url, "postgresql://example.invalid/research_gap")
         self.assertEqual(settings.max_analysis_workers, 3)
 
     def test_invalid_values_fail_clearly(self) -> None:
