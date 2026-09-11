@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from .document import FullTextStatus, SectionType
+from .document import FullTextStatus, SectionType, SourceFormat
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -51,12 +51,64 @@ class ExtractionCoverage(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
 
-    source_level: Literal["metadata_only", "abstract", "full_text"]
+    source_level: Literal["metadata_only", "abstract", "abstract_fallback", "full_text"]
     full_text_status: FullTextStatus = "not_attempted"
+    full_text_requested: bool = False
+    full_text_attempted: bool = False
+    full_text_extraction_succeeded: bool = False
+    full_text_source_format: SourceFormat | None = None
     inspected_section_types: list[SectionType] = Field(default_factory=list)
     structure_available: bool = False
     truncated: bool = False
+    fallback_explanation: str | None = Field(default=None, max_length=500)
     notices: list[str] = Field(default_factory=list)
+
+
+class PaperCoverageRecord(BaseModel):
+    """Safe final accounting for exactly one requested canonical paper."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+    paper_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    full_text_requested: bool
+    full_text_attempted: bool
+    final_evidence_level: Literal[
+        "full_text", "abstract", "abstract_fallback", "metadata_only", "none"
+    ]
+    full_text_status: FullTextStatus
+    full_text_extraction_succeeded: bool = False
+    full_text_source_format: SourceFormat | None = None
+    truncated: bool = False
+    inspected_section_types: list[SectionType] = Field(default_factory=list)
+    fallback_explanation: str | None = Field(default=None, max_length=500)
+    final_state: Literal["success", "failure"]
+    failure_category: Literal[
+        "provider_failure", "model_schema_evidence_validation"
+    ] | None = None
+
+    @model_validator(mode="after")
+    def validate_final_accounting(self) -> "PaperCoverageRecord":
+        if self.final_state == "success":
+            if self.final_evidence_level == "none":
+                raise ValueError("successful coverage requires a final evidence level")
+            if self.failure_category is not None:
+                raise ValueError("successful coverage cannot have a failure category")
+        else:
+            if self.final_evidence_level != "none" or self.failure_category is None:
+                raise ValueError(
+                    "final coverage failures require level none and a failure category"
+                )
+        if self.final_evidence_level == "full_text" and not (
+            self.full_text_requested
+            and self.full_text_attempted
+            and self.full_text_status == "usable"
+            and self.full_text_extraction_succeeded
+        ):
+            raise ValueError("full-text evidence requires a successful usable full-text attempt")
+        if self.final_evidence_level == "abstract_fallback" and not self.full_text_requested:
+            raise ValueError("abstract fallback requires full text to have been requested")
+        return self
 
 
 class LimitationEvidence(EvidenceItem):

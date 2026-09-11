@@ -13,6 +13,8 @@ from src.auth import network_rate_key
 from src.persistence.models import NewAnalysis
 from src.persistence.security import QuotaError
 from src.api.safety import public_analysis_result
+from src.extraction.evidence import canonical_evidence_key
+from src.retrieval.deduplication import normalize_doi, normalize_title
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -147,10 +149,20 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
         for paper in papers if isinstance(papers, list) and isinstance(paper, dict)
     }
     if isinstance(evidence, list) and evidence:
-        _markdown_evidence_section(lines, "What the literature already studies well", evidence, paper_titles, "research_objective")
-        _markdown_evidence_section(lines, "Common methods", evidence, paper_titles, "method_or_intervention")
-        _markdown_evidence_section(lines, "Main findings", evidence, paper_titles, "main_findings")
-        _markdown_evidence_section(lines, "Important limitations and future work", evidence, paper_titles, "limitations", "future_work")
+        for heading, fields in (
+            ("Research objectives", ("research_objective",)),
+            ("Populations and settings", ("population_or_setting",)),
+            ("Methods", ("method_or_intervention",)),
+            ("Datasets and data modalities", ("datasets", "data_or_modality")),
+            ("Sample sizes", ("sample_size",)),
+            ("Comparisons and baselines", ("comparison_or_baseline",)),
+            ("Evaluation metrics", ("evaluation_metrics",)),
+            ("Main findings", ("main_findings",)),
+            ("Limitations and future work", ("limitations", "future_work")),
+        ):
+            _markdown_evidence_section(lines, heading, evidence, paper_titles, *fields)
+
+    provenance_index = _evidence_provenance_index(evidence)
 
     gaps = public.get("gaps", [])
     if mode == "full" and isinstance(gaps, list) and gaps:
@@ -164,14 +176,20 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
             if isinstance(paper_ids, list) and paper_ids:
                 citations = [f"{paper_titles.get(str(item), 'Paper record')} ({item})" for item in paper_ids]
                 lines.extend(["", "Supporting papers: " + ", ".join(citations)])
+            supporting = gap.get("supporting_evidence") or []
+            if isinstance(supporting, list) and supporting:
+                lines.extend(["", "Supporting evidence:"])
+                _markdown_gap_evidence(lines, supporting, paper_titles, provenance_index)
             verification = gap.get("verification") or {}
             if isinstance(verification, dict) and verification.get("reason"):
                 lines.extend(["", "Verification: " + str(verification["reason"])])
+                verification_evidence = verification.get("evidence") or []
+                if isinstance(verification_evidence, list) and verification_evidence:
+                    lines.extend(["", "Verification evidence:"])
+                    _markdown_gap_evidence(
+                        lines, verification_evidence, paper_titles, provenance_index
+                    )
 
-    landscape = public.get("landscape") or {}
-    coverage = landscape.get("source_coverage") or {} if isinstance(landscape, dict) else {}
-    levels = coverage.get("source_levels") or {} if isinstance(coverage, dict) else {}
-    outcomes = coverage.get("full_text_outcomes") or {} if isinstance(coverage, dict) else {}
     extraction = public.get("extraction_coverage") or {}
     lines.extend(["", "## Full-text and evidence coverage", "",
                   f"Full text requested: {'yes' if public.get('full_text_requested') else 'no'}."])
@@ -183,18 +201,70 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
             + "; successful evidence records: " + str(extraction.get("successful_evidence_records", 0))
             + "; failed extractions: " + str(extraction.get("failed_extractions", 0)) + "."
         )
-    if isinstance(levels, dict):
+        if "accounted_papers" in extraction:
+            lines.append(
+                "Final outcomes — full text: " + str(extraction.get("full_text_successes", 0))
+                + "; abstract: " + str(extraction.get("abstract_successes", 0))
+                + "; abstract fallback: " + str(extraction.get("abstract_fallback_successes", 0))
+                + "; metadata only: " + str(extraction.get("metadata_only_successes", 0))
+                + "; final failures: " + str(extraction.get("final_failures", 0))
+                + "; accounted: " + str(extraction.get("accounted_papers", 0)) + "."
+            )
+    attempts = public.get("full_text_attempt_summary") or {}
+    if isinstance(attempts, dict) and attempts:
         lines.append(
-            f"Full text: {levels.get('full_text', 0)}; abstract fallback: {levels.get('abstract', 0)}; metadata only: {levels.get('metadata_only', 0)}."
-        )
-    if isinstance(outcomes, dict):
-        lines.append(
-            f"Unavailable: {outcomes.get('unavailable', 0)}; fetch failed: {outcomes.get('fetch_failed', 0)}; parse failed: {outcomes.get('parse_failed', 0)}."
+            "Attempt diagnostics — full-text attempts: " + str(attempts.get("full_text_attempts", 0))
+            + "; fetch failures: " + str(attempts.get("fetch_failures", 0))
+            + "; parse failures: " + str(attempts.get("parse_failures", 0))
+            + "; truncations: " + str(attempts.get("truncations", 0))
+            + "; successful full-text extraction calls: "
+            + str(attempts.get("full_text_extraction_successes", 0))
+            + "; model/schema/evidence-validation final failures: "
+            + str(attempts.get("model_schema_evidence_validation_failures", 0))
+            + "; provider final failures: "
+            + str(attempts.get("provider_failures", 0)) + "."
         )
 
-    lines.extend(["", "## Relevant papers", ""])
-    for paper in papers if isinstance(papers, list) else []:
-        if isinstance(paper, dict):
+    paper_coverage = public.get("paper_coverage") or []
+    if isinstance(paper_coverage, list) and paper_coverage:
+        lines.extend(["", "## Per-paper coverage", ""])
+        for item in paper_coverage:
+            if not isinstance(item, dict):
+                continue
+            paper_id = str(item.get("paper_id") or "paper ID unavailable")
+            title = str(item.get("title") or paper_titles.get(paper_id, "Paper record"))
+            state = "success" if item.get("final_state") == "success" else "final failure"
+            lines.append(
+                f"- **{title}** ({paper_id}) — {state}; final evidence: "
+                f"{str(item.get('final_evidence_level', 'none')).replace('_', ' ')}; "
+                f"full text: {str(item.get('full_text_status', 'not_attempted')).replace('_', ' ')}"
+                + (f" ({str(item['full_text_source_format']).upper()})" if item.get("full_text_source_format") else "")
+                + "."
+            )
+            sections = item.get("inspected_section_types") or []
+            if isinstance(sections, list) and sections:
+                lines.append("  Full-text sections supplied to the extraction attempt: " + ", ".join(str(value).replace("_", " ") for value in sections) + ".")
+            if item.get("fallback_explanation"):
+                lines.append("  " + str(item["fallback_explanation"]))
+
+    paper_records = [
+        paper for paper in papers
+        if isinstance(paper, dict)
+    ] if isinstance(papers, list) else []
+    if paper_records:
+        lines.extend(["", "## Relevant papers", ""])
+        seen_papers: set[tuple[str, str]] = set()
+        for paper in paper_records:
+            doi = normalize_doi(str(paper.get("doi") or ""))
+            identity = (
+                "doi", doi
+            ) if doi else (
+                normalize_title(str(paper.get("title") or "")),
+                str(paper.get("publication_year") or ""),
+            )
+            if identity in seen_papers:
+                continue
+            seen_papers.add(identity)
             lines.append(f"- {paper.get('title', 'Untitled')} ({paper.get('publication_year') or 'year unavailable'})")
     lines.extend(["", "## Coverage limitations", "",
                   "This bounded analysis helps investigate possible gaps; it does not prove global novelty or replace a systematic review.", ""])
@@ -204,6 +274,7 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
 def _markdown_evidence_section(lines: list[str], heading: str,
                                evidence: list[object], paper_titles: dict[str, str], *fields: str) -> None:
     values: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
     for record in evidence:
         if not isinstance(record, dict):
             continue
@@ -213,6 +284,73 @@ def _markdown_evidence_section(lines: list[str], heading: str,
             for item in items:
                 if isinstance(item, dict) and item.get("value"):
                     paper_id = str(record.get("paper_id", "paper ID unavailable"))
-                    values.append(f"- {item['value']} — {paper_titles.get(paper_id, 'Paper record')} ({paper_id})")
+                    key = (paper_id, field, canonical_evidence_key(str(item["value"])))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    values.extend([
+                        f"- **{item['value']}** — {paper_titles.get(paper_id, 'Paper record')} ({paper_id})",
+                        f"  > {str(item.get('evidence_text') or '').strip()}",
+                        "  " + _markdown_provenance(item),
+                    ])
     if values:
         lines.extend(["", f"## {heading}", "", *values])
+
+
+def _markdown_provenance(item: dict[str, object]) -> str:
+    source = str(item.get("source") or "unknown")
+    if source != "full_text":
+        return f"Evidence source: {source.replace('_', ' ')}."
+    details = ["Evidence source: full text"]
+    if item.get("section_heading"):
+        details.append(f"heading: {item['section_heading']}")
+    if item.get("section_type"):
+        details.append(f"section type: {str(item['section_type']).replace('_', ' ')}")
+    if item.get("section_id"):
+        details.append(f"section ID: {item['section_id']}")
+    return "; ".join(details) + "."
+
+
+def _evidence_provenance_index(evidence: object) -> dict[tuple[str, str], dict[str, object]]:
+    result: dict[tuple[str, str], dict[str, object]] = {}
+    if not isinstance(evidence, list):
+        return result
+    fields = (
+        "research_objective", "population_or_setting", "method_or_intervention",
+        "comparison_or_baseline", "data_or_modality", "datasets", "sample_size",
+        "evaluation_metrics", "main_findings", "constraints", "limitations", "future_work",
+    )
+    for record in evidence:
+        if not isinstance(record, dict):
+            continue
+        paper_id = str(record.get("paper_id") or "")
+        for field in fields:
+            raw = record.get(field)
+            items = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else []
+            for item in items:
+                if isinstance(item, dict) and item.get("evidence_text"):
+                    result[(paper_id, canonical_evidence_key(str(item["evidence_text"])))] = item
+    return result
+
+
+def _markdown_gap_evidence(
+    lines: list[str],
+    items: list[object],
+    paper_titles: dict[str, str],
+    provenance_index: dict[tuple[str, str], dict[str, object]],
+) -> None:
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        if not isinstance(item, dict) or not item.get("evidence_text"):
+            continue
+        paper_id = str(item.get("paper_id") or "paper ID unavailable")
+        evidence_text = str(item["evidence_text"])
+        key = (paper_id, canonical_evidence_key(evidence_text))
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.extend([
+            f"- **{item.get('value') or 'Supporting claim'}** — {paper_titles.get(paper_id, 'Paper record')} ({paper_id})",
+            f"  > {evidence_text.strip()}",
+            "  " + _markdown_provenance(provenance_index.get(key) or item),
+        ])

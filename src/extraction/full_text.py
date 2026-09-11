@@ -198,7 +198,25 @@ class FullTextClient:
         if not paper.full_text_locations:
             return PaperDocument(paper_id=paper.id, status="unavailable", notices=["no open-access full-text location"])
         failures: list[PaperDocument] = []
-        for location in paper.full_text_locations:
+        # Preserve the provider's best-location ordering within each class,
+        # while trying declared open-access, parser-supported formats before
+        # ambiguous landing pages. This is provider-agnostic and does not
+        # assume a publisher or repository URL shape.
+        locations = [
+            location
+            for _index, location in sorted(
+                (
+                    item
+                    for item in enumerate(paper.full_text_locations)
+                    if item[1].is_open_access
+                ),
+                key=lambda item: (
+                    item[1].source_format == "unknown",
+                    item[0],
+                ),
+            )
+        ]
+        for location in locations:
             try:
                 cached = self.store.get(paper.id, location.url, negative_ttl=self.negative_ttl_seconds)
             except Exception as exc:

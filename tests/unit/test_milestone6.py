@@ -1423,6 +1423,41 @@ class Milestone6Test(unittest.TestCase):
     # Landscape-grounded candidate generation
     # ------------------------------------------------------------------
 
+    def test_duplicate_scholarly_records_cannot_create_recurrence_or_two_paper_support(self):
+        title = "Reducing hallucination in structured outputs via Retrieval-Augmented Generation"
+        records = [
+            evidence_record(
+                paper_id,
+                limitations=["Evaluation remains limited to one enterprise setting"],
+            )
+            for paper_id in ("W4394838812", "W6966460441")
+        ]
+        papers = [
+            Paper(
+                id=paper_id,
+                openalex_id=paper_id,
+                title=title,
+                publication_year=2024,
+                authors=["Edoardo Serra"],
+            )
+            for paper_id in ("W4394838812", "W6966460441")
+        ]
+
+        landscape = LandscapeAnalyzer().analyze(records, papers)
+        limitation_rows = [
+            item for item in landscape.frequencies
+            if item.dimension == "limitation"
+        ]
+        self.assertEqual(landscape.total_papers, 1)
+        self.assertEqual(len(limitation_rows), 1)
+        self.assertEqual(limitation_rows[0].count, 1)
+
+        candidates = GapCandidateGenerator().generate(self.idea, landscape, records)
+        self.assertFalse(any(
+            item.pattern_type == "repeated_limitation"
+            for item in candidates
+        ))
+
     def test_combination_candidate_requires_landscape_grounding(self):
         evidence = [
             evidence_record(

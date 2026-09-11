@@ -8,7 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.extraction.evidence import canonical_evidence_key
+from src.extraction.document import SectionType
+from src.extraction.evidence import EvidenceSource, canonical_evidence_key
 
 
 GapCategory = Literal[
@@ -105,11 +106,35 @@ class GapEvidence(BaseModel):
     evidence_type: str = Field(min_length=1, max_length=80)
     value: str = Field(min_length=1)
     evidence_text: str = Field(min_length=1)
+    source: EvidenceSource | None = None
+    section_type: SectionType | None = None
+    section_heading: str | None = None
+    section_id: str | None = None
     study_type: str | None = Field(
         default=None,
         max_length=40,
     )
     role: EvidenceRole = "direct_support"
+
+    @model_validator(mode="after")
+    def validate_source_provenance(self) -> "GapEvidence":
+        """Keep abstract/title evidence free of full-text section metadata."""
+
+        section_values = (
+            self.section_type,
+            self.section_heading,
+            self.section_id,
+        )
+        if self.source == "full_text":
+            if any(value is None for value in section_values):
+                raise ValueError(
+                    "full-text gap evidence requires section type, heading, and ID"
+                )
+        elif any(value is not None for value in section_values):
+            raise ValueError(
+                "non-full-text gap evidence cannot carry section provenance"
+            )
+        return self
 
 
 class LandscapeBasis(BaseModel):

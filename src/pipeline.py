@@ -14,13 +14,14 @@ from src.analysis.gap_candidates import GapCandidateGenerator
 from src.analysis.models import GapCandidate, IdeaAssessment
 from src.analysis.verification import GapVerifier
 from src.models.landscape import LiteratureLandscape
-from src.extraction.evidence import PaperEvidence
+from src.extraction.evidence import PaperCoverageRecord, PaperEvidence
 from src.extraction.paper_extractor import PaperExtractor
 from src.query.base import QueryDecomposer, QueryGenerator
 from src.query.generator import DeterministicQueryGenerator
 from src.query.planner import QueryPlanner
 from src.ranking.reranker import HybridReranker
 from src.retrieval.multi_query import MultiQueryRetriever, RetrievalFailure
+from src.retrieval.deduplication import deduplicate_paper_models
 
 
 class PipelineError(RuntimeError):
@@ -39,6 +40,7 @@ class ResearchResult:
     ranking_mode: Literal["hybrid", "lexical_only"] = "lexical_only"
     evidence: list[PaperEvidence] = field(default_factory=list)
     extraction_failures: list[str] = field(default_factory=list)
+    paper_coverage: list[PaperCoverageRecord] = field(default_factory=list)
     gaps: list[GapCandidate] = field(default_factory=list)
     analysis_notices: list[str] = field(default_factory=list)
     landscape: LiteratureLandscape | None = None
@@ -69,6 +71,7 @@ class ResearchResult:
             "ranking_mode": self.ranking_mode,
             "evidence": [item.model_dump(mode="json") for item in self.evidence],
             "extraction_failures": list(self.extraction_failures),
+            "paper_coverage": [item.model_dump(mode="json") for item in self.paper_coverage],
             "gaps": gap_payloads,
             "analysis_notices": list(self.analysis_notices),
             "landscape": self.landscape.model_dump(mode="json") if self.landscape else None,
@@ -163,9 +166,13 @@ class ResearchPipeline:
         if not ranking.papers:
             notices.append("No candidate papers were found.")
 
-        selected = ranking.papers[:top_k]
+        # Treat the reranker boundary as a second identity firewall. Retrieval
+        # already canonicalizes route results, but cached/custom rerankers must
+        # not be able to reintroduce duplicate scholarly works before reading.
+        selected = deduplicate_paper_models(ranking.papers)[:top_k]
         evidence: list[PaperEvidence] = []
         extraction_failures: list[str] = []
+        paper_coverage: list[PaperCoverageRecord] = []
         gaps: list[GapCandidate] = []
         analysis_notices: list[str] = []
         landscape: LiteratureLandscape | None = None
@@ -194,6 +201,11 @@ class ResearchPipeline:
                 ),
             )
             extraction_failures = [str(error) for error in self.extractor.failures]
+            paper_coverage = [
+                item.model_copy(deep=True)
+                for item in getattr(self.extractor, "coverage_records", [])
+                if isinstance(item, PaperCoverageRecord)
+            ]
             initial_extractor_after = _component_metrics(self.extractor)
             notify("building_landscape", {"evidence_count": len(evidence)})
             started = perf_counter()
@@ -261,6 +273,7 @@ class ResearchPipeline:
             ranking_mode=ranking.mode,
             evidence=evidence,
             extraction_failures=extraction_failures,
+            paper_coverage=paper_coverage,
             gaps=gaps,
             analysis_notices=analysis_notices,
             landscape=landscape,

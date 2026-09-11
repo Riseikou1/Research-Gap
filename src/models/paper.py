@@ -78,6 +78,7 @@ class Paper(BaseModel):
 
     doi: str | None = None
     openalex_id: str | None = None
+    openalex_aliases: list[str] = Field(default_factory=list)
 
     citation_count: int = Field(default=0, ge=0)
 
@@ -150,6 +151,23 @@ class Paper(BaseModel):
                 seen.add(key)
                 result.append(normalized)
 
+        return result
+
+    @field_validator("openalex_aliases", mode="before")
+    @classmethod
+    def normalize_openalex_aliases(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        result: list[str] = []
+        seen: set[str] = set()
+        for alias in value:
+            if not isinstance(alias, str):
+                continue
+            normalized = " ".join(alias.split()).rstrip("/")
+            key = normalized.casefold()
+            if normalized and key not in seen:
+                seen.add(key)
+                result.append(normalized)
         return result
 
     @field_validator("full_text_locations", mode="after")
@@ -225,6 +243,7 @@ class Paper(BaseModel):
 
         return {
             "openalex_id": self.openalex_id,
+            "openalex_aliases": list(self.openalex_aliases),
             "title": self.title,
             "abstract": self.abstract,
             "authors": list(self.authors),

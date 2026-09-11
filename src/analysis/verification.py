@@ -30,7 +30,7 @@ from src.models.landscape import LiteratureLandscape
 from src.models.paper import Paper
 from src.models.query import RetrievalMode, SearchQuery
 from src.ranking.lexical import LexicalScorer
-from src.retrieval.deduplication import deduplicate_paper_models
+from src.retrieval.deduplication import canonicalize_against, deduplicate_paper_models
 from src.retrieval.multi_query import MultiQueryResult, MultiQueryRetriever
 
 from .gap_candidates import is_concrete_entity
@@ -1109,6 +1109,7 @@ class GapVerifier:
         ] = {}
         self._verification_outcome_cache: dict[tuple[tuple[str, str], ...], GapVerification] = {}
         self._verification_evidence_cache: dict[tuple[str, str], PaperEvidence] = {}
+        self._canonical_initial_papers: list[Paper] = []
         self._timings: dict[str, float] = {
             "direct_verification_retrieval": 0.0,
             "direct_verification_evidence_extraction": 0.0,
@@ -1136,6 +1137,7 @@ class GapVerifier:
         self._verification_query_cache.clear()
         self._verification_outcome_cache.clear()
         self._verification_evidence_cache.clear()
+        self._canonical_initial_papers.clear()
         for key in self._timings:
             self._timings[key] = 0.0
 
@@ -1146,8 +1148,9 @@ class GapVerifier:
     ) -> None:
         """Make exact initial-pass evidence available to verification."""
 
+        self._canonical_initial_papers = deduplicate_paper_models(papers)
         by_id = {item.paper_id: item for item in evidence}
-        for paper in papers:
+        for paper in self._canonical_initial_papers:
             record = by_id.get(paper.id)
             if (
                 record is None
@@ -1262,7 +1265,7 @@ class GapVerifier:
             failures.extend(result.failures)
             before = set(seen_ids)
             papers.extend(result.papers)
-            unique = deduplicate_paper_models(papers)
+            unique = canonicalize_against(papers, self._canonical_initial_papers)
             seen_ids.update(paper.id.casefold() for paper in unique)
             new_count = len(seen_ids - before)
 
@@ -1298,7 +1301,10 @@ class GapVerifier:
                     break
 
         return MultiQueryResult(
-            papers=deduplicate_paper_models(papers)[: self.max_verification_papers],
+            papers=canonicalize_against(
+                papers,
+                self._canonical_initial_papers,
+            )[: self.max_verification_papers],
             failures=failures,
             requested_routes=executed,
         )
@@ -1525,6 +1531,10 @@ class GapVerifier:
                             evidence_type=field_name,
                             value=item.value,
                             evidence_text=item.evidence_text,
+                            source=item.source,
+                            section_type=item.section_type,
+                            section_heading=item.section_heading,
+                            section_id=item.section_id,
                             study_type=record.study_type,
                             role="confirmed_direct_match",
                         )
@@ -1692,6 +1702,10 @@ class GapVerifier:
                         evidence_type=field_name,
                         value=item.value,
                         evidence_text=item.evidence_text,
+                        source=item.source,
+                        section_type=item.section_type,
+                        section_heading=item.section_heading,
+                        section_id=item.section_id,
                         study_type=record.study_type,
                         role=role,
                     )
@@ -1707,6 +1721,7 @@ class GapVerifier:
                         evidence_type="title",
                         value=record.title,
                         evidence_text=record.title,
+                        source="title",
                         study_type=record.study_type,
                         role=role,
                     )
@@ -2119,6 +2134,10 @@ class GapVerifier:
                         evidence_type=evidence_type,
                         value=item.value,
                         evidence_text=item.evidence_text,
+                        source=item.source,
+                        section_type=item.section_type,
+                        section_heading=item.section_heading,
+                        section_id=item.section_id,
                         study_type=(
                             record.study_type
                             if record

@@ -14,7 +14,10 @@ describe("ResultView", () => {
     expect(screen.getByText("External multilingual validation")).toBeInTheDocument();
     expect(screen.getByText(/A counterexample needs closer review/)).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
-    expect(screen.getByText("inspected at full-text level")).toBeInTheDocument();
+    expect(screen.getByText("final full-text evidence records")).toBeInTheDocument();
+    expect(screen.getByText("Per-paper coverage")).toBeInTheDocument();
+    expect(screen.getByText(/attempted as PDF/)).toBeInTheDocument();
+    expect(screen.getByText("full-text access attempts")).toBeInTheDocument();
     expect(screen.getByText("12.5s")).toBeInTheDocument();
     expect(screen.getByText("total elapsed wall-clock time")).toBeInTheDocument();
     expect(screen.getByText("papers requested for structured extraction")).toBeInTheDocument();
@@ -66,5 +69,23 @@ describe("ResultView", () => {
     const citation=container.querySelector(".citation");
     expect(citation).toHaveTextContent("Multilingual clinical retrieval");
     expect(citation?.querySelector("code")).toHaveTextContent("W1");
+  });
+
+  it("renders one relevant-paper card for DOI aliases", () => {
+    const duplicate = {
+      ...realisticAnalysis.result!.papers[0],
+      id: "W1-alias",
+      title: "Multilingual-clinical retrieval",
+      doi: "https://doi.org/10.1/EXAMPLE",
+    };
+    const analysis = analysisSchema.parse({
+      ...realisticAnalysis,
+      result: {
+        ...realisticAnalysis.result,
+        papers: [...realisticAnalysis.result!.papers, duplicate],
+      },
+    });
+    const {container} = render(<ResultView analysis={analysis}/>);
+    expect(container.querySelectorAll(".paper-list .paper")).toHaveLength(2);
   });
 });

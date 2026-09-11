@@ -23,6 +23,7 @@ from src.persistence.models import NewAnalysis
 from src.storage import AvatarError, validate_avatar
 from src.application.analysis_service import PipelineOptions, build_pipeline
 from src.api.routes.analyses import _markdown_report
+from src.api.safety import public_analysis_result
 
 
 def result_for(record):
@@ -337,6 +338,131 @@ def test_public_result_hides_provider_errors_and_markdown_uses_real_contract():
     })
     assert "Coverage is bounded." in report and "Correct year paper (2025)" in report
     assert "Small cohort" in report and "paper.get('year')" not in report
+
+
+def test_final_coverage_accounts_once_and_separates_attempt_failures():
+    records = [
+        {
+            "paper_id": "full", "title": "Full", "full_text_requested": True,
+            "full_text_attempted": True, "final_evidence_level": "full_text",
+            "full_text_status": "usable", "full_text_extraction_succeeded": True,
+            "full_text_source_format": "pdf", "truncated": False,
+            "inspected_section_types": ["methods"], "fallback_explanation": None,
+            "final_state": "success", "failure_category": None,
+        },
+        {
+            "paper_id": "fetch", "title": "Fetch", "full_text_requested": True,
+            "full_text_attempted": True, "final_evidence_level": "abstract_fallback",
+            "full_text_status": "fetch_failed", "full_text_extraction_succeeded": False,
+            "full_text_source_format": "pdf", "truncated": False,
+            "inspected_section_types": [],
+            "fallback_explanation": "Full-text fetch failed; abstract fallback succeeded.",
+            "final_state": "success", "failure_category": None,
+        },
+        {
+            "paper_id": "meta", "title": "Metadata", "full_text_requested": True,
+            "full_text_attempted": False, "final_evidence_level": "metadata_only",
+            "full_text_status": "unavailable", "full_text_extraction_succeeded": False,
+            "full_text_source_format": None, "truncated": False,
+            "inspected_section_types": [],
+            "fallback_explanation": "Open full text was unavailable; title metadata fallback succeeded.",
+            "final_state": "success", "failure_category": None,
+        },
+        {
+            "paper_id": "invalid", "title": "Invalid", "full_text_requested": True,
+            "full_text_attempted": True, "final_evidence_level": "none",
+            "full_text_status": "parse_failed", "full_text_extraction_succeeded": False,
+            "full_text_source_format": "pdf", "truncated": False,
+            "inspected_section_types": [],
+            "fallback_explanation": "Full-text parsing failed and the abstract fallback did not produce validated evidence.",
+            "final_state": "failure",
+            "failure_category": "model_schema_evidence_validation",
+        },
+    ]
+    public = public_analysis_result({
+        "papers": [{"id": item["paper_id"]} for item in records],
+        "evidence": [{"paper_id": item["paper_id"]} for item in records[:3]],
+        "paper_coverage": records,
+        "extraction_failures": ["private provider detail"],
+    })
+    coverage = public["extraction_coverage"]
+    self_total = (
+        coverage["full_text_successes"]
+        + coverage["abstract_successes"]
+        + coverage["abstract_fallback_successes"]
+        + coverage["metadata_only_successes"]
+        + coverage["final_failures"]
+    )
+    assert coverage["requested_for_extraction"] == self_total == 4
+    assert coverage["successful_evidence_records"] == 3
+    assert coverage["failed_extractions"] == 1
+    assert public["full_text_attempt_summary"]["fetch_failures"] == 1
+    assert public["full_text_attempt_summary"]["parse_failures"] == 1
+    assert public["full_text_attempt_summary"]["model_schema_evidence_validation_failures"] == 1
+    assert "extraction_failures" not in public
+
+
+def test_markdown_renders_supported_scientific_sections_and_provenance_only():
+    full_text = {
+        "source": "full_text", "confidence": 0.9,
+        "section_type": "results", "section_heading": "Results", "section_id": "s-results",
+    }
+    report = _markdown_report("An idea", "full", {
+        "full_text_requested": True,
+        "papers": [
+            {"id": "W1", "title": "Canonical paper", "publication_year": 2025,
+             "doi": "10.1/example"},
+            {"id": "W1-alias", "title": "Canonical-paper", "publication_year": 2025,
+             "doi": "https://doi.org/10.1/EXAMPLE"},
+        ],
+        "evidence": [{
+            "paper_id": "W1", "title": "Canonical paper", "study_type": "empirical",
+            "population_or_setting": [{
+                "value": "Enterprise workflows", "evidence_text": "enterprise workflows",
+                "source": "abstract", "confidence": 0.9,
+            }],
+            "datasets": [{
+                "value": "EnterpriseFlow-500", "evidence_text": "EnterpriseFlow-500",
+                **full_text,
+            }],
+            "sample_size": [{
+                "value": "500 examples", "evidence_text": "500 examples", **full_text,
+            }],
+            "comparison_or_baseline": [{
+                "value": "GPT-4 baseline", "evidence_text": "GPT-4 baseline", **full_text,
+            }],
+            "evaluation_metrics": [{
+                "value": "Exact Match", "evidence_text": "Exact Match", **full_text,
+            }],
+            "main_findings": [{
+                "value": "Hallucinations decreased", "evidence_text": "Hallucinations decreased",
+                **full_text,
+            }],
+            "limitations": [], "future_work": [],
+        }],
+        "paper_coverage": [{
+            "paper_id": "W1", "title": "Canonical paper", "full_text_requested": True,
+            "full_text_attempted": True, "final_evidence_level": "full_text",
+            "full_text_status": "usable", "full_text_extraction_succeeded": True,
+            "full_text_source_format": "pdf", "truncated": False,
+            "inspected_section_types": ["results"], "fallback_explanation": None,
+            "final_state": "success", "failure_category": None,
+        }],
+        "gaps": [],
+    })
+    for heading in (
+        "Populations and settings", "Datasets and data modalities", "Sample sizes",
+        "Comparisons and baselines", "Evaluation metrics", "Main findings",
+        "Per-paper coverage",
+    ):
+        assert f"## {heading}" in report
+    assert "> EnterpriseFlow-500" in report
+    assert "Evidence source: full text; heading: Results; section type: results; section ID: s-results." in report
+    assert "Evidence source: abstract." in report
+    assert "full text: usable (PDF)" in report
+    assert "\n## Limitations and future work\n" not in report
+    relevant = report.split("## Relevant papers", 1)[1].split("## Coverage limitations", 1)[0]
+    assert relevant.count("Canonical paper") == 1
 
 
 def test_full_text_request_is_persisted_for_the_pipeline_executor():

@@ -14,6 +14,7 @@ def public_analysis_result(result: dict[str, object]) -> dict[str, object]:
     extraction_count = len(extraction) if isinstance(extraction, list) else 0
     papers = public.get("papers")
     evidence = public.get("evidence")
+    paper_coverage = public.get("paper_coverage")
     work_metrics = public.get("work_metrics")
     selected_count = len(papers) if isinstance(papers, list) else 0
     successful_count = len(evidence) if isinstance(evidence, list) else 0
@@ -28,6 +29,44 @@ def public_analysis_result(result: dict[str, object]) -> dict[str, object]:
             successful_count = configured_successful
         if isinstance(configured_failed, int) and configured_failed >= 0:
             extraction_count = configured_failed
+    coverage_counts: dict[str, int] | None = None
+    attempt_counts: dict[str, int] | None = None
+    if isinstance(paper_coverage, list) and paper_coverage:
+        safe_records = [item for item in paper_coverage if isinstance(item, dict)]
+        levels = {
+            level: sum(item.get("final_evidence_level") == level for item in safe_records)
+            for level in ("full_text", "abstract", "abstract_fallback", "metadata_only")
+        }
+        final_failures = sum(item.get("final_state") == "failure" for item in safe_records)
+        requested_count = len(safe_records)
+        successful_count = requested_count - final_failures
+        extraction_count = final_failures
+        accounted = sum(levels.values()) + final_failures
+        coverage_counts = {
+            "full_text_successes": levels["full_text"],
+            "abstract_successes": levels["abstract"],
+            "abstract_fallback_successes": levels["abstract_fallback"],
+            "metadata_only_successes": levels["metadata_only"],
+            "final_failures": final_failures,
+            "accounted_papers": accounted,
+        }
+        attempt_counts = {
+            "full_text_attempts": sum(bool(item.get("full_text_attempted")) for item in safe_records),
+            "fetch_failures": sum(item.get("full_text_status") == "fetch_failed" for item in safe_records),
+            "parse_failures": sum(item.get("full_text_status") == "parse_failed" for item in safe_records),
+            "truncations": sum(bool(item.get("truncated")) for item in safe_records),
+            "full_text_extraction_successes": sum(
+                bool(item.get("full_text_extraction_succeeded")) for item in safe_records
+            ),
+            "model_schema_evidence_validation_failures": sum(
+                item.get("failure_category") == "model_schema_evidence_validation"
+                for item in safe_records
+            ),
+            "provider_failures": sum(
+                item.get("failure_category") == "provider_failure" for item in safe_records
+            ),
+        }
+
     public["failure_summary"] = {
         "retrieval": retrieval_count,
         "extraction": extraction_count,
@@ -39,7 +78,10 @@ def public_analysis_result(result: dict[str, object]) -> dict[str, object]:
         "failed_extractions": extraction_count,
         "not_requested_for_extraction": max(0, selected_count - requested_count),
         "partial": extraction_count > 0,
+        **(coverage_counts or {}),
     }
+    if attempt_counts is not None:
+        public["full_text_attempt_summary"] = attempt_counts
     messages: list[str] = []
     if retrieval_count:
         messages.append(
@@ -50,6 +92,13 @@ def public_analysis_result(result: dict[str, object]) -> dict[str, object]:
             f"Structured extraction failed for {extraction_count} requested paper(s). "
             "Fields from those papers could not be evaluated; this is partial coverage, "
             "not evidence that the fields were unreported."
+        )
+    if attempt_counts and (
+        attempt_counts["fetch_failures"] or attempt_counts["parse_failures"]
+    ):
+        messages.append(
+            "Full-text access diagnostics are reported separately from final extraction failures; "
+            "a paper can still succeed through abstract or metadata fallback."
         )
     public["coverage_messages"] = messages
     if isinstance(evidence, list):

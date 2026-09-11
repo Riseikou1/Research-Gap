@@ -3,6 +3,7 @@
 from .evidence import (
     EvidenceItem,
     ExtractionCoverage,
+    PaperCoverageRecord,
     LimitationEvidence,
     PaperEvidence,
     StudyType,
@@ -16,6 +17,7 @@ from .store import EvidenceStore
 __all__ = [
     "EvidenceItem",
     "ExtractionCoverage",
+    "PaperCoverageRecord",
     "PaperDocument",
     "PaperSection",
     "FullTextClient",

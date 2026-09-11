@@ -44,6 +44,7 @@ def format_landscape(landscape: LiteratureLandscape) -> str:
         "Evidence sources: "
         f"{levels.get('full_text', 0)} full-text, "
         f"{levels.get('abstract', 0)} abstract-only, "
+        f"{levels.get('abstract_fallback', 0)} abstract fallback, "
         f"{levels.get('metadata_only', 0)} metadata-only",
         "Full-text outcomes: "
         f"{outcomes.get('usable', 0)} usable, "

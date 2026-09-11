@@ -211,6 +211,21 @@ server logs but removed from normal API responses and exports. Full-text coverag
 distinguishes successful inspection, abstract fallback, metadata-only evidence, unavailable text,
 fetch/parse failures, and truncation.
 
+### Deployed scientific smoke check
+
+Use `2024.naacl-industry.19` as a grounding check without treating a smoke test as a paid
+benchmark. With `full_text=false`, confirm that the report retains the hallucination-reduction
+objective, the enterprise workflow-generation setting, Retrieval-Augmented Generation, reduced
+hallucination, out-of-domain generalization, and the smaller-retriever/smaller-LLM finding supported
+by the abstract. It must not add named datasets, sample sizes, baselines, or metric names that are
+absent from that abstract.
+
+With `full_text=true`, first inspect the paper's per-paper coverage record. Confirm datasets, sample
+sizes, baselines, and named metrics only when a supported PDF/XML/HTML source was successfully
+accessed and each populated claim includes the corresponding exact evidence text and full-text
+section provenance. A fetch or parse diagnostic may still end in a successful abstract fallback;
+that evidence must remain labeled as abstract evidence and carry no full-text section provenance.
+
 Verified email addresses receive the two-credit allowance only once across account recreation. The
 server stores a keyed HMAC identity in `lifetime_credit_identities`; it does not store the deleted
 email there. Account deletion is blocked while an active paid subscription remains, deletes the

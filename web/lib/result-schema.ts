@@ -15,12 +15,30 @@ export const evidenceItemSchema = z.object({
 });
 
 export const coverageSchema = z.object({
-  source_level: z.enum(["metadata_only", "abstract", "full_text"]),
+  source_level: z.enum(["metadata_only", "abstract", "abstract_fallback", "full_text"]),
   full_text_status: z.enum(["not_attempted", "unavailable", "fetch_failed", "parse_failed", "usable"]),
+  full_text_requested: z.boolean().default(false),
+  full_text_attempted: z.boolean().default(false),
+  full_text_extraction_succeeded: z.boolean().default(false),
+  full_text_source_format: z.enum(["pdf", "xml", "html", "unknown"]).nullable().optional(),
   inspected_section_types: stringList,
   structure_available: z.boolean().default(false),
   truncated: z.boolean().default(false),
+  fallback_explanation: z.string().nullable().optional(),
   notices: stringList,
+});
+
+const paperCoverageSchema = z.object({
+  paper_id: z.string(), title: z.string(), full_text_requested: z.boolean(),
+  full_text_attempted: z.boolean(),
+  final_evidence_level: z.enum(["full_text", "abstract", "abstract_fallback", "metadata_only", "none"]),
+  full_text_status: z.enum(["not_attempted", "unavailable", "fetch_failed", "parse_failed", "usable"]),
+  full_text_extraction_succeeded: z.boolean().default(false),
+  full_text_source_format: z.enum(["pdf", "xml", "html", "unknown"]).nullable().optional(),
+  truncated: z.boolean().default(false), inspected_section_types: stringList,
+  fallback_explanation: z.string().nullable().optional(),
+  final_state: z.enum(["success", "failure"]),
+  failure_category: z.enum(["provider_failure", "model_schema_evidence_validation"]).nullable().optional(),
 });
 
 const evidenceFields = {
@@ -51,7 +69,8 @@ export const paperSchema = z.object({
   id: z.string(), title: z.string(), abstract: z.string().nullable().default(null),
   authors: stringList, publication_year: z.number().nullable().default(null),
   publication_date: z.string().nullable().optional(), doi: z.string().nullable().default(null),
-  openalex_id: z.string().nullable().optional(), citation_count: z.number().default(0),
+  openalex_id: z.string().nullable().optional(), openalex_aliases: stringList,
+  citation_count: z.number().default(0),
   source: z.string().nullable().optional(), url: z.string().nullable().default(null),
   full_text_locations: z.array(z.object({url: z.string(), source_format: z.string(), is_open_access: z.boolean()})).default([]),
   provenance: z.array(z.unknown()).default([]), lexical_score: z.number().nullable().optional(),
@@ -63,6 +82,9 @@ export const paperSchema = z.object({
 const gapEvidenceSchema = z.object({
   paper_id: z.string(), evidence_type: z.string(), value: z.string(), evidence_text: z.string(),
   study_type: z.string().nullable().optional(), role: z.string(),
+  source: z.enum(["title", "abstract", "full_text"]).nullable().optional(),
+  section_type: z.string().nullable().optional(), section_heading: z.string().nullable().optional(),
+  section_id: z.string().nullable().optional(),
 });
 const verificationQuerySchema = z.object({
   candidate_id: z.string(), query: z.string(), pattern_type: z.string(), strategy: z.string(), source: z.string(),
@@ -116,6 +138,7 @@ export const analysisResultSchema = z.object({
   mode: z.enum(["quick", "full"]).optional(), full_text_requested: z.boolean().default(false),
   candidate_count: z.number().default(0), retrieved_paper_ids: stringList,
   papers: z.array(paperSchema).default([]), evidence: z.array(paperEvidenceSchema).default([]),
+  paper_coverage: z.array(paperCoverageSchema).default([]),
   gaps: z.array(gapSchema).default([]), idea_assessment: ideaAssessmentSchema.nullable().default(null),
   landscape: landscapeSchema, notices: stringList, analysis_notices: stringList,
   coverage_messages: stringList,
@@ -127,7 +150,17 @@ export const analysisResultSchema = z.object({
     failed_extractions: z.number().default(0),
     not_requested_for_extraction: z.number().default(0),
     partial: z.boolean().default(false),
-  }).default({selected_for_report: 0, requested_for_extraction: 0, successful_evidence_records: 0, failed_extractions: 0, not_requested_for_extraction: 0, partial: false}),
+    full_text_successes: z.number().default(0), abstract_successes: z.number().default(0),
+    abstract_fallback_successes: z.number().default(0), metadata_only_successes: z.number().default(0),
+    final_failures: z.number().default(0), accounted_papers: z.number().default(0),
+  }).default({selected_for_report: 0, requested_for_extraction: 0, successful_evidence_records: 0, failed_extractions: 0, not_requested_for_extraction: 0, partial: false, full_text_successes: 0, abstract_successes: 0, abstract_fallback_successes: 0, metadata_only_successes: 0, final_failures: 0, accounted_papers: 0}),
+  full_text_attempt_summary: z.object({
+    full_text_attempts: z.number().default(0), fetch_failures: z.number().default(0),
+    parse_failures: z.number().default(0), truncations: z.number().default(0),
+    full_text_extraction_successes: z.number().default(0),
+    model_schema_evidence_validation_failures: z.number().default(0),
+    provider_failures: z.number().default(0),
+  }).optional(),
   queries: z.array(z.object({text: z.string(), strategy: z.string().optional(), source: z.string().optional()})).default([]),
   ranking_mode: z.string().optional(), work_metrics: z.record(z.string(), z.number()).default({}),
   stage_timings: z.record(z.string(), z.number()).default({}),

@@ -76,6 +76,27 @@ class OpenAI:
         self.responses = Responses(payload)
 
 
+class FailThenSucceedResponses:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        if len(self.calls) == 1:
+            raise RuntimeError("synthetic provider failure")
+        return type("Parsed", (), {"output_parsed": self.payload})()
+
+
+class AlwaysFailResponses:
+    def __init__(self):
+        self.calls = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        raise RuntimeError("synthetic provider failure")
+
+
 class Loader:
     def __init__(self, documents):
         self.documents = documents
@@ -149,6 +170,33 @@ class FullTextTest(unittest.TestCase):
         }
         urls = [item.url for item in _parse_work(work).full_text_locations]
         self.assertEqual(urls, ["https://oa.test/a.pdf", "https://oa.test/a", "https://publisher.test/a", "https://repository.test/a.xml"])
+
+    def test_declared_supported_open_location_precedes_ambiguous_landing_page(self):
+        paper = Paper(
+            id="p", title="Paper", doi="10.1/example",
+            full_text_locations=[
+                FullTextLocation(url="https://example.org/landing", source_format="unknown"),
+                FullTextLocation(url="https://example.org/article.xml", source_format="xml"),
+            ],
+        )
+        client = FullTextClient()
+        attempted = []
+
+        def load_location(paper_id, location):
+            attempted.append(location.url)
+            return PaperDocument(
+                paper_id=paper_id, source_url=location.url,
+                source_format=location.source_format, status="usable",
+                sections=[PaperSection(
+                    id="s", heading="Methods", section_types=["methods"],
+                    text="A sufficiently detailed supported source passage.",
+                )],
+            )
+
+        with patch.object(client, "_load_location", side_effect=load_location):
+            document = client.load(paper)
+        self.assertEqual(document.source_format, "xml")
+        self.assertEqual(attempted, ["https://example.org/article.xml"])
 
     def test_safe_url_validation_rejects_private_and_non_http(self):
         validator = SafeURLValidator(public_resolver)
@@ -313,9 +361,96 @@ class FullTextTest(unittest.TestCase):
             result = PaperExtractor(client=OpenAI(payload), full_text_client=loader).extract(
                 Paper(id="p", title="Paper", abstract=abstract)
             )
-            self.assertEqual(result.coverage.source_level, "abstract")
+            self.assertEqual(result.coverage.source_level, "abstract_fallback")
             self.assertEqual(result.coverage.full_text_status, status)
             self.assertEqual(result.method_or_intervention[0].value, "Model A")
+            self.assertIsNone(result.method_or_intervention[0].section_type)
+
+    def test_fetch_and_parse_failures_are_attempt_diagnostics_not_final_failures(self):
+        abstract = "This study evaluates Model A on a clinical cohort."
+        payload = _ExtractionResult(method_or_intervention=[{
+            "value": "Model A", "evidence_text": "Model A", "source": "abstract",
+            "confidence": 0.9, "role": "primary",
+        }], extraction_confidence=0.8)
+        for status in ("fetch_failed", "parse_failed"):
+            with self.subTest(status=status):
+                document = PaperDocument(
+                    paper_id="p", source_url="https://example.org/paper.pdf",
+                    source_format="pdf", status=status,
+                )
+                extractor = PaperExtractor(
+                    client=OpenAI(payload), full_text_client=Loader({"p": document}),
+                )
+                evidence = extractor.extract_many([
+                    Paper(id="p", title="Paper", abstract=abstract)
+                ])
+                self.assertEqual(len(evidence), 1)
+                coverage = extractor.coverage_records[0]
+                self.assertTrue(coverage.full_text_attempted)
+                self.assertEqual(coverage.full_text_status, status)
+                self.assertEqual(coverage.final_evidence_level, "abstract_fallback")
+                self.assertEqual(coverage.final_state, "success")
+                self.assertEqual(coverage.full_text_source_format, "pdf")
+                self.assertIn("fallback succeeded", coverage.fallback_explanation)
+                self.assertEqual(evidence[0].method_or_intervention[0].source, "abstract")
+                self.assertIsNone(evidence[0].method_or_intervention[0].section_id)
+
+    def test_full_text_extraction_failure_has_one_bounded_abstract_fallback(self):
+        section = PaperSection(
+            id="s1", heading="Methods", section_types=["methods"],
+            text="The paper evaluates Model A in an enterprise workflow setting.",
+        )
+        document = PaperDocument(
+            paper_id="p", source_url="https://example.org/paper.html",
+            source_format="html", status="usable", structure_available=True,
+            sections=[section],
+        )
+        payload = _ExtractionResult(method_or_intervention=[{
+            "value": "Model A", "evidence_text": "Model A", "source": "abstract",
+            "confidence": 0.9, "role": "primary",
+        }], extraction_confidence=0.8)
+        responses = FailThenSucceedResponses(payload)
+        extractor = PaperExtractor(
+            client=type("Client", (), {"responses": responses})(),
+            full_text_client=Loader({"p": document}),
+        )
+        paper = Paper(id="p", title="Paper", abstract="We evaluate Model A.")
+
+        evidence = extractor.extract_many([paper])
+        self.assertEqual(len(responses.calls), 2)
+        self.assertEqual(evidence[0].coverage.source_level, "abstract_fallback")
+        self.assertFalse(evidence[0].coverage.inspected_section_types)
+        self.assertEqual(extractor.coverage_records[0].final_state, "success")
+        self.assertEqual(extractor.coverage_records[0].inspected_section_types, ["methods"])
+        self.assertIn("structured extraction failed", extractor.coverage_records[0].fallback_explanation)
+
+        # The completed fallback result is cached; neither full text nor the
+        # provider is called again for an identical request.
+        extractor.extract(paper)
+        self.assertEqual(len(responses.calls), 2)
+
+    def test_no_abstract_and_failed_full_text_and_metadata_fallback_is_final_failure(self):
+        document = PaperDocument(
+            paper_id="p", source_url="https://example.org/paper.html",
+            source_format="html", status="usable",
+            sections=[PaperSection(
+                id="s1", heading="Methods", section_types=["methods"],
+                text="A sufficiently detailed methods passage for extraction.",
+            )],
+        )
+        responses = AlwaysFailResponses()
+        extractor = PaperExtractor(
+            client=type("Client", (), {"responses": responses})(),
+            full_text_client=Loader({"p": document}),
+        )
+
+        evidence = extractor.extract_many([Paper(id="p", title="Paper")])
+        self.assertEqual(evidence, [])
+        self.assertEqual(len(responses.calls), 2)
+        coverage = extractor.coverage_records[0]
+        self.assertEqual(coverage.final_state, "failure")
+        self.assertEqual(coverage.final_evidence_level, "none")
+        self.assertEqual(coverage.failure_category, "provider_failure")
 
     def test_changed_acquisition_outcome_invalidates_fallback_evidence_cache(self):
         section = PaperSection(id="s1", heading="Methods", section_types=["methods"], text="A sufficiently detailed methods section describes Model A and its controlled evaluation protocol.")
@@ -353,7 +488,10 @@ class FullTextTest(unittest.TestCase):
             ))
         landscape = LandscapeAnalyzer().analyze(records)
         report = format_landscape(landscape)
-        self.assertIn("1 full-text, 1 abstract-only, 1 metadata-only", report)
+        self.assertIn(
+            "1 full-text, 1 abstract-only, 0 abstract fallback, 1 metadata-only",
+            report,
+        )
         self.assertIn("Truncated full-text documents: 1", report)
 
     def test_full_text_cache_uses_parser_version(self):

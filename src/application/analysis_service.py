@@ -20,7 +20,7 @@ from src.ranking.semantic import OpenAIEmbeddingProvider, SemanticScorer
 from src.retrieval.multi_query import MultiQueryRetriever
 from src.retrieval.openalex import OpenAlexRetriever
 
-PIPELINE_VERSION = "m9-v2"
+PIPELINE_VERSION = "m9-v3"
 DecomposerName = Literal["deterministic", "openai"]
 QueryGeneratorName = Literal["deterministic", "openai"]
 
@@ -153,7 +153,7 @@ class AnalysisService:
         settings = self.settings
         return {
             "pipeline_version": PIPELINE_VERSION,
-            "api_schema_version": "m9-v2",
+            "api_schema_version": "m9-v3",
             "mode": mode,
             "decomposer": decomposer,
             "query_generator": query_generator,

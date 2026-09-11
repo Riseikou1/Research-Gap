@@ -1488,6 +1488,10 @@ class GapCandidateGenerator:
                         evidence_type=evidence_type,
                         value=item.value,
                         evidence_text=item.evidence_text,
+                        source=item.source,
+                        section_type=item.section_type,
+                        section_heading=item.section_heading,
+                        section_id=item.section_id,
                         study_type=record.study_type,
                         role=role,
                     )

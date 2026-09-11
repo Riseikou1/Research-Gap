@@ -3,7 +3,7 @@ import unittest
 
 from src.models.paper import Paper, RetrievalProvenance
 from src.models.query import RetrievalMode, SearchQuery
-from src.retrieval.deduplication import deduplicate_paper_models
+from src.retrieval.deduplication import canonicalize_against, deduplicate_paper_models
 
 
 def paper(**updates):
@@ -134,7 +134,7 @@ class TypedDeduplicationTest(unittest.TestCase):
 
         self.assertEqual(len(result), 2)
 
-    def test_similar_titles_and_conflicting_ids_stay_separate(
+    def test_exact_titles_reconcile_openalex_aliases_but_similar_titles_stay_separate(
         self,
     ) -> None:
         result = deduplicate_paper_models(
@@ -156,7 +156,86 @@ class TypedDeduplicationTest(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(
+            set(result[0].openalex_aliases),
+            {"https://openalex.org/W1", "https://openalex.org/W2"},
+        )
+
+    def test_three_naacl_records_become_one_canonical_work(self) -> None:
+        title = "Reducing hallucination in structured outputs via Retrieval-Augmented Generation"
+        result = deduplicate_paper_models([
+            paper(id=openalex_id, openalex_id=openalex_id, title=title, authors=["Edoardo Serra"], abstract=abstract)
+            for openalex_id, abstract in (
+                ("https://openalex.org/W4394838812", "Short abstract."),
+                ("https://openalex.org/W6966460441", "A substantially richer abstract describing the enterprise workflow application."),
+                ("https://openalex.org/W4401042735", None),
+            )
+        ])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            set(result[0].openalex_aliases),
+            {
+                "https://openalex.org/W4394838812",
+                "https://openalex.org/W6966460441",
+                "https://openalex.org/W4401042735",
+            },
+        )
+        self.assertIn("substantially richer", result[0].abstract)
+
+    def test_hyphenated_review_variants_merge_with_year_and_author_support(self) -> None:
+        result = deduplicate_paper_models([
+            paper(
+                id="W7117820692",
+                openalex_id="W7117820692",
+                title="Retrieval-Augmented Generation for Enterprise Applications: A Systematic Review",
+                authors=["A. Researcher"],
+            ),
+            paper(
+                id="W4417026990",
+                openalex_id="W4417026990",
+                title="Retrieval Augmented Generation for Enterprise Applications - A Systematic Review",
+                authors=["A. Researcher"],
+            ),
+        ])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0].openalex_aliases), 2)
+
+    def test_verification_alias_maps_to_initial_canonical_id(self) -> None:
+        title = "Reducing hallucination in structured outputs via Retrieval-Augmented Generation"
+        initial = paper(
+            id="https://openalex.org/W4394838812",
+            openalex_id="https://openalex.org/W4394838812",
+            title=title,
+            authors=["Edoardo Serra"],
+        )
+        verification = paper(
+            id="https://openalex.org/W6966460441",
+            openalex_id="https://openalex.org/W6966460441",
+            title=title,
+            authors=["Edoardo Serra"],
+            abstract="A richer abstract returned during verification.",
+        )
+
+        result = canonicalize_against([verification], [initial])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].id, initial.id)
+        self.assertEqual(len(result[0].openalex_aliases), 2)
+        self.assertIn("richer abstract", result[0].abstract)
+
+    def test_different_similar_reviews_remain_separate(self) -> None:
+        result = deduplicate_paper_models([
+            paper(
+                id="W1", openalex_id="W1", authors=["A. Researcher"],
+                title="A Systematic Review of Retrieval Augmented Generation for Enterprise Applications",
+            ),
+            paper(
+                id="W2", openalex_id="W2", authors=["A. Researcher"],
+                title="A Systematic Review of Retrieval Augmented Generation for Healthcare Applications",
+            ),
+        ])
+        self.assertEqual(len(result), 2)
 
     def test_title_fallback_does_not_bridge_conflicting_dois(
         self,

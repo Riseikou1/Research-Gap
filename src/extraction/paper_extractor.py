@@ -21,6 +21,7 @@ from .evidence import (
     EvidenceItem,
     EvidenceSource,
     LimitationEvidence,
+    PaperCoverageRecord,
     PaperEvidence,
     StudyType,
     canonical_evidence_key,
@@ -36,7 +37,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Increment when the structured extraction contract or its compatibility
 # assumptions change. Old cache rows remain harmless misses after a bump.
-EVIDENCE_SCHEMA_VERSION = 7
+EVIDENCE_SCHEMA_VERSION = 8
 
 
 class PaperExtractionError(RuntimeError):
@@ -525,6 +526,8 @@ class PaperExtractor:
         self.full_text_client = full_text_client
         self.max_full_text_context_chars = max_full_text_context_chars
         self.failures: list[PaperExtractionError] = []
+        self.coverage_records: list[PaperCoverageRecord] = []
+        self._attempt_documents: dict[str, PaperDocument] = {}
         self._cache_lock = RLock()
         self._cache: dict[tuple[str, str, str, str], PaperEvidence] = {}
         self._inflight: dict[tuple[str, str, str, str], Future[PaperEvidence]] = {}
@@ -541,6 +544,7 @@ class PaperExtractor:
             "extraction_repaired_claims": 0,
             "extraction_failed_members": 0,
             "evidence_inflight_hits": 0,
+            "full_text_extraction_fallback_requests": 0,
         }
         self._timings: dict[str, float] = {
             "initial_evidence_extraction_api_wait": 0.0,
@@ -619,20 +623,29 @@ class PaperExtractor:
         """Resolve one paper independently; acquisition errors become coverage."""
 
         if self.full_text_client is None:
-            return PaperDocument(paper_id=paper.id, status="not_attempted")
+            document = PaperDocument(paper_id=paper.id, status="not_attempted")
+            with self._cache_lock:
+                self._attempt_documents[paper.id] = document
+            return document
         try:
-            return self.full_text_client.load(paper)
+            document = self.full_text_client.load(paper)
         except Exception as exc:
             LOGGER.info("full-text enrichment failed paper=%s error=%s", paper.id, exc)
-            return PaperDocument(
+            document = PaperDocument(
                 paper_id=paper.id, status="fetch_failed",
                 notices=[f"full-text enrichment failed: {str(exc)[:240]}"],
             )
+        with self._cache_lock:
+            self._attempt_documents[paper.id] = document
+        return document
 
     def _extract_uncached(
         self,
         paper: Paper,
         document: PaperDocument | None = None,
+        *,
+        use_full_text: bool = True,
+        fallback_explanation: str | None = None,
     ) -> PaperEvidence:
         title = paper.title.strip()
         abstract = paper.abstract.strip() if paper.abstract else None
@@ -648,7 +661,7 @@ class PaperExtractor:
         inspected_sections: list[PaperSection] = []
         context_truncated = False
         instructions = _INSTRUCTIONS
-        if document.status == "usable":
+        if use_full_text and document.status == "usable":
             context, inspected_sections, context_truncated = build_extraction_context(
                 document, max_chars=self.max_full_text_context_chars,
             )
@@ -700,6 +713,12 @@ class PaperExtractor:
                 paper, strict_payload, document=document,
                 inspected_sections=inspected_sections,
                 context_truncated=context_truncated,
+                full_text_requested=self.full_text_client is not None,
+                full_text_used=bool(inspected_sections),
+                fallback_explanation=(
+                    fallback_explanation
+                    or _fallback_explanation(document, paper)
+                ),
             )
 
         except PaperExtractionError:
@@ -944,14 +963,39 @@ class PaperExtractor:
 
         try:
             result = self._extract_uncached(paper, document)
+        except PaperExtractionError as full_text_error:
+            if document.status == "usable" and self.full_text_client is not None:
+                try:
+                    with self._cache_lock:
+                        self._metrics["full_text_extraction_fallback_requests"] += 1
+                    result = self._extract_uncached(
+                        paper,
+                        document,
+                        use_full_text=False,
+                        fallback_explanation=(
+                            "Full-text structured extraction failed; "
+                            + (
+                                "abstract fallback succeeded."
+                                if paper.abstract
+                                else "title metadata fallback succeeded."
+                            )
+                        ),
+                    )
+                except BaseException as fallback_error:
+                    assert pending is not None
+                    self._finish_failure(cache_key, fallback_error, pending)
+                    raise fallback_error from full_text_error
+            else:
+                assert pending is not None
+                self._finish_failure(cache_key, full_text_error, pending)
+                raise
         except BaseException as exc:
             assert pending is not None
             self._finish_failure(cache_key, exc, pending)
             raise
-        else:
-            assert pending is not None
-            self._finish_success(cache_key, result, pending)
-            return result
+        assert pending is not None
+        self._finish_success(cache_key, result, pending)
+        return result
 
     def extract_many(
         self,
@@ -959,6 +1003,9 @@ class PaperExtractor:
         limit: int | None = None,
     ) -> list[PaperEvidence]:
         self.failures = []
+        self.coverage_records = []
+        with self._cache_lock:
+            self._attempt_documents = {}
 
         if limit is not None and limit < 0:
             raise ValueError("limit must be non-negative")
@@ -966,7 +1013,9 @@ class PaperExtractor:
         selected = list(papers)[: self.evidence_limit if limit is None else limit]
 
         if self.full_text_client is None and self.batch_size > 1 and len(selected) > 1:
-            return self._extract_many_batched(selected)
+            results = self._extract_many_batched(selected)
+            self._finalize_coverage_records(selected, results)
+            return results
 
         results: list[PaperEvidence] = []
 
@@ -982,7 +1031,83 @@ class PaperExtractor:
                 except PaperExtractionError as exc:
                     self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
 
+        self._finalize_coverage_records(selected, results)
         return results
+
+    def _finalize_coverage_records(
+        self,
+        requested: Sequence[Paper],
+        evidence: Sequence[PaperEvidence],
+    ) -> None:
+        by_id = {record.paper_id: record for record in evidence}
+        records: list[PaperCoverageRecord] = []
+        for paper in requested:
+            record = by_id.get(paper.id)
+            document = self._attempt_documents.get(paper.id)
+            attempted_section_types: list[SectionType] = []
+            attempted_truncated = False
+            if document is not None and document.status == "usable":
+                _context, attempted_sections, attempted_truncated = (
+                    build_extraction_context(
+                        document,
+                        max_chars=self.max_full_text_context_chars,
+                    )
+                )
+                attempted_section_types = list(dict.fromkeys(
+                    section_type
+                    for section in attempted_sections
+                    for section_type in section.section_types
+                ))
+            if record is not None and record.coverage is not None:
+                coverage = record.coverage
+                records.append(PaperCoverageRecord(
+                    paper_id=paper.id,
+                    title=paper.title,
+                    full_text_requested=coverage.full_text_requested,
+                    full_text_attempted=coverage.full_text_attempted,
+                    final_evidence_level=coverage.source_level,
+                    full_text_status=coverage.full_text_status,
+                    full_text_extraction_succeeded=coverage.full_text_extraction_succeeded,
+                    full_text_source_format=coverage.full_text_source_format,
+                    truncated=bool(coverage.truncated or attempted_truncated),
+                    inspected_section_types=(
+                        attempted_section_types
+                        if coverage.full_text_attempted
+                        else list(coverage.inspected_section_types)
+                    ),
+                    fallback_explanation=coverage.fallback_explanation,
+                    final_state="success",
+                ))
+                continue
+
+            status = document.status if document is not None else "not_attempted"
+            attempted = bool(
+                document
+                and (document.source_url or status in {"fetch_failed", "parse_failed", "usable"})
+            )
+            failure = next(
+                (item for item in self.failures if str(item).startswith(f"{paper.id}:")),
+                None,
+            )
+            records.append(PaperCoverageRecord(
+                paper_id=paper.id,
+                title=paper.title,
+                full_text_requested=self.full_text_client is not None,
+                full_text_attempted=attempted,
+                final_evidence_level="none",
+                full_text_status=status,
+                full_text_extraction_succeeded=False,
+                full_text_source_format=document.source_format if document else None,
+                truncated=bool(
+                    document and document.truncated
+                    or attempted_truncated
+                ),
+                inspected_section_types=attempted_section_types,
+                fallback_explanation=_final_failure_explanation(status, bool(paper.abstract)),
+                final_state="failure",
+                failure_category=_failure_category(failure),
+            ))
+        self.coverage_records = records
 
     def _extract_many_batched(
         self,
@@ -1394,6 +1519,9 @@ def _to_evidence(
     document: PaperDocument | None = None,
     inspected_sections: Sequence[PaperSection] = (),
     context_truncated: bool = False,
+    full_text_requested: bool = False,
+    full_text_used: bool = False,
+    fallback_explanation: str | None = None,
 ) -> PaperEvidence:
     inspected_section_ids = {section.id for section in inspected_sections}
     limitations = [
@@ -1451,7 +1579,7 @@ def _to_evidence(
     if sample_size is None:
         sample_size = _fallback_sample_size(paper)
 
-    return PaperEvidence(
+    result = PaperEvidence(
         paper_id=paper.id,
         title=paper.title,
         study_type=payload.study_type,
@@ -1490,21 +1618,96 @@ def _to_evidence(
             paper, document, inspected_section_ids,
         ),
         extraction_confidence=payload.extraction_confidence,
-        coverage=ExtractionCoverage(
-            source_level=(
-                "full_text" if document and document.status == "usable"
-                else "abstract" if paper.abstract else "metadata_only"
-            ),
-            full_text_status=document.status if document else "not_attempted",
-            inspected_section_types=list(dict.fromkeys(
-                role for section in inspected_sections for role in section.section_types
-            )),
-            structure_available=bool(document and document.structure_available),
-            truncated=bool(
-                context_truncated
-                or document and document.truncated
-                or any(section.truncated for section in inspected_sections)
-            ),
-            notices=list(document.notices) if document else [],
-        ),
     )
+    evidence_items = [
+        item
+        for field_name in (
+            "research_objective", "population_or_setting", "method_or_intervention",
+            "comparison_or_baseline", "data_or_modality", "datasets", "sample_size",
+            "evaluation_metrics", "main_findings", "constraints", "limitations", "future_work",
+        )
+        for item in (
+            getattr(result, field_name)
+            if isinstance(getattr(result, field_name), list)
+            else [getattr(result, field_name)]
+        )
+        if item is not None
+    ]
+    has_full_text_evidence = any(item.source == "full_text" for item in evidence_items)
+    if has_full_text_evidence:
+        source_level = "full_text"
+    elif full_text_requested and paper.abstract:
+        source_level = "abstract_fallback"
+    elif paper.abstract:
+        source_level = "abstract"
+    else:
+        source_level = "metadata_only"
+    attempted = bool(
+        full_text_requested
+        and document
+        and (
+            document.source_url
+            or document.status in {"fetch_failed", "parse_failed", "usable"}
+        )
+    )
+    if source_level == "abstract_fallback" and fallback_explanation is None:
+        fallback_explanation = (
+            "Full text was inspected, but validated evidence came from the abstract."
+        )
+    result.coverage = ExtractionCoverage(
+        source_level=source_level,
+        full_text_status=document.status if document else "not_attempted",
+        full_text_requested=full_text_requested,
+        full_text_attempted=attempted,
+        full_text_extraction_succeeded=full_text_used,
+        full_text_source_format=document.source_format if document and attempted else None,
+        inspected_section_types=list(dict.fromkeys(
+            role for section in inspected_sections for role in section.section_types
+        )),
+        structure_available=bool(full_text_used and document and document.structure_available),
+        truncated=bool(
+            context_truncated
+            or full_text_used and document and document.truncated
+            or any(section.truncated for section in inspected_sections)
+        ),
+        fallback_explanation=fallback_explanation,
+        notices=list(document.notices) if document else [],
+    )
+    return result
+
+
+def _fallback_explanation(document: PaperDocument, paper: Paper) -> str | None:
+    if document.status == "usable":
+        return None
+    fallback = "abstract" if paper.abstract else "title metadata"
+    if document.status == "fetch_failed":
+        return f"Full-text fetch failed; {fallback} fallback succeeded."
+    if document.status == "parse_failed":
+        return f"Full-text parsing failed; {fallback} fallback succeeded."
+    if document.status == "unavailable":
+        return f"Open full text was unavailable; {fallback} fallback succeeded."
+    return None
+
+
+def _final_failure_explanation(status: str, has_abstract: bool) -> str:
+    source = "abstract" if has_abstract else "title metadata"
+    if status == "fetch_failed":
+        return f"Full-text fetch failed and the {source} fallback did not produce validated evidence."
+    if status == "parse_failed":
+        return f"Full-text parsing failed and the {source} fallback did not produce validated evidence."
+    if status == "usable":
+        return f"Full text was inspected, but neither it nor the {source} fallback produced validated evidence."
+    if status == "unavailable":
+        return f"Open full text was unavailable and the {source} fallback did not produce validated evidence."
+    return "Structured extraction did not produce validated evidence."
+
+
+def _failure_category(error: object | None) -> str:
+    message = str(error or "").casefold()
+    if (
+        "invalid evidence response" in message
+        or "validation" in message
+        or "no parsed evidence payload" in message
+    ):
+        return "model_schema_evidence_validation"
+    return "provider_failure"

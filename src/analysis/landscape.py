@@ -17,6 +17,10 @@ from src.models.landscape import (
     SourceCoverageSummary,
 )
 from src.models.paper import Paper
+from src.retrieval.deduplication import (
+    deduplicate_paper_models,
+    papers_represent_same_work,
+)
 
 from .comparison import to_paper_features
 
@@ -136,7 +140,17 @@ class LandscapeAnalyzer:
         evidence: Sequence[PaperEvidence],
         papers: Sequence[Paper] | None = None,
     ) -> LiteratureLandscape:
-        features = to_paper_features(evidence, papers)
+        canonical_papers = (
+            deduplicate_paper_models(papers or [])
+            if papers is not None
+            else None
+        )
+        canonical_evidence = (
+            _canonicalize_evidence(evidence, papers or [], canonical_papers or [])
+            if papers is not None
+            else list(evidence)
+        )
+        features = to_paper_features(canonical_evidence, canonical_papers)
         total = len(features)
 
         return LiteratureLandscape(
@@ -144,14 +158,65 @@ class LandscapeAnalyzer:
             papers=features,
             frequencies=_frequencies(features, total),
             combinations=_combinations(features, total),
-            missing_field_counts=_missing_counts(evidence, features),
-            source_coverage=_source_coverage(evidence),
+            missing_field_counts=_missing_counts(canonical_evidence, features),
+            source_coverage=_source_coverage(canonical_evidence),
             conflicts=_conflicts(features),
         )
 
 
+def _canonicalize_evidence(
+    evidence: Sequence[PaperEvidence],
+    original_papers: Sequence[Paper],
+    canonical_papers: Sequence[Paper],
+) -> list[PaperEvidence]:
+    """Allow each canonical work at most one landscape vote."""
+
+    paper_id_map: dict[str, Paper] = {}
+    for paper in original_papers:
+        matches = [
+            candidate
+            for candidate in canonical_papers
+            if papers_represent_same_work(paper, candidate)
+        ]
+        if len(matches) == 1:
+            paper_id_map[paper.id.casefold()] = matches[0]
+
+    by_canonical_id: OrderedDict[str, PaperEvidence] = OrderedDict()
+    for record in evidence:
+        canonical = paper_id_map.get(record.paper_id.casefold())
+        canonical_id = canonical.id if canonical is not None else record.paper_id
+        normalized = record.model_copy(
+            deep=True,
+            update={
+                "paper_id": canonical_id,
+                "title": canonical.title if canonical is not None else record.title,
+            },
+        )
+        existing = by_canonical_id.get(canonical_id.casefold())
+        if existing is None or _evidence_richness(normalized) > _evidence_richness(existing):
+            by_canonical_id[canonical_id.casefold()] = normalized
+    return list(by_canonical_id.values())
+
+def _evidence_richness(record: PaperEvidence) -> tuple[int, float]:
+    populated = sum(
+        len(value) if isinstance(value, list) else int(value is not None)
+        for field in (
+            "research_objective", "population_or_setting", "method_or_intervention",
+            "comparison_or_baseline", "data_or_modality", "datasets", "sample_size",
+            "evaluation_metrics", "main_findings", "constraints", "limitations", "future_work",
+        )
+        for value in [getattr(record, field)]
+    )
+    return populated, record.extraction_confidence
+
+
 def _source_coverage(evidence: Sequence[PaperEvidence]) -> SourceCoverageSummary:
-    source_levels = {"full_text": 0, "abstract": 0, "metadata_only": 0}
+    source_levels = {
+        "full_text": 0,
+        "abstract": 0,
+        "abstract_fallback": 0,
+        "metadata_only": 0,
+    }
     outcomes = {
         "usable": 0, "unavailable": 0, "fetch_failed": 0,
         "parse_failed": 0, "not_attempted": 0,
