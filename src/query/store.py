@@ -10,6 +10,7 @@ import unicodedata
 from pathlib import Path
 from threading import RLock
 from typing import Any
+from src.persistence.cache import PersistentCache
 
 
 # Bump when planning prompts, transport schemas, or their interpretation
@@ -55,12 +56,17 @@ def planning_cache_key(
 class PlanningStore:
     """Versioned SQLite storage for decomposition/query-generation payloads."""
 
-    def __init__(self, path: str | Path | None) -> None:
+    def __init__(self, path: str | Path | None, *, database_url: str | None = None) -> None:
         self.path = Path(path) if path is not None else None
         self._lock = RLock()
         self._connection: sqlite3.Connection | None = None
+        self._durable = (
+            PersistentCache(path, database_url=database_url)
+            if path is not None and database_url
+            else None
+        )
 
-        if self.path is None:
+        if self.path is None or self._durable is not None:
             return
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +91,12 @@ class PlanningStore:
         self._connection.commit()
 
     def get(self, *, kind: str, key: str) -> Any | None:
+        if self._durable is not None:
+            try:
+                row = self._durable.get(f"planning:{kind}:v{PLANNING_CACHE_VERSION}", key)
+                return json.loads(row[1]) if row is not None else None
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return None
         if self._connection is None:
             return None
 
@@ -112,7 +124,7 @@ class PlanningStore:
             return None
 
     def put(self, *, kind: str, key: str, payload: Any) -> None:
-        if self._connection is None:
+        if self._connection is None and self._durable is None:
             return
 
         encoded = json.dumps(
@@ -120,6 +132,14 @@ class PlanningStore:
             ensure_ascii=False,
             separators=(",", ":"),
         )
+        if self._durable is not None:
+            self._durable.put(
+                f"planning:{kind}:v{PLANNING_CACHE_VERSION}",
+                key,
+                encoded,
+                stored_at=time.time(),
+            )
+            return
         with self._lock:
             self._connection.execute(
                 """

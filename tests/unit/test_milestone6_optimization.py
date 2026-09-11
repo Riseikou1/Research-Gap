@@ -246,7 +246,82 @@ class OptimizationTest(unittest.TestCase):
         result = extractor.extract_many(papers)
         self.assertEqual([item.paper_id for item in result], ["p0", "p1", "p2"])
         self.assertEqual(len(responses.calls), 2)
-        self.assertEqual(extractor.metrics_snapshot()["new_evidence_extractions"], 3)
+        metrics = extractor.metrics_snapshot()
+        self.assertEqual(metrics["new_evidence_extractions"], 3)
+        self.assertEqual(metrics["extraction_batch_requests"], 1)
+        self.assertEqual(metrics["extraction_fallback_requests"], 1)
+
+    def test_invalid_optional_batch_provenance_does_not_retry_valid_members(self):
+        class ProvenanceResponses:
+            def __init__(self):
+                self.calls = 0
+
+            def parse(self, **kwargs):
+                self.calls += 1
+                ids = [
+                    line.removeprefix("Paper ID: ")
+                    for line in kwargs["input"].splitlines()
+                    if line.startswith("Paper ID: ")
+                ]
+                papers = []
+                for paper_id in ids:
+                    claim = {
+                        "value": "study objective",
+                        "evidence_text": "study objective",
+                        "source": "abstract",
+                        "confidence": 0.9,
+                        "section_type": "abstract",
+                        "section_heading": "Abstract",
+                        "section_id": "invalid-for-abstract",
+                    }
+                    if paper_id.startswith("p1::"):
+                        # A genuinely unsupported/mislabeled member is repaired by
+                        # dropping only its bad claim, not by retrying its siblings.
+                        claim.update({
+                            "evidence_text": "text that is absent from the source",
+                            "source": "full_text",
+                            "section_type": "methods",
+                        })
+                    papers.append({
+                        "paper_id": paper_id,
+                        "evidence": {
+                            "research_objective": claim,
+                            "extraction_confidence": 0.9,
+                        },
+                    })
+                payload = {"papers": papers}
+                return SimpleNamespace(
+                    output_parsed=kwargs["text_format"].model_validate(payload)
+                )
+
+        responses = ProvenanceResponses()
+        extractor = PaperExtractor(
+            client=SimpleNamespace(responses=responses),
+            batch_size=3,
+            max_workers=2,
+        )
+        papers = [
+            Paper(id=f"p{index}", title=f"Paper {index}", abstract="study objective")
+            for index in range(3)
+        ]
+
+        records = extractor.extract_many(papers)
+        metrics = extractor.metrics_snapshot()
+
+        self.assertEqual([record.paper_id for record in records], ["p0", "p1", "p2"])
+        self.assertIsNone(records[1].research_objective)
+        for record in (records[0], records[2]):
+            self.assertEqual(record.research_objective.source, "abstract")
+            self.assertIsNone(record.research_objective.section_id)
+        self.assertEqual(responses.calls, 1)
+        self.assertEqual(metrics["openai_extraction_requests"], 1)
+        self.assertEqual(metrics["extraction_batch_requests"], 1)
+        self.assertEqual(metrics["extraction_fallback_requests"], 0)
+        self.assertEqual(metrics["extraction_repair_attempts"], 3)
+        # The former batch-failure path issued one batch call plus one fallback
+        # call per paper. The same deterministic three-paper scenario now uses one.
+        self.assertEqual(1 + len(papers), 4)
+        self.assertLess(metrics["openai_extraction_requests"], 1 + len(papers))
 
 
 if __name__ == "__main__":

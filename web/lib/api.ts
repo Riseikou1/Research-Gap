@@ -1,7 +1,9 @@
 import {z} from "zod";
 import {analysisResultSchema} from "./result-schema";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+import {invalidateHistory} from "./history-events";
+
+const API_URL = "/api/backend";
 const status = z.enum(["pending", "running", "completed", "failed"]);
 export const analysisSchema = z.object({
   analysis_id: z.string(), research_idea: z.string(), status, mode: z.enum(["quick", "full"]),
@@ -50,9 +52,11 @@ export function safeApiMessage(statusCode: number, detail = "") {
 }
 export async function getMe(token?: string | null) { return meSchema.parse(await call("/me", token)); }
 export async function createAnalysis(input: object, token?: string | null) {
-  return z.object({analysis_id: z.string(), status}).parse(await call("/analyses", token, {method: "POST", body: JSON.stringify(input)}));
+  const created = z.object({analysis_id: z.string(), status}).parse(await call("/analyses", token, {method: "POST", body: JSON.stringify(input)}));
+  invalidateHistory();
+  return created;
 }
-export async function getAnalysis(id: string, token?: string | null) { return analysisSchema.parse(await call(`/analyses/${encodeURIComponent(id)}`, token)); }
-export async function getHistory(token?: string | null) { return z.array(analysisSchema.pick({analysis_id: true, research_idea: true, status: true, mode: true, stage: true, created_at: true, completed_at: true})).parse(await call("/analyses", token)); }
+export async function getAnalysis(id: string, token?: string | null, signal?: AbortSignal) { return analysisSchema.parse(await call(`/analyses/${encodeURIComponent(id)}`, token, {signal})); }
+export async function getHistory(token?: string | null, signal?: AbortSignal) { return z.array(analysisSchema.pick({analysis_id: true, research_idea: true, status: true, mode: true, stage: true, created_at: true, completed_at: true})).parse(await call("/analyses", token, {signal})); }
 export async function post(path: string, token?: string | null, body?: object) { return call(path, token, {method: "POST", body: body ? JSON.stringify(body) : undefined}); }
 export {API_URL};

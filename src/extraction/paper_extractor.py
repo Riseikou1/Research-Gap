@@ -17,9 +17,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from src.config import cache_dir, openai_api_key, openai_extraction_model
 from src.models.paper import Paper
 
-from .evidence import EvidenceItem, LimitationEvidence, PaperEvidence, StudyType, canonical_evidence_key
+from .evidence import (
+    EvidenceItem,
+    EvidenceSource,
+    LimitationEvidence,
+    PaperEvidence,
+    StudyType,
+    canonical_evidence_key,
+)
 from .evidence import ExtractionCoverage
-from .document import PaperDocument, PaperSection, build_extraction_context
+from .document import PaperDocument, PaperSection, SectionType, build_extraction_context
 from .full_text import PARSER_VERSION, FullTextClient
 from .store import EvidenceStore
 
@@ -29,7 +36,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Increment when the structured extraction contract or its compatibility
 # assumptions change. Old cache rows remain harmless misses after a bump.
-EVIDENCE_SCHEMA_VERSION = 5
+EVIDENCE_SCHEMA_VERSION = 7
 
 
 class PaperExtractionError(RuntimeError):
@@ -41,6 +48,44 @@ class _LimitationClaim(EvidenceItem):
 
 
 class _MethodClaim(EvidenceItem):
+    role: Literal["primary", "supporting", "comparison"]
+
+
+class _ExtractionClaim(BaseModel):
+    """Typed provider transport before provenance-dependent validation.
+
+    OpenAI Structured Outputs needs one JSON schema for abstract and full-text
+    requests. Section fields therefore remain nullable at this boundary. A
+    single bounded normalization pass below removes impossible section
+    provenance before the strict ``EvidenceItem`` domain model is constructed.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+    value: str = Field(min_length=1)
+    canonical_value: str | None = None
+    evidence_text: str = Field(min_length=1)
+    source: EvidenceSource
+    confidence: float = Field(ge=0.0, le=1.0)
+    section_type: SectionType | None = Field(
+        default=None,
+        description="Only for source=full_text. Must be null for title or abstract evidence.",
+    )
+    section_heading: str | None = Field(
+        default=None,
+        description="Only for source=full_text. Must be null for title or abstract evidence.",
+    )
+    section_id: str | None = Field(
+        default=None,
+        description="Only for source=full_text. Must be null for title or abstract evidence.",
+    )
+
+
+class _ExtractionLimitationClaim(_ExtractionClaim):
+    author_stated: bool
+
+
+class _ExtractionMethodClaim(_ExtractionClaim):
     role: Literal["primary", "supporting", "comparison"]
 
 
@@ -111,11 +156,44 @@ class _ExtractionResult(BaseModel):
     extraction_confidence: float = Field(ge=0.0, le=1.0)
 
 
+class _ExtractionTransportResult(BaseModel):
+    """Provider payload whose members are normalized into `_ExtractionResult`."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    research_objective: _ExtractionClaim | None = None
+    population_or_setting: list[_ExtractionClaim] = Field(default_factory=list)
+    method_or_intervention: list[_ExtractionMethodClaim] = Field(default_factory=list)
+    comparison_or_baseline: list[_ExtractionClaim] = Field(
+        default_factory=list,
+        description="Methods or systems explicitly compared with the focal method.",
+    )
+    data_or_modality: list[_ExtractionClaim] = Field(default_factory=list)
+    datasets: list[_ExtractionClaim] = Field(
+        default_factory=list,
+        description="Named datasets or source-explicit, identifiable dataset descriptions; not merely input requirements or an application setting.",
+    )
+    sample_size: _ExtractionClaim | None = Field(
+        default=None,
+        description="An explicit numerical sample count with a defined unit, such as participants, records, documents, or examples.",
+    )
+    evaluation_metrics: list[_ExtractionClaim] = Field(
+        default_factory=list,
+        description="Only explicitly stated evaluation metric names; outcome statements belong in main_findings.",
+    )
+    main_findings: list[_ExtractionClaim] = Field(default_factory=list)
+    constraints: list[_ExtractionClaim] = Field(default_factory=list)
+    limitations: list[_ExtractionLimitationClaim] = Field(default_factory=list)
+    future_work: list[_ExtractionClaim] = Field(default_factory=list)
+    study_type: StudyType = "other"
+    extraction_confidence: float = Field(ge=0.0, le=1.0)
+
+
 class _BatchPaperExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     paper_id: str = Field(min_length=1)
-    evidence: _ExtractionResult
+    evidence: _ExtractionTransportResult
 
 
 class _BatchExtractionResult(BaseModel):
@@ -139,6 +217,9 @@ For every claim:
   concepts and meaningful qualifiers must remain distinct;
 - evidence_text must be copied directly from the title or abstract;
 - source must be exactly "title" or "abstract";
+- section_type, section_heading, and section_id must be absent or null for
+  title and abstract evidence; these fields are valid only for a claim copied
+  from an actual supplied full-text section;
 - confidence describes extraction confidence, not scientific truth.
 
 CANONICAL CONCEPTS
@@ -214,6 +295,11 @@ Do not create dataset entities from vague phrases such as:
 
 unless the data can actually be identified.
 
+Natural-language requirements, an application setting, or another input
+description is not by itself a dataset. Put it in data_or_modality or
+population_or_setting when appropriate unless the source identifies it as a
+dataset or data collection.
+
 SAMPLE SIZE
 
 Extract an explicit numerical number of images, samples, participants,
@@ -229,6 +315,10 @@ Do not infer sample size from:
 METRICS
 
 Extract only explicitly stated evaluation metric names.
+
+An outcome such as "reduced hallucination" or "improved generalization" is a
+finding, not a metric name. Extract a metric only when the source explicitly
+names what was measured, such as Hallucination Rate, accuracy, F1, or latency.
 
 FINDINGS
 
@@ -407,6 +497,7 @@ class PaperExtractor:
         evidence_limit: int = 10,
         max_workers: int = max(1, (os.cpu_count() or 2) // 2),
         cache_path: str | Path | None = None,
+        cache_database_url: str | None = None,
         batch_size: int = 1,
         max_batch_input_chars: int = 24000,
         full_text_client: FullTextClient | None = None,
@@ -443,6 +534,13 @@ class PaperExtractor:
             "persistent_cache_hits": 0,
             "new_evidence_extractions": 0,
             "openai_extraction_requests": 0,
+            "extraction_batch_requests": 0,
+            "extraction_batch_members": 0,
+            "extraction_fallback_requests": 0,
+            "extraction_repair_attempts": 0,
+            "extraction_repaired_claims": 0,
+            "extraction_failed_members": 0,
+            "evidence_inflight_hits": 0,
         }
         self._timings: dict[str, float] = {
             "initial_evidence_extraction_api_wait": 0.0,
@@ -452,7 +550,7 @@ class PaperExtractor:
             self.client = client
             # Unit-test fakes stay isolated by default. Supplying cache_path
             # explicitly enables the same persistent behavior for them.
-            self.evidence_store = EvidenceStore(cache_path)
+            self.evidence_store = EvidenceStore(cache_path, database_url=cache_database_url)
             return
 
         key = api_key or openai_api_key()
@@ -466,7 +564,8 @@ class PaperExtractor:
 
         self.client = OpenAI(api_key=key)
         self.evidence_store = EvidenceStore(
-            cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3"
+            cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3",
+            database_url=cache_database_url,
         )
 
     def _cache_key(
@@ -571,7 +670,7 @@ class PaperExtractor:
                 max_output_tokens=self.max_output_tokens,
                 instructions=instructions,
                 input=source,
-                text_format=_ExtractionResult,
+                text_format=_ExtractionTransportResult,
             )
             with self._cache_lock:
                 self._timings["initial_evidence_extraction_api_wait"] += (
@@ -579,11 +678,26 @@ class PaperExtractor:
                 )
 
             payload = getattr(response, "output_parsed", None)
-            if not isinstance(payload, _ExtractionResult):
+            if not isinstance(payload, (_ExtractionTransportResult, _ExtractionResult)):
                 raise PaperExtractionError("OpenAI returned no parsed evidence payload.")
 
+            strict_payload, repaired = _normalize_extraction_payload(
+                payload,
+                paper,
+                full_text_allowed=bool(inspected_sections),
+            )
+            if repaired:
+                with self._cache_lock:
+                    self._metrics["extraction_repair_attempts"] += 1
+                    self._metrics["extraction_repaired_claims"] += repaired
+                LOGGER.info(
+                    "normalized extraction provenance paper=%s repaired_claims=%d",
+                    paper.id,
+                    repaired,
+                )
+
             return _to_evidence(
-                paper, payload, document=document,
+                paper, strict_payload, document=document,
                 inspected_sections=inspected_sections,
                 context_truncated=context_truncated,
             )
@@ -591,8 +705,20 @@ class PaperExtractor:
         except PaperExtractionError:
             raise
         except (ValidationError, TypeError, ValueError) as exc:
+            LOGGER.warning(
+                "invalid structured evidence response paper=%s error_type=%s error=%s",
+                paper.id,
+                type(exc).__name__,
+                exc,
+            )
             raise PaperExtractionError(f"Invalid evidence response: {exc}") from exc
         except Exception as exc:
+            LOGGER.warning(
+                "evidence provider request failed paper=%s error_type=%s error=%s",
+                paper.id,
+                type(exc).__name__,
+                exc,
+            )
             raise PaperExtractionError(f"Evidence extraction failed: {exc}") from exc
 
     def _extract_uncached_batch(
@@ -620,6 +746,8 @@ class PaperExtractor:
         try:
             with self._cache_lock:
                 self._metrics["openai_extraction_requests"] += 1
+                self._metrics["extraction_batch_requests"] += 1
+                self._metrics["extraction_batch_members"] += len(papers)
             started = perf_counter()
             response = self.client.responses.parse(
                 model=self.model,
@@ -642,8 +770,20 @@ class PaperExtractor:
         except PaperExtractionError:
             raise
         except (ValidationError, TypeError, ValueError) as exc:
+            LOGGER.warning(
+                "invalid structured evidence batch members=%d error_type=%s error=%s",
+                len(papers),
+                type(exc).__name__,
+                exc,
+            )
             raise PaperExtractionError(f"Invalid batch evidence response: {exc}") from exc
         except Exception as exc:
+            LOGGER.warning(
+                "evidence batch provider request failed members=%d error_type=%s error=%s",
+                len(papers),
+                type(exc).__name__,
+                exc,
+            )
             raise PaperExtractionError(f"Batch evidence extraction failed: {exc}") from exc
 
         result: dict[str, PaperEvidence] = {}
@@ -655,10 +795,32 @@ class PaperExtractor:
             seen_request_ids.add(item.paper_id)
             content_hash, paper = mapping
             try:
-                result[content_hash] = _to_evidence(paper, item.evidence)
-            except (PaperExtractionError, TypeError, ValueError):
+                strict_payload, repaired = _normalize_extraction_payload(
+                    item.evidence,
+                    paper,
+                    full_text_allowed=False,
+                )
+                if repaired:
+                    with self._cache_lock:
+                        self._metrics["extraction_repair_attempts"] += 1
+                        self._metrics["extraction_repaired_claims"] += repaired
+                    LOGGER.info(
+                        "normalized batch extraction provenance paper=%s repaired_claims=%d",
+                        paper.id,
+                        repaired,
+                    )
+                result[content_hash] = _to_evidence(paper, strict_payload)
+            except (PaperExtractionError, ValidationError, TypeError, ValueError) as exc:
                 # Only this member is invalid; its sibling results remain
                 # eligible for completion and caching.
+                with self._cache_lock:
+                    self._metrics["extraction_failed_members"] += 1
+                LOGGER.warning(
+                    "invalid structured evidence batch member paper=%s error_type=%s error=%s",
+                    paper.id,
+                    type(exc).__name__,
+                    exc,
+                )
                 continue
         return result
 
@@ -726,6 +888,7 @@ class PaperExtractor:
 
             pending = self._inflight.get(cache_key)
             if pending is not None:
+                self._metrics["evidence_inflight_hits"] += 1
                 return cache_key, None, pending, False
 
             pending = Future()
@@ -876,11 +1039,93 @@ class PaperExtractor:
             # A failed batch member is retried alone. Other valid members have
             # already been completed and cached, so they are never re-extracted.
             try:
+                with self._cache_lock:
+                    self._metrics["extraction_fallback_requests"] += 1
                 result = self._extract_uncached(paper)
             except BaseException as exc:
                 self._finish_failure(cache_key, exc, pending)
             else:
                 self._finish_success(cache_key, result, pending)
+
+
+_LIST_CLAIM_FIELDS = (
+    "population_or_setting",
+    "method_or_intervention",
+    "comparison_or_baseline",
+    "data_or_modality",
+    "datasets",
+    "evaluation_metrics",
+    "main_findings",
+    "constraints",
+    "limitations",
+    "future_work",
+)
+
+
+def _normalize_extraction_payload(
+    payload: _ExtractionTransportResult | _ExtractionResult,
+    paper: Paper,
+    *,
+    full_text_allowed: bool,
+) -> tuple[_ExtractionResult, int]:
+    """Normalize impossible optional provenance once, then validate strictly.
+
+    The repair is deliberately narrow: it clears section-only properties from
+    title/abstract evidence. If an abstract-only request is mislabeled as
+    full-text, it is reassigned only when its verbatim evidence can be located
+    in the supplied title or abstract; otherwise that one claim is dropped.
+    Values, evidence text, roles, confidence, and paper identity are untouched.
+    """
+
+    raw = payload.model_dump(mode="python")
+    repaired = 0
+
+    def normalize_claim(claim: dict[str, object]) -> dict[str, object] | None:
+        nonlocal repaired
+        source = claim.get("source")
+        section_fields = ("section_type", "section_heading", "section_id")
+
+        if source == "full_text" and not full_text_allowed:
+            evidence_text = claim.get("evidence_text")
+            if not isinstance(evidence_text, str):
+                repaired += 1
+                return None
+            normalized_evidence = _normalize(evidence_text)
+            if normalized_evidence and normalized_evidence in _normalize(paper.title):
+                claim["source"] = "title"
+            elif normalized_evidence and normalized_evidence in _normalize(paper.abstract or ""):
+                claim["source"] = "abstract"
+            else:
+                repaired += 1
+                return None
+            repaired += 1
+            source = claim["source"]
+
+        if source in {"title", "abstract"}:
+            if any(claim.get(field) is not None for field in section_fields):
+                repaired += 1
+            for field in section_fields:
+                claim[field] = None
+        return claim
+
+    for field_name in _LIST_CLAIM_FIELDS:
+        value = raw.get(field_name)
+        if not isinstance(value, list):
+            continue
+        normalized_items: list[dict[str, object]] = []
+        for item in value:
+            if isinstance(item, dict):
+                normalized = normalize_claim(item)
+                if normalized is not None:
+                    normalized_items.append(normalized)
+        raw[field_name] = normalized_items
+
+    for field_name in ("research_objective", "sample_size"):
+        item = raw.get(field_name)
+        if isinstance(item, dict):
+            raw[field_name] = normalize_claim(item)
+
+    return _ExtractionResult.model_validate(raw), repaired
 
 
 def _normalize(text: str) -> str:

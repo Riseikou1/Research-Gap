@@ -141,11 +141,16 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
         lines.extend(["", "## Executive summary", "", str(rationale)])
 
     evidence = public.get("evidence", [])
+    papers = public.get("papers", [])
+    paper_titles = {
+        str(paper.get("id")): str(paper.get("title") or "Paper record")
+        for paper in papers if isinstance(papers, list) and isinstance(paper, dict)
+    }
     if isinstance(evidence, list) and evidence:
-        _markdown_evidence_section(lines, "What the literature already studies well", evidence, "research_objective")
-        _markdown_evidence_section(lines, "Common methods", evidence, "method_or_intervention")
-        _markdown_evidence_section(lines, "Main findings", evidence, "main_findings")
-        _markdown_evidence_section(lines, "Important limitations and future work", evidence, "limitations", "future_work")
+        _markdown_evidence_section(lines, "What the literature already studies well", evidence, paper_titles, "research_objective")
+        _markdown_evidence_section(lines, "Common methods", evidence, paper_titles, "method_or_intervention")
+        _markdown_evidence_section(lines, "Main findings", evidence, paper_titles, "main_findings")
+        _markdown_evidence_section(lines, "Important limitations and future work", evidence, paper_titles, "limitations", "future_work")
 
     gaps = public.get("gaps", [])
     if mode == "full" and isinstance(gaps, list) and gaps:
@@ -157,7 +162,8 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
             lines.extend(["", str(gap.get("description") or ""), "", str(gap.get("rationale") or "")])
             paper_ids = gap.get("supporting_paper_ids") or []
             if isinstance(paper_ids, list) and paper_ids:
-                lines.extend(["", "Supporting papers: " + ", ".join(map(str, paper_ids))])
+                citations = [f"{paper_titles.get(str(item), 'Paper record')} ({item})" for item in paper_ids]
+                lines.extend(["", "Supporting papers: " + ", ".join(citations)])
             verification = gap.get("verification") or {}
             if isinstance(verification, dict) and verification.get("reason"):
                 lines.extend(["", "Verification: " + str(verification["reason"])])
@@ -166,9 +172,17 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
     coverage = landscape.get("source_coverage") or {} if isinstance(landscape, dict) else {}
     levels = coverage.get("source_levels") or {} if isinstance(coverage, dict) else {}
     outcomes = coverage.get("full_text_outcomes") or {} if isinstance(coverage, dict) else {}
+    extraction = public.get("extraction_coverage") or {}
     lines.extend(["", "## Full-text and evidence coverage", "",
-                  f"Full text requested: {'yes' if public.get('full_text_requested') else 'no'}.",
-                  f"Selected evidence records: {len(evidence) if isinstance(evidence, list) else 0}."])
+                  f"Full text requested: {'yes' if public.get('full_text_requested') else 'no'}."])
+    if isinstance(extraction, dict):
+        lines.append(
+            "Retrieved candidates: " + str(public.get("candidate_count", 0))
+            + "; selected for reporting: " + str(extraction.get("selected_for_report", 0))
+            + "; requested for structured extraction: " + str(extraction.get("requested_for_extraction", 0))
+            + "; successful evidence records: " + str(extraction.get("successful_evidence_records", 0))
+            + "; failed extractions: " + str(extraction.get("failed_extractions", 0)) + "."
+        )
     if isinstance(levels, dict):
         lines.append(
             f"Full text: {levels.get('full_text', 0)}; abstract fallback: {levels.get('abstract', 0)}; metadata only: {levels.get('metadata_only', 0)}."
@@ -179,7 +193,6 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
         )
 
     lines.extend(["", "## Relevant papers", ""])
-    papers = public.get("papers", [])
     for paper in papers if isinstance(papers, list) else []:
         if isinstance(paper, dict):
             lines.append(f"- {paper.get('title', 'Untitled')} ({paper.get('publication_year') or 'year unavailable'})")
@@ -189,7 +202,7 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
 
 
 def _markdown_evidence_section(lines: list[str], heading: str,
-                               evidence: list[object], *fields: str) -> None:
+                               evidence: list[object], paper_titles: dict[str, str], *fields: str) -> None:
     values: list[str] = []
     for record in evidence:
         if not isinstance(record, dict):
@@ -199,6 +212,7 @@ def _markdown_evidence_section(lines: list[str], heading: str,
             items = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else []
             for item in items:
                 if isinstance(item, dict) and item.get("value"):
-                    values.append(f"- {item['value']} — {record.get('paper_id', 'paper ID unavailable')}")
+                    paper_id = str(record.get("paper_id", "paper ID unavailable"))
+                    values.append(f"- {item['value']} — {paper_titles.get(paper_id, 'Paper record')} ({paper_id})")
     if values:
         lines.extend(["", f"## {heading}", "", *values])

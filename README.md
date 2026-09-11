@@ -57,11 +57,13 @@ papers is never treated as proof that no work exists.
 `--show-landscape` prints the deterministic Milestone-5 literature landscape: normalized feature
 frequencies, observed combinations, evidence coverage, and conservatively comparable conflicts.
 
-Provider-backed planning and raw retrieval results use the local SQLite cache under
-`RESEARCH_GAP_CACHE_DIR`. Planning rows are versioned by normalized idea, provider/model, and
-planning configuration; retrieval rows expire after `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS`.
-Evidence and paper embeddings use the same database, while ranking and gap reasoning still run on
-every invocation.
+Provider-backed planning, retrieval, embeddings, evidence, and full-text artifacts use a shared
+versioned cache. Local development uses SQLite under `RESEARCH_GAP_CACHE_DIR`; when `DATABASE_URL`
+is set, the same cache is stored durably in PostgreSQL so Render restarts and deployments do not
+discard it. Planning rows include normalized idea, provider/model, prompt and planning inputs;
+retrieval rows expire after `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS`; evidence, embedding, and
+full-text keys include their scientific content and relevant schema/parser/model versions. Ranking
+and gap reasoning still run on every invocation.
 
 Full-text enrichment is opt-in with `--full-text`. It runs only for the already selected
 `RESEARCH_GAP_EVIDENCE_LIMIT` papers, follows metadata-declared open-access locations, and accepts
@@ -107,7 +109,7 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_RETRIEVAL_CACHE_TTL_SECONDS` | `21600` | Freshness window for persistent retrieval results |
 | `RESEARCH_GAP_CACHE_DIR` | `data/cache` | Local SQLite cache directory |
 | `RESEARCH_GAP_DATABASE_PATH` | `data/research_gap.sqlite3` | Durable analysis-history database |
-| `DATABASE_URL` | unset | PostgreSQL URL for durable application data; overrides the SQLite path |
+| `DATABASE_URL` | unset | PostgreSQL URL for durable application data and provider caches; overrides local SQLite |
 | `RESEARCH_GAP_MAX_ANALYSIS_WORKERS` | `2` | Maximum concurrent API analysis jobs |
 | `RESEARCH_GAP_FULL_TEXT_TIMEOUT_SECONDS` | `12` | Per-document request timeout |
 | `RESEARCH_GAP_FULL_TEXT_MAX_BYTES` | `8000000` | Maximum streamed response bytes |

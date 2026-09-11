@@ -17,6 +17,7 @@ except ModuleNotFoundError as exc:  # Local contributors may not have installed 
     raise unittest.SkipTest(f"FastAPI test dependencies unavailable: {exc}")
 
 from src.api.app import create_app
+from src.application import PIPELINE_VERSION
 from src.config import Settings
 
 
@@ -69,7 +70,7 @@ class ApiTest(unittest.TestCase):
         record = self.wait_for_terminal(analysis_id)
         self.assertEqual(record["status"], "completed")
         self.assertEqual(record["result"]["papers"][0]["id"], "W1")
-        self.assertEqual(record["configuration"]["pipeline_version"], "m8-v1")
+        self.assertEqual(record["configuration"]["pipeline_version"], PIPELINE_VERSION)
         serialized = str(record["configuration"])
         self.assertNotIn("sk-local-test-secret", serialized)
         self.assertNotIn("openalex-test-secret", serialized)

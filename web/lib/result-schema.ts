@@ -120,9 +120,18 @@ export const analysisResultSchema = z.object({
   landscape: landscapeSchema, notices: stringList, analysis_notices: stringList,
   coverage_messages: stringList,
   failure_summary: z.object({retrieval: z.number().default(0), extraction: z.number().default(0)}).default({retrieval: 0, extraction: 0}),
+  extraction_coverage: z.object({
+    selected_for_report: z.number().default(0),
+    requested_for_extraction: z.number().default(0),
+    successful_evidence_records: z.number().default(0),
+    failed_extractions: z.number().default(0),
+    not_requested_for_extraction: z.number().default(0),
+    partial: z.boolean().default(false),
+  }).default({selected_for_report: 0, requested_for_extraction: 0, successful_evidence_records: 0, failed_extractions: 0, not_requested_for_extraction: 0, partial: false}),
   queries: z.array(z.object({text: z.string(), strategy: z.string().optional(), source: z.string().optional()})).default([]),
   ranking_mode: z.string().optional(), work_metrics: z.record(z.string(), z.number()).default({}),
   stage_timings: z.record(z.string(), z.number()).default({}),
+  duration_seconds: z.number().nonnegative().nullable().optional(),
 });
 
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;

@@ -45,6 +45,7 @@ class ResearchResult:
     idea_assessment: IdeaAssessment | None = None
     work_metrics: dict[str, int] = field(default_factory=dict)
     stage_timings: dict[str, float] = field(default_factory=dict)
+    duration_seconds: float | None = None
 
     def to_dict(self) -> dict[str, object]:
         gap_payloads = []
@@ -74,6 +75,7 @@ class ResearchResult:
             "idea_assessment": self.idea_assessment.model_dump(mode="json") if self.idea_assessment else None,
             "work_metrics": dict(self.work_metrics),
             "stage_timings": dict(self.stage_timings),
+            "duration_seconds": self.duration_seconds,
         }
 
 
@@ -111,6 +113,7 @@ class ResearchPipeline:
 
     def run(self, idea_text: str, *, top_k: int = 20,
             progress: Callable[[str, dict[str, object] | None], object] | None = None) -> ResearchResult:
+        wall_started = perf_counter()
         if not 1 <= top_k <= self.retriever.max_candidates:
             raise ValueError(
                 f"top_k must be between 1 and {self.retriever.max_candidates}"
@@ -167,6 +170,7 @@ class ResearchPipeline:
         analysis_notices: list[str] = []
         landscape: LiteratureLandscape | None = None
         idea_assessment: IdeaAssessment | None = None
+        initial_extractor_after = dict(extractor_before)
         if self.extractor:
             notify("reading_selected_papers", {"paper_count": len(selected)})
             get_many = getattr(
@@ -190,6 +194,7 @@ class ResearchPipeline:
                 ),
             )
             extraction_failures = [str(error) for error in self.extractor.failures]
+            initial_extractor_after = _component_metrics(self.extractor)
             notify("building_landscape", {"evidence_count": len(evidence)})
             started = perf_counter()
             landscape = self.landscape_analyzer.analyze(evidence, selected)
@@ -226,6 +231,9 @@ class ResearchPipeline:
             selected_papers=selected,
             extractor_before=extractor_before,
             extractor_after=_component_metrics(self.extractor),
+            initial_extractor_after=initial_extractor_after,
+            initial_evidence_records=len(evidence),
+            initial_extraction_failures=len(extraction_failures),
             embedding_before=embedding_before,
             embedding_after=_component_metrics(embedding_provider),
             verifier_before=verifier_before,
@@ -259,6 +267,7 @@ class ResearchPipeline:
             idea_assessment=idea_assessment,
             work_metrics=work_metrics,
             stage_timings=stage_timings,
+            duration_seconds=perf_counter() - wall_started,
         )
 
 
@@ -307,6 +316,9 @@ def _build_work_metrics(
     selected_papers: list[Paper],
     extractor_before: dict[str, int],
     extractor_after: dict[str, int],
+    initial_extractor_after: dict[str, int],
+    initial_evidence_records: int,
+    initial_extraction_failures: int,
     embedding_before: dict[str, int],
     embedding_after: dict[str, int],
     verifier_before: dict[str, int],
@@ -331,11 +343,14 @@ def _build_work_metrics(
         # implement the extract_many interface without metrics.
         evidence_requested = len(selected_papers)
 
-    evidence_requested += _metric_delta(
-        verifier_before,
-        verifier_after,
-        "verification_evidence_requested",
-    )
+    if "evidence_requested" in extractor_before or "evidence_requested" in initial_extractor_after:
+        initial_evidence_requested = _metric_delta(
+            extractor_before,
+            initial_extractor_after,
+            "evidence_requested",
+        )
+    else:
+        initial_evidence_requested = len(selected_papers)
 
     return {
         "retrieved_papers": len(retrieval_papers),
@@ -354,6 +369,10 @@ def _build_work_metrics(
         ),
         "candidate_hypotheses_displayed": displayed_candidates,
         "evidence_requested": evidence_requested,
+        "papers_selected_for_report": len(selected_papers),
+        "papers_requested_for_initial_extraction": initial_evidence_requested,
+        "successful_initial_evidence_records": initial_evidence_records,
+        "failed_initial_extractions": initial_extraction_failures,
         "memory_cache_hits": _metric_delta(
             extractor_before,
             extractor_after,
@@ -383,6 +402,27 @@ def _build_work_metrics(
             extractor_before,
             extractor_after,
             "openai_extraction_requests",
+        ),
+        "extraction_batch_requests": _metric_delta(
+            extractor_before, extractor_after, "extraction_batch_requests"
+        ),
+        "extraction_batch_members": _metric_delta(
+            extractor_before, extractor_after, "extraction_batch_members"
+        ),
+        "extraction_fallback_requests": _metric_delta(
+            extractor_before, extractor_after, "extraction_fallback_requests"
+        ),
+        "extraction_repair_attempts": _metric_delta(
+            extractor_before, extractor_after, "extraction_repair_attempts"
+        ),
+        "extraction_repaired_claims": _metric_delta(
+            extractor_before, extractor_after, "extraction_repaired_claims"
+        ),
+        "extraction_failed_members": _metric_delta(
+            extractor_before, extractor_after, "extraction_failed_members"
+        ),
+        "evidence_inflight_hits": _metric_delta(
+            extractor_before, extractor_after, "evidence_inflight_hits"
         ),
         "verification_queries_executed": _metric_delta(
             verifier_before,

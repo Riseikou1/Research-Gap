@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import ipaddress
 import json
 import logging
@@ -23,6 +24,7 @@ from defusedxml import ElementTree
 from bs4 import BeautifulSoup
 
 from src.models.paper import FullTextLocation, Paper
+from src.persistence.cache import PersistentCache
 
 from .document import PaperDocument, PaperSection, SourceFormat, normalize_heading
 
@@ -90,10 +92,15 @@ class SafeURLValidator:
 
 
 class FullTextStore:
-    def __init__(self, path: str | Path | None) -> None:
+    def __init__(self, path: str | Path | None, *, database_url: str | None = None) -> None:
         self.connection: sqlite3.Connection | None = None
+        self.durable = (
+            PersistentCache(path, database_url=database_url)
+            if path is not None and database_url
+            else None
+        )
         self.lock = RLock()
-        if path is None:
+        if path is None or self.durable is not None:
             return
         cache_path = Path(path)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,6 +114,19 @@ class FullTextStore:
         self.connection.commit()
 
     def get(self, paper_id: str, source_url: str, *, negative_ttl: float) -> PaperDocument | None:
+        cache_key = self._cache_key(paper_id, source_url)
+        if self.durable is not None:
+            row = self.durable.get("full-text", cache_key)
+            if row is None:
+                return None
+            stored_at, payload = row
+            try:
+                document = PaperDocument.model_validate(json.loads(payload))
+            except (ValueError, TypeError, json.JSONDecodeError):
+                return None
+            if document.status != "usable" and time.time() - stored_at > negative_ttl:
+                return None
+            return document
         if self.connection is None:
             return None
         with self.lock:
@@ -125,15 +145,30 @@ class FullTextStore:
         return document
 
     def put(self, document: PaperDocument) -> None:
-        if self.connection is None or not document.source_url:
+        if (self.connection is None and self.durable is None) or not document.source_url:
+            return
+        payload = json.dumps(document.model_dump(mode="json"), ensure_ascii=False)
+        if self.durable is not None:
+            self.durable.put(
+                "full-text",
+                self._cache_key(document.paper_id, document.source_url),
+                payload,
+                stored_at=time.time(),
+            )
             return
         with self.lock:
             self.connection.execute(
                 "INSERT OR REPLACE INTO full_text_cache VALUES (?, ?, ?, ?, ?)",
                 (document.paper_id, document.source_url, PARSER_VERSION, time.time(),
-                 json.dumps(document.model_dump(mode="json"), ensure_ascii=False)),
+                 payload),
             )
             self.connection.commit()
+
+    @staticmethod
+    def _cache_key(paper_id: str, source_url: str) -> str:
+        return hashlib.sha256(
+            "\0".join((paper_id, source_url, PARSER_VERSION)).encode("utf-8")
+        ).hexdigest()
 
 
 class FullTextClient:
@@ -143,6 +178,7 @@ class FullTextClient:
         max_chunk_chars: int = 8_000, max_redirects: int = 3,
         validator: SafeURLValidator | None = None, opener=None,
         cache_path: str | Path | None = None, negative_ttl_seconds: float = 3600,
+        cache_database_url: str | None = None,
     ) -> None:
         if min(
             timeout, max_bytes, max_document_chars, max_section_chars,
@@ -156,7 +192,7 @@ class FullTextClient:
         self.max_chunk_chars, self.negative_ttl_seconds = max_chunk_chars, negative_ttl_seconds
         self.validator = validator or SafeURLValidator()
         self.opener = opener or build_opener(_SafeRedirectHandler(self.validator, max_redirects)).open
-        self.store = FullTextStore(cache_path)
+        self.store = FullTextStore(cache_path, database_url=cache_database_url)
 
     def load(self, paper: Paper) -> PaperDocument:
         if not paper.full_text_locations:

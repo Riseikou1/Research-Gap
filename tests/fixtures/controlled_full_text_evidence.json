@@ -1,0 +1,88 @@
+{
+  "paper": {
+    "id": "controlled-full-text-paper",
+    "title": "Controlled evaluation of a grounded workflow generator",
+    "abstract": "We evaluate a grounded workflow generator in an enterprise setting."
+  },
+  "document": {
+    "paper_id": "controlled-full-text-paper",
+    "source_url": "https://example.test/controlled-paper.html",
+    "source_format": "html",
+    "status": "usable",
+    "structure_available": true,
+    "sections": [
+      {
+        "id": "section-methods",
+        "heading": "Methods",
+        "section_types": ["methods"],
+        "text": "We evaluated RAG-Workflow on the EnterpriseFlow-500 dataset, which contains 500 natural-language workflow requirements from 12 business domains. The evaluation used 500 examples and compared RAG-Workflow with a GPT-4 zero-shot baseline."
+      },
+      {
+        "id": "section-results",
+        "heading": "Results",
+        "section_types": ["results"],
+        "text": "We report Exact Match Accuracy and Hallucination Rate for every system."
+      }
+    ]
+  },
+  "extraction": {
+    "comparison_or_baseline": [
+      {
+        "value": "GPT-4 zero-shot baseline",
+        "canonical_value": "GPT-4 zero-shot",
+        "evidence_text": "compared RAG-Workflow with a GPT-4 zero-shot baseline",
+        "source": "full_text",
+        "confidence": 0.96,
+        "section_type": "methods",
+        "section_heading": "Methods",
+        "section_id": "section-methods"
+      }
+    ],
+    "datasets": [
+      {
+        "value": "EnterpriseFlow-500",
+        "canonical_value": "EnterpriseFlow-500",
+        "evidence_text": "the EnterpriseFlow-500 dataset",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "methods",
+        "section_heading": "Methods",
+        "section_id": "section-methods"
+      }
+    ],
+    "sample_size": {
+      "value": "500 examples",
+      "canonical_value": "500",
+      "evidence_text": "The evaluation used 500 examples",
+      "source": "full_text",
+      "confidence": 0.99,
+      "section_type": "methods",
+      "section_heading": "Methods",
+      "section_id": "section-methods"
+    },
+    "evaluation_metrics": [
+      {
+        "value": "Exact Match Accuracy",
+        "canonical_value": "exact match accuracy",
+        "evidence_text": "Exact Match Accuracy",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "results",
+        "section_heading": "Results",
+        "section_id": "section-results"
+      },
+      {
+        "value": "Hallucination Rate",
+        "canonical_value": "hallucination rate",
+        "evidence_text": "Hallucination Rate",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "results",
+        "section_heading": "Results",
+        "section_id": "section-results"
+      }
+    ],
+    "study_type": "empirical",
+    "extraction_confidence": 0.97
+  }
+}

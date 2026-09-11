@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_MAX_CANDIDATES = 100
 DEFAULT_PER_ROUTE_LIMIT = 20
 DEFAULT_RETRIEVAL_CACHE_TTL_SECONDS = 6 * 60 * 60
+RETRIEVAL_CACHE_VERSION = 2
 
 
 @dataclass(slots=True)
@@ -78,6 +79,7 @@ class MultiQueryRetriever:
         cache_path: str | Path | None = None,
         retrieval_cache_ttl_seconds: float = DEFAULT_RETRIEVAL_CACHE_TTL_SECONDS,
         clock=None,
+        cache_database_url: str | None = None,
     ) -> None:
         if not 1 <= max_candidates <= 500:
             raise ValueError(
@@ -102,6 +104,7 @@ class MultiQueryRetriever:
             cache_path,
             ttl_seconds=retrieval_cache_ttl_seconds,
             clock=clock,
+            database_url=cache_database_url,
         )
         self._cache_lock = RLock()
         self._inflight: dict[str, Future[list[Paper]]] = {}
@@ -461,6 +464,7 @@ def _retrieval_cache_key(client: PaperRetriever, request: RetrievalRequest) -> s
 
     provider = getattr(client, "provider_name", type(client).__name__)
     payload = {
+        "version": RETRIEVAL_CACHE_VERSION,
         "provider": str(provider).casefold(),
         "query": " ".join(request.query.text.split()).casefold(),
         "mode": request.mode.value,

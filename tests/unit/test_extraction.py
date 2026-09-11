@@ -1,4 +1,7 @@
 import unittest
+import hashlib
+import json
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Barrier, Lock
 from unittest.mock import patch
@@ -58,6 +61,77 @@ class ConcurrentResponses:
 
 
 class EvidenceTest(unittest.TestCase):
+    def test_abstract_section_provenance_is_repaired_without_losing_valid_fields(self):
+        fixture_path = (
+            Path(__file__).parents[1]
+            / "fixtures"
+            / "naacl_2024_rag_abstract.json"
+        )
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        source_text = fixture["paper"]["title"] + "\n" + fixture["paper"]["abstract"]
+        normalize = lambda value: " ".join(value.casefold().split())
+        self.assertEqual(
+            hashlib.sha256(fixture["paper"]["abstract"].encode("utf-8")).hexdigest(),
+            "7cafa0dd8d92df3576a2c7e1d8f5be6b154f311e5de4af739bde7ba91ad7917e",
+        )
+        for unsupported_field in ("datasets", "sample_size", "evaluation_metrics", "comparison_or_baseline"):
+            self.assertNotIn(unsupported_field, fixture["extraction"])
+        for field_name in (
+            "research_objective",
+            "population_or_setting",
+            "method_or_intervention",
+            "main_findings",
+        ):
+            raw = fixture["extraction"][field_name]
+            claims = raw if isinstance(raw, list) else [raw]
+            for claim in claims:
+                self.assertIn(normalize(claim["evidence_text"]), normalize(source_text))
+        responses = FakeResponses(None)
+
+        def parse(**kwargs):
+            responses.inputs.append(kwargs["input"])
+            return SimpleNamespace(
+                output_parsed=kwargs["text_format"].model_validate(
+                    fixture["extraction"]
+                )
+            )
+
+        responses.parse = parse
+        extractor = PaperExtractor(
+            client=SimpleNamespace(responses=responses),
+            batch_size=1,
+        )
+
+        result = extractor.extract(Paper.model_validate(fixture["paper"]))
+
+        self.assertEqual(result.coverage.source_level, "abstract")
+        self.assertEqual(result.coverage.full_text_status, "not_attempted")
+        self.assertEqual(result.research_objective.source, "abstract")
+        self.assertEqual(result.research_objective.section_id, None)
+        self.assertEqual(
+            [item.value for item in result.method_or_intervention],
+            ["Retrieval-Augmented Generation (RAG)"],
+        )
+        self.assertTrue(result.population_or_setting)
+        self.assertEqual(result.datasets, [])
+        self.assertIsNone(result.sample_size)
+        self.assertEqual(result.evaluation_metrics, [])
+        self.assertEqual(result.comparison_or_baseline, [])
+        self.assertEqual(result.constraints, [])
+        self.assertEqual(len(result.main_findings), 2)
+        self.assertIn("out-of-domain", result.main_findings[0].value)
+        self.assertIn("smaller accompanying LLM", result.main_findings[1].value)
+        all_items = [
+            result.research_objective,
+            *result.population_or_setting,
+            *result.method_or_intervention,
+            *result.main_findings,
+        ]
+        self.assertTrue(all(item.source != "full_text" for item in all_items))
+        self.assertEqual(extractor.metrics_snapshot()["openai_extraction_requests"], 1)
+        self.assertEqual(extractor.metrics_snapshot()["extraction_repair_attempts"], 1)
+        self.assertEqual(extractor.metrics_snapshot()["extraction_repaired_claims"], 5)
+
     def test_model_tracks_missing_fields_and_validates_confidence(self):
         evidence = PaperEvidence(paper_id="p1", title="A paper", study_type="other", extraction_confidence=0.5)
         self.assertIsNone(evidence.sample_size)

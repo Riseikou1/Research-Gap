@@ -1,0 +1,28 @@
+import type {Metadata} from "next";
+import Link from "next/link";
+import {siteContent} from "@/lib/content";
+
+export const metadata: Metadata = {title:"About", description:"How Research GAP works, what its verdicts mean, and where its evidence ends."};
+
+const flow = [
+  ["Research idea decomposition", "Separate the stated problem, population, method, data, comparison, outcomes, domain, and constraints without inventing missing details."],
+  ["Query generation", "Keep the original idea and add bounded, complementary search formulations with visible provenance."],
+  ["OpenAlex literature retrieval", "Discover scholarly candidates through several bounded metadata and search routes."],
+  ["Deduplication and ranking", "Merge duplicate works while preserving how each one was found, then rank against the original idea."],
+  ["Evidence extraction", "Extract structured claims from abstracts or accessible full text and retain the supporting source text."],
+  ["Literature-landscape construction", "Compare observed methods, settings, datasets, evaluations, findings, limitations, and combinations."],
+  ["Candidate-gap generation", "Propose questions only from explicit patterns in the retrieved landscape."],
+  ["Targeted verification and counterexample search", "Search specifically for work that could contradict each candidate gap or directly cover the idea."],
+  ["Evidence-linked report generation", "Present a qualified verdict, source coverage, and conclusions connected to supporting papers."],
+] as const;
+
+export default function AboutPage(){return <div className="page about-page"><section className="about-hero"><p className="eyebrow">About Research GAP</p><h1>A clearer starting point for literature exploration.</h1><p className="lede">Research GAP is built for the uncomfortable space between having a research idea and understanding what the literature can actually support.</p></section>
+  <section className="about-grid"><div><p className="eyebrow">The problem</p><h2>Discovery is easy to start and difficult to qualify.</h2></div><div><p>Search engines can return plausible titles quickly, but a researcher still has to ask what each paper studied, which evidence was accessible, whether an apparent opening has counterexamples, and how much of the landscape was missed.</p><p>Research GAP provides an evidence-backed starting point. It organizes a bounded literature exploration so that the route from idea to conclusion stays inspectable.</p></div></section>
+  <section className="about-modes"><p className="eyebrow">Two depths</p><h2>Search quickly, or investigate the gap.</h2><div><article><h3>Quick Search</h3><p>Uses deterministic query planning, OpenAlex retrieval, and basic ranking. It is a fast way to find relevant papers and does not perform structured extraction or gap verification.</p></article><article><h3>Full Gap Analysis</h3><p>Adds configured embeddings, structured evidence extraction, landscape construction, candidate generation, direct verification, and counterexample search. Accessible full text is optional and never assumed.</p></article></div></section>
+  <section><p className="eyebrow">Complete project flow</p><h2>Nine stages, each with a boundary.</h2><ol className="project-flow">{flow.map(([title,body],index)=><li key={title}><span>{String(index+1).padStart(2,"0")}</span><div><h3>{title}</h3><p>{body}</p></div></li>)}</ol></section>
+  <section className="about-grid"><div><p className="eyebrow">Reading the verdict</p><h2>“Uncertain” is an honest result.</h2></div><div><p>An <strong>Uncertain</strong> verdict means the retrieved and accessible evidence was not strong or complete enough to support either a direct “well studied” match or a grounded “promising gap” signal. It may reflect partial facet matches, missing abstracts, extraction failures, inaccessible full text, or counterexamples that need human review.</p><p>The verdict does not prove global novelty. Research GAP is not a systematic review, and it cannot replace database-specific strategies, formal inclusion criteria, citation chaining, expert judgment, or a researcher reading the original papers.</p></div></section>
+  <section className="boundary-panel"><p className="eyebrow">Scientific boundary</p><h2>Output quality follows evidence quality.</h2><p>Full text can be inspected only when a usable, openly accessible source is available. Otherwise the system falls back to the abstract or metadata and reports that reading depth. Conclusions depend on what OpenAlex retrieved and what evidence the pipeline could access and validate. Every report should be reviewed by a human researcher before it informs a proposal, review, or novelty claim.</p></section>
+  <section className="about-grid"><div><p className="eyebrow">Attribution</p><h2>Built independently on useful research infrastructure.</h2></div><div><p><a href="https://openalex.org/" target="_blank" rel="noreferrer">OpenAlex</a> supplies scholarly metadata and literature-discovery data. <a href="https://openai.com/" target="_blank" rel="noreferrer">OpenAI</a> models support embeddings and structured evidence extraction where configured.</p><p>Research GAP is an independent project. It is not endorsed by, sponsored by, or affiliated with OpenAlex or OpenAI.</p></div></section>
+  <section className="creator-panel"><p className="eyebrow">Creator</p><h2>Made by Temuujin.</h2><p>{siteContent.about}</p></section>
+  <section className="about-cta"><p className="eyebrow">Begin with a question</p><h2>Explore the evidence around your idea.</h2><Link className="button primary" href="/analyze">Start an analysis</Link></section>
+</div>}

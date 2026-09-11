@@ -10,6 +10,7 @@ from threading import RLock
 from typing import Callable
 
 from src.models.paper import Paper
+from src.persistence.cache import PersistentCache
 
 
 class RetrievalStore:
@@ -21,6 +22,7 @@ class RetrievalStore:
         *,
         ttl_seconds: float,
         clock: Callable[[], float] | None = None,
+        database_url: str | None = None,
     ) -> None:
         if ttl_seconds <= 0:
             raise ValueError("retrieval cache TTL must be positive")
@@ -30,8 +32,13 @@ class RetrievalStore:
         self._clock = clock or time.time
         self._lock = RLock()
         self._connection: sqlite3.Connection | None = None
+        self._durable = (
+            PersistentCache(path, database_url=database_url)
+            if path is not None and database_url
+            else None
+        )
 
-        if self.path is None:
+        if self.path is None or self._durable is not None:
             return
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -53,10 +60,22 @@ class RetrievalStore:
         self._connection.commit()
 
     def get(self, cache_key: str) -> list[Paper] | None:
-        if self._connection is None:
+        if self._connection is None and self._durable is None:
             return None
 
         now = self._clock()
+        if self._durable is not None:
+            try:
+                row = self._durable.get("retrieval", cache_key)
+                if row is None:
+                    return None
+                stored_at, payload = row
+                if now - stored_at >= self.ttl_seconds:
+                    self._durable.delete("retrieval", cache_key)
+                    return None
+            except (TypeError, ValueError):
+                return None
+            return self._decode(payload)
         try:
             with self._lock:
                 row = self._connection.execute(
@@ -78,6 +97,10 @@ class RetrievalStore:
         except (sqlite3.DatabaseError, TypeError, ValueError):
             return None
 
+        return self._decode(payload)
+
+    @staticmethod
+    def _decode(payload: str) -> list[Paper] | None:
         try:
             raw_items = json.loads(payload)
             if not isinstance(raw_items, list):
@@ -92,7 +115,7 @@ class RetrievalStore:
             return None
 
     def put(self, cache_key: str, papers: list[Paper]) -> None:
-        if self._connection is None:
+        if self._connection is None and self._durable is None:
             return
 
         encoded_items = []
@@ -101,6 +124,11 @@ class RetrievalStore:
             for computed in ("matched_queries", "retrieval_modes", "retrieved_by"):
                 item.pop(computed, None)
             encoded_items.append(item)
+
+        payload = json.dumps(encoded_items, ensure_ascii=False, separators=(",", ":"))
+        if self._durable is not None:
+            self._durable.put("retrieval", cache_key, payload, stored_at=self._clock())
+            return
 
         with self._lock:
             self._connection.execute(
@@ -112,7 +140,7 @@ class RetrievalStore:
                 (
                     cache_key,
                     self._clock(),
-                    json.dumps(encoded_items, ensure_ascii=False, separators=(",", ":")),
+                    payload,
                 ),
             )
             self._connection.commit()

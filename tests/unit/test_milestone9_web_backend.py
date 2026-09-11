@@ -167,6 +167,8 @@ def test_guest_quick_limit_is_private_and_network_bounded():
             assert first.get(f"/analyses/{analysis_id}").status_code==200
             assert first.post("/analyses",json={"research_idea":"another quick idea","mode":"quick"}).status_code==429
             assert first.post("/analyses",json={"research_idea":"guest full idea","mode":"full"}).status_code==401
+            first.cookies.clear()
+            assert first.get(f"/analyses/{analysis_id}").status_code == 404
 
 
 def test_user_ownership_legacy_policy_unverified_and_admin_enforcement():
@@ -316,6 +318,15 @@ def test_public_result_hides_provider_errors_and_markdown_uses_real_contract():
             serialized=json.dumps(record)
             assert "traceback" not in serialized and "internal:9000" not in serialized
             assert record["result"]["failure_summary"] == {"retrieval":1,"extraction":1}
+            assert record["result"]["extraction_coverage"] == {
+                "selected_for_report": 1,
+                "requested_for_extraction": 1,
+                "successful_evidence_records": 0,
+                "failed_extractions": 1,
+                "not_requested_for_extraction": 0,
+                "partial": True,
+            }
+            assert "could not be evaluated" in record["result"]["coverage_messages"][1]
     report = _markdown_report("An idea", "full", {
         "full_text_requested": True,
         "idea_assessment":{"label":"uncertain","rationale":"Coverage is bounded."},

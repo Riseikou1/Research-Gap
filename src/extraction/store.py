@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import time
 from pathlib import Path
 from threading import RLock
 
 from src.models.paper import Paper
+from src.persistence.cache import PersistentCache
 
 from .evidence import PaperEvidence
 
@@ -16,12 +18,17 @@ from .evidence import PaperEvidence
 class EvidenceStore:
     """Read and write evidence using a versioned SQLite cache key."""
 
-    def __init__(self, path: str | Path | None) -> None:
+    def __init__(self, path: str | Path | None, *, database_url: str | None = None) -> None:
         self.path = Path(path) if path is not None else None
         self._lock = RLock()
         self._connection: sqlite3.Connection | None = None
+        self._durable = (
+            PersistentCache(path, database_url=database_url)
+            if path is not None and database_url
+            else None
+        )
 
-        if self.path is None:
+        if self.path is None or self._durable is not None:
             return
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,6 +66,15 @@ class EvidenceStore:
         model: str,
         schema_version: int,
     ) -> PaperEvidence | None:
+        durable_key = self._durable_key(paper_id, content_hash, model, schema_version)
+        if self._durable is not None:
+            row = self._durable.get("evidence", durable_key)
+            if row is None:
+                return None
+            try:
+                return PaperEvidence.model_validate(json.loads(row[1]))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return None
         if self._connection is None:
             return None
 
@@ -93,7 +109,7 @@ class EvidenceStore:
         model: str,
         schema_version: int,
     ) -> None:
-        if self._connection is None:
+        if self._connection is None and self._durable is None:
             return
 
         payload = json.dumps(
@@ -101,6 +117,15 @@ class EvidenceStore:
             ensure_ascii=False,
             separators=(",", ":"),
         )
+
+        if self._durable is not None:
+            self._durable.put(
+                "evidence",
+                self._durable_key(evidence.paper_id, content_hash, model, schema_version),
+                payload,
+                stored_at=time.time(),
+            )
+            return
 
         with self._lock:
             self._connection.execute(
@@ -126,6 +151,12 @@ class EvidenceStore:
         with self._lock:
             self._connection.close()
             self._connection = None
+
+    @staticmethod
+    def _durable_key(paper_id: str, content_hash: str, model: str, schema_version: int) -> str:
+        return hashlib.sha256(
+            "\0".join((paper_id, content_hash, model, str(schema_version))).encode("utf-8")
+        ).hexdigest()
 
 
 __all__ = ["EvidenceStore"]

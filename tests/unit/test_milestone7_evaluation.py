@@ -281,6 +281,28 @@ class PerformanceTest(unittest.TestCase):
         self.assertEqual(metrics.token_usage, "unavailable")
         self.assertEqual(cache_hit_rate(0, 0), 0.0)
 
+    def test_wall_clock_duration_wins_and_legacy_fallback_ignores_nested_timings(self):
+        current = type("Result", (), {
+            "duration_seconds": 12.0,
+            "stage_timings": {
+                "direct_verification": 8.0,
+                "direct_verification_evidence_extraction": 7.0,
+            },
+            "work_metrics": {},
+        })()
+        self.assertEqual(performance_from_result(current).total_seconds, 12.0)
+
+        legacy = type("Result", (), {
+            "stage_timings": {
+                "planning": 1.0,
+                "direct_verification": 8.0,
+                "direct_verification_evidence_extraction": 7.0,
+                "candidate_verification": 4.0,
+            },
+            "work_metrics": {},
+        })()
+        self.assertEqual(performance_from_result(legacy).total_seconds, 13.0)
+
 
 if __name__ == "__main__":
     unittest.main()

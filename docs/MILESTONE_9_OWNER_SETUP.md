@@ -70,7 +70,10 @@ Backend `.env` values:
 | `RESEARCH_GAP_DATABASE_PATH` | private path | Durable SQLite file on persistent storage |
 | `DATABASE_URL` | critical secret | Supabase Session Pooler PostgreSQL URL; takes precedence over the SQLite path |
 
-Frontend `web/.env.local` contains only `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Never add service-role, Stripe secret/webhook, OpenAI, or OpenAlex keys to `NEXT_PUBLIC_*` variables.
+Frontend `web/.env.local` contains the server-only `RESEARCH_GAP_BACKEND_URL` plus
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Browser backend calls use the
+same-origin `/api/backend` route; do not restore `NEXT_PUBLIC_API_URL`. Never add service-role,
+Stripe secret/webhook, OpenAI, or OpenAlex keys to `NEXT_PUBLIC_*` variables.
 
 Edit the placeholder owner contact, About Me copy, and project link in `web/lib/content.ts` before publishing. That is the single site-content module; replace `owner@example.com`.
 

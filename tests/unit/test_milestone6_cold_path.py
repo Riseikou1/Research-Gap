@@ -168,6 +168,24 @@ class ColdPathTest(unittest.TestCase):
 
         self.assertEqual([item.id for item in screened], ["supported"])
 
+    def test_prescreen_records_multi_facet_support_as_accepted_not_uncertain(self):
+        paper = Paper(
+            id="supported",
+            title="Problem alpha with method beta",
+            abstract="problem alpha is evaluated using method beta in another setting",
+        )
+        from src.analysis.verification import _pre_screen_papers_with_stats
+
+        screened, stats = _pre_screen_papers_with_stats(
+            [paper, Paper(id="other", title="Ocean currents", abstract="marine tides")],
+            [("problem alpha",), ("method beta",), ("setting gamma",)],
+            LexicalScorer(),
+            "problem alpha method beta setting gamma",
+        )
+
+        self.assertEqual([item.id for item in screened], ["supported"])
+        self.assertEqual(stats, (2, 1, 0, 1))
+
 
 if __name__ == "__main__":
     unittest.main()

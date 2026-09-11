@@ -89,6 +89,7 @@ class OpenAIQueryGenerator:
         max_retries: int = 2,
         max_output_tokens: int = 800,
         cache_path: str | Path | None = None,
+        cache_database_url: str | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
@@ -110,7 +111,7 @@ class OpenAIQueryGenerator:
         # Dependency injection keeps tests independent of real API calls.
         if client is not None:
             self.client = client
-            self.planning_store = PlanningStore(cache_path)
+            self.planning_store = PlanningStore(cache_path, database_url=cache_database_url)
             return
 
         key = api_key or openai_api_key()
@@ -134,7 +135,8 @@ class OpenAIQueryGenerator:
             max_retries=max_retries,
         )
         self.planning_store = PlanningStore(
-            cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3"
+            cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3",
+            database_url=cache_database_url,
         )
 
     def generate(self, idea: ResearchIdea) -> list[SearchQuery]:

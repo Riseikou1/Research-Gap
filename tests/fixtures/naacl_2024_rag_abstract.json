@@ -1,0 +1,70 @@
+{
+  "paper": {
+    "id": "2024.naacl-industry.19",
+    "title": "Reducing hallucination in structured outputs via Retrieval-Augmented Generation",
+    "abstract": "A current limitation of Generative AI (GenAI) is its propensity to hallucinate. While Large Language Models (LLM) have taken the world by storm, without eliminating or at least reducing hallucination, real-world GenAI systems will likely continue to face challenges in user adoption. In the process of deploying an enterprise application that produces workflows from natural language requirements, we devised a system leveraging Retrieval-Augmented Generation (RAG) to improve the quality of the structured output that represents such workflows. Thanks to our implementation of RAG, our proposed system significantly reduces hallucination and allows the generalization of our LLM to out-of-domain settings. In addition, we show that using a small, well-trained retriever can reduce the size of the accompanying LLM at no loss in performance, thereby making deployments of LLM-based systems less resource-intensive.",
+    "doi": "10.18653/v1/2024.naacl-industry.19",
+    "url": "https://aclanthology.org/2024.naacl-industry.19/"
+  },
+  "extraction": {
+    "research_objective": {
+      "value": "reduce hallucination in structured workflow generation",
+      "canonical_value": "hallucination reduction in structured generation",
+      "evidence_text": "we devised a system leveraging Retrieval-Augmented Generation (RAG) to improve the quality of the structured output that represents such workflows. Thanks to our implementation of RAG, our proposed system significantly reduces hallucination",
+      "source": "abstract",
+      "confidence": 0.96,
+      "section_type": "abstract",
+      "section_heading": "Abstract",
+      "section_id": "section-abstract"
+    },
+    "population_or_setting": [
+      {
+        "value": "enterprise application producing workflows from natural-language requirements",
+        "canonical_value": "enterprise workflow generation",
+        "evidence_text": "deploying an enterprise application that produces workflows from natural language requirements",
+        "source": "abstract",
+        "confidence": 0.97,
+        "section_type": "abstract",
+        "section_heading": "Abstract",
+        "section_id": "section-abstract"
+      }
+    ],
+    "method_or_intervention": [
+      {
+        "value": "Retrieval-Augmented Generation (RAG)",
+        "canonical_value": "retrieval-augmented generation",
+        "evidence_text": "a system leveraging Retrieval-Augmented Generation (RAG)",
+        "source": "abstract",
+        "confidence": 0.99,
+        "section_type": "abstract",
+        "section_heading": "Abstract",
+        "section_id": "section-abstract",
+        "role": "primary"
+      }
+    ],
+    "main_findings": [
+      {
+        "value": "RAG reduces hallucination and supports out-of-domain generalization",
+        "canonical_value": "reduced hallucination and out-of-domain generalization",
+        "evidence_text": "our proposed system significantly reduces hallucination and allows the generalization of our LLM to out-of-domain settings",
+        "source": "abstract",
+        "confidence": 0.98,
+        "section_type": "abstract",
+        "section_heading": "Abstract",
+        "section_id": "section-abstract"
+      },
+      {
+        "value": "a small, well-trained retriever permits a smaller accompanying LLM without performance loss",
+        "canonical_value": "small retriever enables smaller LLM without performance loss",
+        "evidence_text": "using a small, well-trained retriever can reduce the size of the accompanying LLM at no loss in performance",
+        "source": "abstract",
+        "confidence": 0.98,
+        "section_type": "abstract",
+        "section_heading": "Abstract",
+        "section_id": "section-abstract"
+      }
+    ],
+    "study_type": "empirical",
+    "extraction_confidence": 0.93
+  }
+}

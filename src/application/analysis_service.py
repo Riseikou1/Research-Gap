@@ -20,7 +20,7 @@ from src.ranking.semantic import OpenAIEmbeddingProvider, SemanticScorer
 from src.retrieval.multi_query import MultiQueryRetriever
 from src.retrieval.openalex import OpenAlexRetriever
 
-PIPELINE_VERSION = "m8-v1"
+PIPELINE_VERSION = "m9-v2"
 DecomposerName = Literal["deterministic", "openai"]
 QueryGeneratorName = Literal["deterministic", "openai"]
 
@@ -44,6 +44,7 @@ def build_decomposer(name: DecomposerName, settings: Settings):
             api_key=settings.openai_api_key,
             model=settings.openai_model,
             cache_path=settings.cache_directory / "research_gap.sqlite3",
+            cache_database_url=settings.database_url,
         )
     raise ValueError(f"Unsupported decomposer: {name}")
 
@@ -62,6 +63,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
         per_route_limit=openalex.per_route_limit,
         max_workers=openalex.max_workers,
         cache_path=settings.cache_directory / "research_gap.sqlite3",
+        cache_database_url=settings.database_url,
         retrieval_cache_ttl_seconds=openalex.retrieval_cache_ttl_seconds,
     )
 
@@ -72,6 +74,8 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
                 api_key=settings.openai_api_key,
                 model=settings.ranking.embedding_model,
                 batch_size=settings.ranking.embedding_batch_size,
+                cache_path=settings.cache_directory / "research_gap.sqlite3",
+                cache_database_url=settings.database_url,
             )
         )
     reranker = HybridReranker(
@@ -88,6 +92,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
             api_key=settings.openai_api_key,
             model=settings.openai_model,
             cache_path=settings.cache_directory / "research_gap.sqlite3",
+            cache_database_url=settings.database_url,
         )
 
     needs_evidence = (
@@ -108,6 +113,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
                 max_redirects=config.max_redirects,
                 negative_ttl_seconds=config.negative_cache_ttl_seconds,
                 cache_path=settings.cache_directory / "research_gap.sqlite3",
+                cache_database_url=settings.database_url,
             )
         extractor = PaperExtractor(
             api_key=settings.openai_api_key,
@@ -116,6 +122,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
             max_workers=settings.extraction_workers,
             batch_size=settings.extraction_batch_size,
             cache_path=settings.cache_directory / "research_gap.sqlite3",
+            cache_database_url=settings.database_url,
             full_text_client=full_text_client,
             max_full_text_context_chars=settings.full_text.max_context_chars,
         )
@@ -146,7 +153,7 @@ class AnalysisService:
         settings = self.settings
         return {
             "pipeline_version": PIPELINE_VERSION,
-            "api_schema_version": "m9-v1",
+            "api_schema_version": "m9-v2",
             "mode": mode,
             "decomposer": decomposer,
             "query_generator": query_generator,

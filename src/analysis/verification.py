@@ -2339,7 +2339,15 @@ def _pre_screen_papers_with_stats(
             for alternatives in groups
         )
 
-        if covered_groups == len(groups):
+        if (
+            covered_groups == len(groups)
+            or covered_groups >= min(2, len(groups))
+            or covered_groups > 0 and score >= 0.75
+        ):
+            # Explicit support for multiple requested facets is a useful
+            # positive prescreen even when a long idea contains additional
+            # qualifiers. This changes only diagnostics: accepted and
+            # uncertain papers are both retained for strict extraction.
             accepted += 1
             retained.append(paper)
         elif covered_groups > 0 or score >= 0.75:

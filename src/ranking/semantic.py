@@ -6,6 +6,7 @@ import math
 import hashlib
 import json
 import sqlite3
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from threading import RLock
@@ -13,6 +14,7 @@ from typing import Any, Protocol
 
 from src.config import DEFAULT_EMBEDDING_MODEL, cache_dir, openai_api_key
 from src.models.paper import Paper
+from src.persistence.cache import PersistentCache
 
 
 Vector = Sequence[float]
@@ -49,6 +51,7 @@ class OpenAIEmbeddingProvider:
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
         cache_path: str | Path | None = None,
+        cache_database_url: str | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError(
@@ -76,6 +79,7 @@ class OpenAIEmbeddingProvider:
             else None
         )
         self._embedding_connection: sqlite3.Connection | None = None
+        self._durable_cache: PersistentCache | None = None
 
         if client is not None:
             self.client = client
@@ -104,6 +108,12 @@ class OpenAIEmbeddingProvider:
             self._embedding_cache_path = cache_dir() / "research_gap.sqlite3"
 
         if self._embedding_cache_path is not None:
+            if cache_database_url:
+                self._durable_cache = PersistentCache(
+                    self._embedding_cache_path,
+                    database_url=cache_database_url,
+                )
+                return
             self._embedding_cache_path.parent.mkdir(parents=True, exist_ok=True)
             self._embedding_connection = sqlite3.connect(
                 self._embedding_cache_path,
@@ -133,6 +143,17 @@ class OpenAIEmbeddingProvider:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def _persistent_get(self, text: str) -> list[float] | None:
+        if self._durable_cache is not None:
+            row = self._durable_cache.get(
+                f"embedding:{self.model}",
+                self._text_hash(text),
+            )
+            if row is None:
+                return None
+            try:
+                return _validated_vector(json.loads(row[1]))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return None
         if self._embedding_connection is None:
             return None
 
@@ -155,6 +176,14 @@ class OpenAIEmbeddingProvider:
             return None
 
     def _persistent_put(self, text: str, vector: list[float]) -> None:
+        if self._durable_cache is not None:
+            self._durable_cache.put(
+                f"embedding:{self.model}",
+                self._text_hash(text),
+                json.dumps(vector, separators=(",", ":")),
+                stored_at=time.time(),
+            )
+            return
         if self._embedding_connection is None:
             return
 

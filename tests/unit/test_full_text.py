@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -247,6 +248,59 @@ class FullTextTest(unittest.TestCase):
             inspected_sections=[section],
         )
         self.assertEqual(rejected.main_findings, [])
+
+    def test_detailed_fields_require_controlled_full_text_passages(self):
+        fixture = json.loads(
+            (Path(__file__).parents[1] / "fixtures" / "controlled_full_text_evidence.json")
+            .read_text(encoding="utf-8")
+        )
+        paper = Paper.model_validate(fixture["paper"])
+        document = PaperDocument.model_validate(fixture["document"])
+
+        class FixtureResponses:
+            def __init__(self):
+                self.calls = 0
+
+            def parse(self, **kwargs):
+                self.calls += 1
+                return type("Parsed", (), {
+                    "output_parsed": kwargs["text_format"].model_validate(fixture["extraction"]),
+                })()
+
+        full_text_responses = FixtureResponses()
+        full_text = PaperExtractor(
+            client=type("Client", (), {"responses": full_text_responses})(),
+            full_text_client=Loader({paper.id: document}),
+        ).extract(paper)
+
+        self.assertEqual([item.value for item in full_text.datasets], ["EnterpriseFlow-500"])
+        self.assertEqual(full_text.sample_size.value, "500 examples")
+        self.assertEqual(
+            [item.value for item in full_text.comparison_or_baseline],
+            ["GPT-4 zero-shot baseline"],
+        )
+        self.assertEqual(
+            [item.value for item in full_text.evaluation_metrics],
+            ["Exact Match Accuracy", "Hallucination Rate"],
+        )
+        self.assertTrue(all(
+            item.source == "full_text"
+            for item in [
+                *full_text.datasets,
+                full_text.sample_size,
+                *full_text.comparison_or_baseline,
+                *full_text.evaluation_metrics,
+            ]
+        ))
+
+        abstract_only_responses = FixtureResponses()
+        abstract_only = PaperExtractor(
+            client=type("Client", (), {"responses": abstract_only_responses})(),
+        ).extract(paper)
+        self.assertEqual(abstract_only.datasets, [])
+        self.assertIsNone(abstract_only.sample_size)
+        self.assertEqual(abstract_only.comparison_or_baseline, [])
+        self.assertEqual(abstract_only.evaluation_metrics, [])
 
     def test_unavailable_fetch_and_parse_statuses_use_abstract_fallback(self):
         abstract = "This study evaluates Model A on a clinical cohort."

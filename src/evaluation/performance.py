@@ -18,6 +18,17 @@ _CACHE_KEYS = {
     "planning": ("planning_cache_hits", "openai_decomposition_requests", "openai_query_generation_requests"),
 }
 
+_TOP_LEVEL_STAGES = (
+    "planning",
+    "initial_retrieval",
+    "ranking_embeddings",
+    "evidence_lookup_extraction",
+    "landscape",
+    "direct_verification",
+    "candidate_generation",
+    "candidate_verification",
+)
+
 
 def cache_hit_rate(hits: int, requests: int) -> float:
     return hits / requests if requests else 0.0
@@ -58,8 +69,17 @@ def performance_from_result(result: object, *, total_seconds: float | None = Non
     if pricing and isinstance(tokens, dict):
         cost = (tokens.get("input_tokens", 0) * pricing.input_per_million + tokens.get("output_tokens", 0) * pricing.output_per_million) / 1_000_000
     if total_seconds is None:
-        candidate_total = getattr(result, "total_seconds", None)
-        total_seconds = float(candidate_total) if candidate_total is not None else sum(normalized_timings.values()) or None
+        candidate_total = getattr(result, "duration_seconds", None)
+        if candidate_total is None:
+            candidate_total = getattr(result, "total_seconds", None)
+        if candidate_total is not None:
+            total_seconds = float(candidate_total)
+        else:
+            # Older results have no wall-clock field. Only mutually sequential
+            # top-level stages are a safe approximation; component timings
+            # overlap their parents and must never be summed into the total.
+            approximation = sum(float(timings.get(key, 0.0)) for key in _TOP_LEVEL_STAGES)
+            total_seconds = approximation or None
     latency = {"mean": total_seconds, "median": total_seconds, "min": total_seconds, "max": total_seconds}
     return PerformanceMetrics(
         cases_total=1, cases_completed=1, total_seconds=total_seconds, cache_mode=cache_mode,

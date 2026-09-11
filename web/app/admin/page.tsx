@@ -1,10 +1,9 @@
 "use client";
 import {useCallback, useEffect, useState, type FormEvent} from "react";
 import Link from "next/link";
-import {post} from "@/lib/api";
+import {API_URL, post} from "@/lib/api";
 import {useAuth} from "@/components/auth-context";
 
-const api = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 type User = {user_id:string; email:string|null; display_name:string; role:string; status:string; subscription_status:string; balance:number};
 type Summary = {user_count:number; analyses:Array<{status:string;mode:string;count:number}>; failed_payment_events:Array<Record<string,unknown>>; audit_log:Array<Record<string,unknown>>};
 
@@ -16,7 +15,7 @@ export default function Admin() {
   const load = useCallback(async () => {
     const headers = {Authorization: `Bearer ${session?.access_token}`};
     const [summaryResponse, usersResponse] = await Promise.all([
-      fetch(`${api}/admin/summary`, {headers}), fetch(`${api}/admin/users`, {headers})
+      fetch(`${API_URL}/admin/summary`, {headers}), fetch(`${API_URL}/admin/users`, {headers})
     ]);
     if (!summaryResponse.ok || !usersResponse.ok) throw new Error("Administrator data is unavailable.");
     setSummary(await summaryResponse.json()); setUsers(await usersResponse.json());
