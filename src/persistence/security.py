@@ -99,6 +99,16 @@ class SecurityRepository:
             row = connection.execute("SELECT * FROM accounts WHERE role='admin' ORDER BY created_at LIMIT 1").fetchone()
         return dict(row) if row else None
 
+    def administrator_credit_exempt(self, user_id: str) -> bool:
+        """Derive exemption only from the current active PostgreSQL account."""
+
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT role,status FROM accounts WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+        return bool(row and row["role"] == "admin" and row["status"] == "active")
+
     def balance(self, user_id: str) -> int:
         with self.database.connect() as connection:
             row = connection.execute(

@@ -74,7 +74,14 @@ class AnalysisDetail(AnalysisSummary):
             paper_limit=record.paper_limit,
             configuration=record.configuration,
             result=public_analysis_result(record.result) if record.result else None,
-            error_message=public_job_error(record.error_message) if record.error_message else None,
+            error_message=(
+                public_job_error(
+                    record.error_message,
+                    credit_was_reserved=record.reservation_id is not None,
+                )
+                if record.error_message
+                else None
+            ),
             mode=record.mode,
             stage=record.stage,
             progress=record.progress,

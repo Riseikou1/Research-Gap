@@ -232,6 +232,16 @@ email there. Account deletion is blocked while an active paid subscription remai
 Supabase Auth identity through the server-only Admin API, removes analyses/avatar data, and keeps
 only the minimal pseudonymous anti-abuse marker plus required audit/payment records.
 
+An active account whose role is `admin` in PostgreSQL is exempt from the application's internal
+Full Gap Analysis credit reservation. The exemption is decided again by the backend when each
+analysis is created; browser state, token metadata, email addresses, display names, and request
+fields cannot grant it. No infinite balance or zero-value ledger entry is created, and exempt jobs
+do not generate settlements or refunds. This changes only the internal ledger: OpenAI and other
+provider calls still have real financial cost, and concurrency, rate, spending, paper, evidence,
+full-text, validation, ownership, and logging safeguards remain active. Ordinary account billing
+and refund behavior is unchanged. Operational details are in
+[`docs/ADMIN_CREDIT_EXEMPTION.md`](docs/ADMIN_CREDIT_EXEMPTION.md).
+
 The historical unauthenticated single-owner API is available only when
 `RESEARCH_GAP_TRUSTED_LOCAL_MODE=true`; use it solely on a loopback-bound local service. The safe
 default treats unauthenticated web requests as isolated guests.

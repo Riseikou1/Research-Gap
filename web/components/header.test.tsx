@@ -6,6 +6,6 @@ vi.mock("./auth-context",()=>({useAuth:()=>state}));
 vi.mock("@/lib/supabase",()=>({supabase:()=>null}));
 import {Header} from "./header";
 describe("authenticated navigation",()=>{
-  it("shows role-gated navigation and About without waiting for profile",()=>{render(<Header/>);expect(screen.getByRole("link",{name:"Admin"})).toBeInTheDocument();expect(screen.getByRole("link",{name:"About"})).toHaveAttribute("href","/about");expect(screen.getByRole("link",{name:"Account"})).toBeInTheDocument();expect(screen.queryByRole("link",{name:"Sign in"})).not.toBeInTheDocument()});
+  it("shows role-gated navigation without rendering a fake infinite balance",()=>{render(<Header/>);expect(screen.getByRole("link",{name:"Admin"})).toBeInTheDocument();expect(screen.getByRole("link",{name:"About"})).toHaveAttribute("href","/about");expect(screen.getByRole("link",{name:"Account"})).toBeInTheDocument();expect(screen.queryByRole("link",{name:"Sign in"})).not.toBeInTheDocument();expect(screen.queryByText("Infinity")).not.toBeInTheDocument()});
   it("reserves account space while session resolves",()=>{state.session=null;state.sessionLoading=true;const{container}=render(<Header/>);expect(screen.getByLabelText("Loading account")).toBeInTheDocument();expect(container.querySelector(".account-nav")).toBeInTheDocument()});
 });

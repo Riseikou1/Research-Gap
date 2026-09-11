@@ -27,17 +27,26 @@ def me(request: Request) -> dict[str, object]:
     principal = principal_for(request)
     if principal.kind != "user":
         return {"kind": principal.kind, "signed_in": False, "verified": False,
-                "role": "user", "credits": 0, "profile": None}
+                "role": "user", "credits": 0, "credit_exempt": False, "profile": None}
     components = request.app.state.components
     account = components.security.account(principal.principal_id) or {}
     subscription_status = components.security.subscription_status(principal.principal_id)
     return {
         "kind": "user", "signed_in": True, "verified": principal.email_verified,
         "role": principal.role, "credits": components.security.balance(principal.principal_id),
+        "credit_exempt": components.security.administrator_credit_exempt(
+            principal.principal_id
+        ),
         "profile": {"display_name": account.get("display_name", ""),
                     "avatar_url": account.get("avatar_url"), "email": account.get("email")},
         "subscription_status": subscription_status,
-        "plan_label": "Paid researcher" if subscription_status in {"active", "trialing"} else "Free",
+        "plan_label": (
+            "Admin access"
+            if principal.role == "admin"
+            else "Paid researcher"
+            if subscription_status in {"active", "trialing"}
+            else "Free"
+        ),
         "plan": {"test_mode": components.settings.web.stripe_test_mode,
                  "price_usd": components.settings.web.paid_price_usd,
                  "credits_per_cycle": components.settings.web.paid_cycle_credits},

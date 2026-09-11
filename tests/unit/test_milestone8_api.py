@@ -125,7 +125,7 @@ class FailedApiJobTest(unittest.TestCase):
                 self.assertEqual(record["status"], "failed")
                 self.assertEqual(
                     record["error_message"],
-                    "The analysis could not be completed. Any reserved credit was returned. Please try again later.",
+                    "The analysis could not be completed. Please try again later.",
                 )
                 self.assertNotIn("RuntimeError", record["error_message"])
                 self.assertEqual(client.get("/health").status_code, 200)

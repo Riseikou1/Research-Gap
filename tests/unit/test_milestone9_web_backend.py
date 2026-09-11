@@ -9,12 +9,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
-from src.auth import AuthenticationError, AuthIdentity, StaticAuthProvider
+from src.auth import AuthenticationError, AuthIdentity, StaticAuthProvider, SupabaseAuthProvider
 from src.billing import BillingError
 from src.config import Settings
 from src.persistence.database import Database
@@ -65,6 +66,9 @@ def test_verified_user_gets_exactly_two_and_third_is_blocked_and_failure_refunds
             first = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"first valid idea","mode":"full"})
             second = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"second valid idea","mode":"full"})
             assert first.status_code == second.status_code == 201
+            first_record = client.app.state.components.repository.get(first.json()["analysis_id"])
+            assert first_record.reservation_id is not None
+            assert first_record.configuration["credit_billing_decision"] == "paid_credit"
             wait(client, first.json()["analysis_id"], "verified")
             wait(client, second.json()["analysis_id"], "verified")
             blocked = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"third valid idea","mode":"full"})
@@ -72,8 +76,236 @@ def test_verified_user_gets_exactly_two_and_third_is_blocked_and_failure_refunds
             assert client.get("/me", headers={"Authorization": "Bearer verified"}).json()["credits"] == 0
             client.app.state.components.security.adjust_credit("admin", "u1", 1, "test failure refund")
             failed = client.post("/analyses", headers={"Authorization": "Bearer verified"}, json={"research_idea":"this fails safely","mode":"full"})
-            assert wait(client, failed.json()["analysis_id"], "verified")["status"] == "failed"
+            failed_record = wait(client, failed.json()["analysis_id"], "verified")
+            assert failed_record["status"] == "failed"
+            assert "reserved credit was returned" in failed_record["error_message"]
             assert client.get("/me", headers={"Authorization": "Bearer verified"}).json()["credits"] == 1
+
+
+def test_zero_credit_admin_full_analysis_is_exempt_owned_and_persisted_without_ledger_work():
+    auth = StaticAuthProvider({"admin-token": AuthIdentity("admin-user", "admin@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(
+            settings=settings_for(Path(directory) / "admin-exempt.sqlite"),
+            analysis_executor=result_for,
+            auth_provider=auth,
+        )) as client:
+            headers = {"Authorization": "Bearer admin-token"}
+            security = client.app.state.components.security
+            client.get("/me", headers=headers)
+            security.adjust_credit("setup", "admin-user", -2, "zero admin test balance")
+            security.set_role("admin-user", "admin")
+            before_ledger = security.ledger("admin-user")
+
+            account = client.get("/me", headers=headers).json()
+            assert account["role"] == "admin"
+            assert account["credit_exempt"] is True
+            assert account["credits"] == 0
+            assert account["plan_label"] == "Admin access"
+
+            created = client.post("/analyses", headers=headers, json={
+                "research_idea": "administrator full analysis with zero credits",
+                "mode": "full",
+            })
+            assert created.status_code == 201
+            analysis_id = created.json()["analysis_id"]
+            persisted = client.app.state.components.repository.get(analysis_id)
+            assert persisted.owner_kind == "user"
+            assert persisted.owner_id == "admin-user"
+            assert persisted.reservation_id is None
+            assert persisted.configuration["credit_billing_decision"] == "administrator_credit_exempt"
+
+            completed = wait(client, analysis_id, "admin-token")
+            assert completed["status"] == "completed"
+            assert security.balance("admin-user") == 0
+            assert security.ledger("admin-user") == before_ledger
+            with client.app.state.components.database.connect() as connection:
+                reservation = connection.execute(
+                    "SELECT 1 FROM credit_reservations WHERE analysis_id=?",
+                    (analysis_id,),
+                ).fetchone()
+                analysis_ledger = connection.execute(
+                    "SELECT 1 FROM credit_ledger WHERE analysis_id=?",
+                    (analysis_id,),
+                ).fetchone()
+            assert reservation is None
+            assert analysis_ledger is None
+            quick = client.post("/analyses", headers=headers, json={
+                "research_idea": "administrator quick search with zero credits",
+                "mode": "quick",
+            })
+            assert quick.status_code == 201
+            wait(client, quick.json()["analysis_id"], "admin-token")
+            assert security.balance("admin-user") == 0
+            assert security.ledger("admin-user") == before_ledger
+            history = client.get("/analyses", headers=headers).json()
+            assert analysis_id in [item["analysis_id"] for item in history]
+            assert quick.json()["analysis_id"] in [item["analysis_id"] for item in history]
+
+            # Exemption does not relax request or scientific provider bounds.
+            assert client.post("/analyses", headers=headers, json={
+                "research_idea": "bounded admin analysis",
+                "mode": "full", "paper_limit": 101,
+            }).status_code == 422
+            assert client.post("/analyses", headers=headers, json={
+                "research_idea": "", "mode": "full",
+            }).status_code == 422
+
+
+def test_failed_admin_analysis_has_no_refund_or_refund_wording():
+    auth = StaticAuthProvider({"admin-token": AuthIdentity("admin-user", "admin@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(
+            settings=settings_for(Path(directory) / "admin-failure.sqlite"),
+            analysis_executor=result_for,
+            auth_provider=auth,
+        )) as client:
+            headers = {"Authorization": "Bearer admin-token"}
+            security = client.app.state.components.security
+            client.get("/me", headers=headers)
+            security.adjust_credit("setup", "admin-user", -2, "zero admin test balance")
+            security.set_role("admin-user", "admin")
+            before_ledger = security.ledger("admin-user")
+
+            created = client.post("/analyses", headers=headers, json={
+                "research_idea": "administrator analysis intentionally fails",
+                "mode": "full",
+            })
+            failed = wait(client, created.json()["analysis_id"], "admin-token")
+            assert failed["status"] == "failed"
+            assert "refund" not in failed["error_message"].casefold()
+            assert "reserved credit" not in failed["error_message"].casefold()
+            assert security.balance("admin-user") == 0
+            assert security.ledger("admin-user") == before_ledger
+
+
+def test_admin_cancellation_and_concurrent_submissions_never_touch_credit_ledger():
+    started = Event()
+    release = Event()
+    auth = StaticAuthProvider({"admin-token": AuthIdentity("admin-user", "admin@example.test", True)})
+
+    def block(record):
+        started.set()
+        release.wait(2)
+        return result_for(record)
+
+    with tempfile.TemporaryDirectory() as directory:
+        settings = replace(
+            settings_for(Path(directory) / "admin-concurrent.sqlite"),
+            max_analysis_workers=1,
+        )
+        with TestClient(create_app(
+            settings=settings,
+            analysis_executor=block,
+            auth_provider=auth,
+        )) as client:
+            headers = {"Authorization": "Bearer admin-token"}
+            security = client.app.state.components.security
+            client.get("/me", headers=headers)
+            security.adjust_credit("setup", "admin-user", -2, "zero admin test balance")
+            security.set_role("admin-user", "admin")
+            before_ledger = security.ledger("admin-user")
+            try:
+                first = client.post("/analyses", headers=headers, json={
+                    "research_idea": "first concurrent administrator analysis", "mode": "full",
+                })
+                assert first.status_code == 201
+                assert started.wait(1)
+                second = client.post("/analyses", headers=headers, json={
+                    "research_idea": "second queued administrator analysis", "mode": "full",
+                })
+                assert second.status_code == 201
+                third = client.post("/analyses", headers=headers, json={
+                    "research_idea": "third bounded administrator analysis", "mode": "full",
+                })
+                assert third.status_code == 429
+                assert client.delete(
+                    f"/analyses/{second.json()['analysis_id']}", headers=headers,
+                ).status_code == 204
+                assert security.balance("admin-user") == 0
+                assert security.ledger("admin-user") == before_ledger
+            finally:
+                release.set()
+            wait(client, first.json()["analysis_id"], "admin-token")
+            assert security.ledger("admin-user") == before_ledger
+
+
+def test_forged_admin_inputs_and_metadata_fail_and_demotion_takes_effect_next_request():
+    auth = StaticAuthProvider({
+        "admin-looking-token": AuthIdentity(
+            "ordinary-user", "owner-admin@example.test", True,
+        ),
+    })
+    with tempfile.TemporaryDirectory() as directory:
+        with TestClient(create_app(
+            settings=settings_for(Path(directory) / "admin-boundary.sqlite"),
+            analysis_executor=result_for,
+            auth_provider=auth,
+        )) as client:
+            headers = {"Authorization": "Bearer admin-looking-token", "X-Admin": "true"}
+            security = client.app.state.components.security
+            client.get("/me", headers=headers)
+            security.adjust_credit("setup", "ordinary-user", -2, "zero ordinary balance")
+
+            forged = client.post("/analyses", headers=headers, json={
+                "research_idea": "forged administrator request field", "mode": "full",
+                "is_admin": True,
+            })
+            assert forged.status_code == 422
+            assert client.post("/analyses", headers=headers, json={
+                "research_idea": "metadata cannot provide administrator access", "mode": "full",
+            }).status_code == 402
+
+            security.set_role("ordinary-user", "admin")
+            exempt = client.post("/analyses", headers=headers, json={
+                "research_idea": "server role permits this administrator analysis", "mode": "full",
+            })
+            assert exempt.status_code == 201
+            wait(client, exempt.json()["analysis_id"], "admin-looking-token")
+            security.set_role("ordinary-user", "user")
+            blocked = client.post("/analyses", headers=headers, json={
+                "research_idea": "demoted administrator now needs a credit", "mode": "full",
+            })
+            assert blocked.status_code == 402
+
+
+def test_supabase_role_metadata_cannot_enable_administrator_credit_exemption():
+    provider = SupabaseAuthProvider("https://auth.example.test")
+    claims = {
+        "sub": "metadata-user",
+        "email": "owner-admin@example.test",
+        "email_verified": True,
+        "user_metadata": {"role": "admin", "is_admin": True},
+        "app_metadata": {"role": "admin"},
+    }
+    signing_key = type("SigningKey", (), {"key": "test-public-key"})()
+    with tempfile.TemporaryDirectory() as directory:
+        with (
+            patch.object(
+                provider._jwks,
+                "get_signing_key_from_jwt",
+                return_value=signing_key,
+            ),
+            patch("src.auth.jwt.decode", return_value=claims),
+            TestClient(create_app(
+                settings=settings_for(Path(directory) / "supabase-metadata.sqlite"),
+                analysis_executor=result_for,
+                auth_provider=provider,
+            )) as client,
+        ):
+            headers = {"Authorization": "Bearer forged-metadata-token"}
+            security = client.app.state.components.security
+            account = client.get("/me", headers=headers)
+            assert account.status_code == 200
+            assert account.json()["role"] == "user"
+            assert account.json()["credit_exempt"] is False
+            security.adjust_credit("setup", "metadata-user", -2, "zero ordinary balance")
+
+            response = client.post("/analyses", headers=headers, json={
+                "research_idea": "Supabase role metadata must not bypass credits",
+                "mode": "full",
+            })
+            assert response.status_code == 402
 
 
 def test_concurrent_credit_reservations_cannot_overspend():

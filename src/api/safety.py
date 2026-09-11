@@ -134,5 +134,10 @@ def _coverage_notices(status: object, truncated: bool) -> list[str]:
     return messages
 
 
-def public_job_error(_message: str | None) -> str:
-    return "The analysis could not be completed. Any reserved credit was returned. Please try again later."
+def public_job_error(_message: str | None, *, credit_was_reserved: bool = False) -> str:
+    if credit_was_reserved:
+        return (
+            "The analysis could not be completed. Any reserved credit was returned. "
+            "Please try again later."
+        )
+    return "The analysis could not be completed. Please try again later."

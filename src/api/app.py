@@ -96,8 +96,21 @@ def create_app(
         execute,
         max_workers=runtime_settings.max_analysis_workers,
     )
-    runner.on_success = security.settle_credit
-    runner.on_failure = security.release_credit
+
+    def settle_reserved_credit(analysis_id: str) -> bool:
+        record = repository.get(analysis_id)
+        if record is None or record.reservation_id is None:
+            return False
+        return security.settle_credit(analysis_id)
+
+    def release_reserved_credit(analysis_id: str) -> bool:
+        record = repository.get(analysis_id)
+        if record is None or record.reservation_id is None:
+            return False
+        return security.release_credit(analysis_id)
+
+    runner.on_success = settle_reserved_credit
+    runner.on_failure = release_reserved_credit
     components = ApiComponents(
         runtime_settings, database, repository, service, runner, security,
         configured_auth, configured_billing, configured_storage,

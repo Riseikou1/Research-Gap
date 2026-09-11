@@ -72,7 +72,7 @@ export default function Profile() {
     <section className="account-summary" aria-label="Account summary">
       <div><span>Email</span><strong>{email}</strong></div><div><span>Verification</span><strong>{session.user.email_confirmed_at || me?.verified ? "Verified" : "Not verified"}</strong></div>
       <div><span>Display name</span><strong>{me?.profile?.display_name || "Not set"}</strong></div><div><span>Role</span><strong>{me?.role ?? "User"}</strong></div>
-      <div><span>Credits</span><strong>{profileLoading ? "…" : me?.credits ?? 0}</strong></div><div><span>Plan</span><strong>{me?.plan_label ?? "Free"} · {me?.subscription_status ?? "No subscription"}</strong></div>
+      <div><span>Credits</span><strong>{profileLoading ? "…" : me?.credit_exempt ? "Not charged for administrator analyses" : me?.credits ?? 0}</strong></div><div><span>Plan</span><strong>{me?.plan_label ?? "Free"} · {me?.subscription_status ?? "No subscription"}</strong></div>
     </section>
 
     <section className="settings-section"><div className="section-heading"><h2>Profile details</h2><p>Choose the name and image shown in your account.</p></div><form className="panel auth-form" onSubmit={save}><label>Display name<input name="name" defaultValue={me?.profile?.display_name ?? ""} minLength={1} maxLength={80} required/></label><label>Profile picture<input type="file" accept="image/png,image/jpeg,image/webp" onChange={avatar}/><small>PNG, JPEG, or WebP; maximum 2 MB.</small></label>{message && <p className="alert success" role="status">{message}</p>}<div className="actions"><button className="button primary">Save profile</button><button className="button secondary" type="button" onClick={claim}>Claim guest history</button></div></form></section>

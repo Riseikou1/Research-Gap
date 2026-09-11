@@ -10,6 +10,12 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 AnalysisStatus = Literal["pending", "running", "completed", "failed"]
 AnalysisMode = Literal["quick", "full"]
 OwnerKind = Literal["user", "guest", "local"]
+CreditBillingDecision = Literal[
+    "paid_credit",
+    "administrator_credit_exempt",
+    "guest_quick_search",
+    "credit_not_applicable",
+]
 
 
 class StrictPersistenceModel(BaseModel):

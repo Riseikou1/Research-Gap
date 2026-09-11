@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from src.api.dependencies import principal_for
 from src.api.models import AnalysisCreated, AnalysisDetail, AnalysisSummary, CreateAnalysisRequest
 from src.auth import network_rate_key
-from src.persistence.models import NewAnalysis
-from src.persistence.security import QuotaError
+from src.persistence.models import CreditBillingDecision, NewAnalysis
+from src.persistence.security import QuotaError, SecurityRepository
 from src.api.safety import public_analysis_result
 from src.extraction.evidence import canonical_evidence_key
 from src.retrieval.deduplication import normalize_doi, normalize_title
@@ -48,7 +48,13 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
 
     analysis_id = str(uuid4())
     reservation_id = None
-    if mode == "full" and principal.kind == "user":
+    billing_decision = _credit_billing_decision(
+        mode,
+        principal.kind,
+        principal.principal_id,
+        components.security,
+    )
+    if billing_decision == "paid_credit":
         try:
             reservation_id = components.security.reserve_credit(principal.principal_id, analysis_id)
         except QuotaError as exc:
@@ -58,6 +64,7 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
         query_generator="deterministic" if mode == "quick" else payload.query_generator,
         paper_limit=payload.paper_limit, full_text=payload.full_text and mode == "full", mode=mode,
     )
+    configuration["credit_billing_decision"] = billing_decision
     try:
         record = components.repository.create(NewAnalysis(
             analysis_id=analysis_id, research_idea=payload.research_idea,
@@ -75,7 +82,8 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
         components.runner.submit(analysis_id)
     except Exception:
         components.repository.mark_failed(analysis_id, "Analysis worker is unavailable.")
-        components.security.release_credit(analysis_id)
+        if reservation_id:
+            components.security.release_credit(analysis_id)
         raise HTTPException(status_code=503, detail="Analysis worker is unavailable.")
     return AnalysisCreated(analysis_id=record.analysis_id, status=record.status)
 
@@ -127,9 +135,27 @@ def delete_analysis(analysis_id: str, request: Request) -> None:
         raise HTTPException(status_code=409, detail="A running analysis cannot be deleted until it finishes.")
     if record.status == "pending":
         components.repository.mark_failed(analysis_id, "Analysis cancelled before it started.")
-        components.security.release_credit(analysis_id)
+        if record.reservation_id:
+            components.security.release_credit(analysis_id)
     if not components.repository.delete_for_owner(analysis_id, principal.kind, principal.principal_id):
         raise HTTPException(status_code=404, detail="Analysis not found.")
+
+
+def _credit_billing_decision(
+    mode: str,
+    principal_kind: str,
+    principal_id: str,
+    security: SecurityRepository,
+) -> CreditBillingDecision:
+    """Choose ledger behavior from server-owned account state only."""
+
+    if mode == "full" and principal_kind == "user":
+        if security.administrator_credit_exempt(principal_id):
+            return "administrator_credit_exempt"
+        return "paid_credit"
+    if mode == "quick" and principal_kind == "guest":
+        return "guest_quick_search"
+    return "credit_not_applicable"
 
 
 def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
