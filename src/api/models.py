@@ -90,3 +90,5 @@ class AnalysisDetail(AnalysisSummary):
 
 class HealthResponse(StrictApiModel):
     status: Literal["ok"] = "ok"
+    pipeline_version: str
+    api_schema_version: str

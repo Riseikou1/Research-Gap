@@ -30,7 +30,7 @@ from .document import PaperDocument, PaperSection, SourceFormat, normalize_headi
 
 
 LOGGER = logging.getLogger(__name__)
-PARSER_VERSION = "full-text-v1"
+PARSER_VERSION = "full-text-v2"
 ACCEPTED_CONTENT_TYPES = {
     "application/pdf": "pdf",
     "application/xml": "xml",
@@ -328,7 +328,98 @@ def _parse_pdf(data: bytes) -> list[tuple[str, str]]:
     text = "\n".join(value for _, value in pages).strip()
     if len(text) < 80 or len(re.sub(r"\W", "", text)) < 40:
         raise ValueError("PDF has no usable text layer")
-    return pages
+    # Text-layer PDFs do not expose HTML/JATS section nodes, but scholarly
+    # headings normally survive as standalone lines. Segment them
+    # conservatively so methods/results provenance and context selection do
+    # not collapse every page into the generic ``other`` bucket.
+    return _pdf_semantic_sections(pages) or pages
+
+
+_PDF_UNNUMBERED_HEADINGS = re.compile(
+    r"^(?:abstract|introduction|background|related work|literature review|"
+    r"methods?|methodology|materials(?: and methods)?|datasets?|data|"
+    r"experiments?|experimental setup|evaluation(?: setup| metrics)?|metrics|"
+    r"results?(?: and discussion)?|discussion|error analysis|limitations?|"
+    r"future work|future directions?|conclusions?|acknowledg(?:e)?ments?|"
+    r"references|bibliography|works cited)$",
+    re.I,
+)
+_PDF_NUMBERED_HEADING = re.compile(
+    r"^(?P<marker>(?:[1-9]\d?(?:\.\d{1,2})*)|[A-Z])(?:[.)])?\s+"
+    r"(?P<title>.{2,100})$"
+)
+
+
+def _pdf_heading(line: str) -> str | None:
+    value = " ".join(line.split()).strip()
+    if not value or len(value) > 120:
+        return None
+    if _PDF_UNNUMBERED_HEADINGS.fullmatch(value):
+        return value
+    match = _PDF_NUMBERED_HEADING.fullmatch(value)
+    if match is None:
+        return None
+    title = match.group("title").strip()
+    # Numbered prose/list items commonly end in sentence punctuation; real
+    # extracted section headings generally do not.
+    if (
+        title.endswith((".", ";", ":", ","))
+        or len(title.split()) > 14
+        or not title[0].isalpha()
+        or (match.group("marker").isalpha() and not title[0].isupper())
+    ):
+        return None
+    return value
+
+
+def _pdf_semantic_sections(
+    pages: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    sections: list[tuple[str, str]] = []
+    heading = "Front matter"
+    body: list[str] = []
+    numbered_parent: tuple[str, str] | None = None
+
+    def flush() -> None:
+        text = "\n".join(body).strip()
+        if text and not _REFERENCE_HEADING.fullmatch(_heading_label(heading)):
+            sections.append((heading, text))
+
+    for _page_heading, page_text in pages:
+        for raw_line in page_text.splitlines():
+            line = " ".join(raw_line.split()).strip()
+            detected = _pdf_heading(line)
+            if detected is None:
+                body.append(line)
+                continue
+            flush()
+            numbered = _PDF_NUMBERED_HEADING.fullmatch(detected)
+            if numbered is not None and numbered.group("marker")[0].isdigit():
+                marker = numbered.group("marker")
+                if "." not in marker:
+                    numbered_parent = (marker, detected)
+                elif numbered_parent is not None and marker.split(".", 1)[0] == numbered_parent[0]:
+                    detected = f"{numbered_parent[1]} / {detected}"
+            elif numbered is None:
+                numbered_parent = None
+            heading = detected
+            body = []
+    flush()
+    # A lone false-positive heading is weaker than page-level chunking.
+    semantic = [
+        value
+        for value in sections
+        if normalize_heading(value[0]) != ["other"]
+    ]
+    return sections if len(semantic) >= 2 else []
+
+
+def _heading_label(heading: str) -> str:
+    return re.sub(
+        r"^(?:(?:\d{1,2}(?:\.\d{1,2})*)|[A-Z])(?:[.)])?\s+",
+        "",
+        heading,
+    ).strip()
 
 
 def _parse_xml(data: bytes) -> list[tuple[str, str]]:
@@ -387,6 +478,9 @@ def _parse_html(data: bytes) -> list[tuple[str, str]]:
     if paragraphs:
         if not _REFERENCE_HEADING.fullmatch(heading):
             sections.append((heading, "\n".join(paragraphs)))
+    article_text = " ".join(text for _heading, text in sections)
+    if len(article_text) < 500 or len(re.sub(r"\W", "", article_text)) < 250:
+        raise ValueError("HTML article container contains only landing-page metadata")
     return sections
 
 

@@ -29,7 +29,8 @@ export const coverageSchema = z.object({
 });
 
 const paperCoverageSchema = z.object({
-  paper_id: z.string(), title: z.string(), full_text_requested: z.boolean(),
+  paper_id: z.string(), title: z.string(), aliases: stringList,
+  full_text_requested: z.boolean(),
   full_text_attempted: z.boolean(),
   final_evidence_level: z.enum(["full_text", "abstract", "abstract_fallback", "metadata_only", "none"]),
   full_text_status: z.enum(["not_attempted", "unavailable", "fetch_failed", "parse_failed", "usable"]),
@@ -69,7 +70,8 @@ export const paperSchema = z.object({
   id: z.string(), title: z.string(), abstract: z.string().nullable().default(null),
   authors: stringList, publication_year: z.number().nullable().default(null),
   publication_date: z.string().nullable().optional(), doi: z.string().nullable().default(null),
-  openalex_id: z.string().nullable().optional(), openalex_aliases: stringList,
+  doi_aliases: stringList, openalex_id: z.string().nullable().optional(),
+  openalex_aliases: stringList, work_type: z.string().nullable().optional(),
   citation_count: z.number().default(0),
   source: z.string().nullable().optional(), url: z.string().nullable().default(null),
   full_text_locations: z.array(z.object({url: z.string(), source_format: z.string(), is_open_access: z.boolean()})).default([]),

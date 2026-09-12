@@ -1063,6 +1063,7 @@ class PaperExtractor:
                 records.append(PaperCoverageRecord(
                     paper_id=paper.id,
                     title=paper.title,
+                    aliases=_paper_aliases(paper),
                     full_text_requested=coverage.full_text_requested,
                     full_text_attempted=coverage.full_text_attempted,
                     final_evidence_level=coverage.source_level,
@@ -1092,6 +1093,7 @@ class PaperExtractor:
             records.append(PaperCoverageRecord(
                 paper_id=paper.id,
                 title=paper.title,
+                aliases=_paper_aliases(paper),
                 full_text_requested=self.full_text_client is not None,
                 full_text_attempted=attempted,
                 final_evidence_level="none",
@@ -1659,7 +1661,9 @@ def _to_evidence(
         full_text_status=document.status if document else "not_attempted",
         full_text_requested=full_text_requested,
         full_text_attempted=attempted,
-        full_text_extraction_succeeded=full_text_used,
+        # A successful provider call is not a successful full-text analysis
+        # unless at least one exactly validated full-text claim survives.
+        full_text_extraction_succeeded=has_full_text_evidence,
         full_text_source_format=document.source_format if document and attempted else None,
         inspected_section_types=list(dict.fromkeys(
             role for section in inspected_sections for role in section.section_types
@@ -1711,3 +1715,10 @@ def _failure_category(error: object | None) -> str:
     ):
         return "model_schema_evidence_validation"
     return "provider_failure"
+
+
+def _paper_aliases(paper: Paper) -> list[str]:
+    return list(dict.fromkeys([
+        *paper.openalex_aliases,
+        *paper.doi_aliases,
+    ]))

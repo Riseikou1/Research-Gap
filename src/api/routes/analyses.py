@@ -267,6 +267,9 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
                 + (f" ({str(item['full_text_source_format']).upper()})" if item.get("full_text_source_format") else "")
                 + "."
             )
+            aliases = item.get("aliases") or []
+            if isinstance(aliases, list) and len(aliases) > 1:
+                lines.append("  Canonical aliases: " + ", ".join(str(value) for value in aliases) + ".")
             sections = item.get("inspected_section_types") or []
             if isinstance(sections, list) and sections:
                 lines.append("  Full-text sections supplied to the extraction attempt: " + ", ".join(str(value).replace("_", " ") for value in sections) + ".")

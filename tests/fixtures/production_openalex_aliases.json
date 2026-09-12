@@ -1,0 +1,175 @@
+{
+  "source_reports": [
+    "naacl_abstract_only_m9_v3.md",
+    "naacl_full_text_m9_v3.md"
+  ],
+  "reported_duplicate_titles": {
+    "Reducing hallucination in structured outputs via Retrieval-Augmented Generation": 3,
+    "Retrieval-Augmented Generation (RAG) and Large Language Models (LLMs) for Enterprise Knowledge Management and Document Automation: A Systematic Literature Review": 2,
+    "Retrieval-Augmented Generation (RAG) in Healthcare: A Comprehensive Review": 2,
+    "Optimizing LLM Based Retrieval Augmented Generation Pipelines in the Financial Domain": 2
+  },
+  "report_regression": {
+    "naacl_abstract_only_m9_v3.md": {
+      "per_paper_coverage_ids": [
+        "https://openalex.org/W4394838812",
+        "https://openalex.org/W6966460441",
+        "https://openalex.org/W4401042735"
+      ],
+      "final_outcomes": {
+        "requested": 10,
+        "abstract_successes": 10,
+        "accounted": 10
+      }
+    },
+    "naacl_full_text_m9_v3.md": {
+      "per_paper_coverage_ids": [
+        "https://openalex.org/W4394838812",
+        "https://openalex.org/W6966460441",
+        "https://openalex.org/W4401042735"
+      ],
+      "naacl_section_types": ["other"],
+      "final_outcomes": {
+        "requested": 10,
+        "full_text_successes": 1,
+        "abstract_fallback_successes": 8,
+        "final_failures": 1,
+        "accounted": 10
+      }
+    }
+  },
+  "works": [
+    {
+      "id": "https://openalex.org/W4394838812",
+      "display_name": "Reducing hallucination in structured outputs via Retrieval-Augmented Generation",
+      "publication_year": 2024,
+      "publication_date": "2024-04-12",
+      "doi": "https://doi.org/10.48550/arxiv.2404.08189",
+      "type": "preprint",
+      "abstract_inverted_index": {
+        "We": [0], "deploy": [1], "retrieval": [2], "augmented": [3],
+        "generation": [4], "for": [5], "enterprise": [6], "workflows": [7],
+        "and": [8], "reduce": [9], "hallucination": [10], "while": [11],
+        "preserving": [12], "out": [13], "of": [14], "domain": [15],
+        "generalization": [16]
+      },
+      "authorships": [
+        {"author": {"display_name": "Patrice Béchard"}},
+        {"author": {"display_name": "Orlando Marquez Ayala"}}
+      ],
+      "cited_by_count": 18,
+      "primary_location": {"is_oa": true, "landing_page_url": "http://arxiv.org/abs/2404.08189", "pdf_url": "https://arxiv.org/pdf/2404.08189", "source": {"display_name": "arXiv (Cornell University)"}},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "http://arxiv.org/abs/2404.08189", "pdf_url": "https://arxiv.org/pdf/2404.08189"},
+      "locations": [
+        {"is_oa": true, "landing_page_url": "http://arxiv.org/abs/2404.08189", "pdf_url": "https://arxiv.org/pdf/2404.08189"},
+        {"is_oa": true, "landing_page_url": "https://doi.org/10.48550/arxiv.2404.08189", "pdf_url": null}
+      ]
+    },
+    {
+      "id": "https://openalex.org/W6966460441",
+      "display_name": "Reducing hallucination in structured outputs via Retrieval-Augmented Generation",
+      "publication_year": 2024,
+      "publication_date": "2024-06-03",
+      "doi": "https://doi.org/10.48448/p2d8-gv20",
+      "type": "other",
+      "abstract_inverted_index": {
+        "Retrieval": [0], "augmented": [1], "generation": [2],
+        "improves": [3], "structured": [4], "workflow": [5], "outputs": [6]
+      },
+      "authorships": [
+        {"author": {"display_name": "Association for Computational Linguistics 2024"}},
+        {"author": {"display_name": "Bechard, Patrice"}},
+        {"author": {"display_name": "Marquez, Orlando"}}
+      ],
+      "cited_by_count": 0,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.48448/p2d8-gv20", "pdf_url": null, "source": {"display_name": "Underline Science Inc."}},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.48448/p2d8-gv20", "pdf_url": null},
+      "locations": [{"is_oa": true, "landing_page_url": "https://doi.org/10.48448/p2d8-gv20", "pdf_url": null}]
+    },
+    {
+      "id": "https://openalex.org/W4401042735",
+      "display_name": "Reducing hallucination in structured outputs via Retrieval-Augmented Generation",
+      "publication_year": 2024,
+      "publication_date": "2024-01-01",
+      "doi": "https://doi.org/10.18653/v1/2024.naacl-industry.19",
+      "type": "conference-paper",
+      "abstract_inverted_index": {
+        "Retrieval": [0], "augmented": [1], "generation": [2],
+        "reduces": [3], "hallucination": [4]
+      },
+      "authorships": [
+        {"author": {"display_name": "Orlando Ayala"}},
+        {"author": {"display_name": "Patrice Bechard"}}
+      ],
+      "cited_by_count": 75,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.18653/v1/2024.naacl-industry.19", "pdf_url": "https://aclanthology.org/2024.naacl-industry.19.pdf", "source": null},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.18653/v1/2024.naacl-industry.19", "pdf_url": "https://aclanthology.org/2024.naacl-industry.19.pdf"},
+      "locations": [{"is_oa": true, "landing_page_url": "https://doi.org/10.18653/v1/2024.naacl-industry.19", "pdf_url": "https://aclanthology.org/2024.naacl-industry.19.pdf"}]
+    },
+    {
+      "id": "https://openalex.org/W7117820692",
+      "display_name": "Retrieval-Augmented Generation (RAG) and Large Language Models (LLMs) for Enterprise Knowledge Management and Document Automation: A Systematic Literature Review",
+      "publication_year": 2025,
+      "publication_date": "2025-12-29",
+      "doi": "https://doi.org/10.3390/app16010368",
+      "type": "review",
+      "authorships": [{"author": {"display_name": "Ehlullah Karakurt"}}, {"author": {"display_name": "Akhan Akbulut"}}],
+      "cited_by_count": 10,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.3390/app16010368", "pdf_url": "https://www.mdpi.com/2076-3417/16/1/368/pdf", "source": {"display_name": "Applied Sciences"}},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.3390/app16010368", "pdf_url": "https://www.mdpi.com/2076-3417/16/1/368/pdf"},
+      "locations": []
+    },
+    {
+      "id": "https://openalex.org/W4417026990",
+      "display_name": "Retrieval Augmented Generation (RAG) and Large Language Models (LLMs) for Enterprise Knowledge Management and Document Automation: A Systematic Literature Review",
+      "publication_year": 2025,
+      "publication_date": "2025-12-04",
+      "doi": "doi:10.20944/preprints202512.0359.v1",
+      "type": "preprint",
+      "authorships": [{"author": {"display_name": "Ehlullah Karakurt"}}, {"author": {"display_name": "Akhan Akbulut"}}],
+      "cited_by_count": 5,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.20944/preprints202512.0359.v1", "pdf_url": null, "source": {"display_name": "Preprints.org"}},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.20944/preprints202512.0359.v1", "pdf_url": null},
+      "locations": []
+    },
+    {
+      "id": "https://openalex.org/W4414128336",
+      "display_name": "Retrieval-Augmented Generation (RAG) in Healthcare: A Comprehensive Review",
+      "publication_year": 2025,
+      "publication_date": "2025-09-11",
+      "doi": "https://doi.org/10.3390/ai6090226",
+      "type": "article",
+      "authorships": [{"author": {"display_name": "Fnu Neha"}}, {"author": {"display_name": "Deepshikha Bhati"}}, {"author": {"display_name": "Deepak Kumar Shukla"}}],
+      "cited_by_count": 68,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.3390/ai6090226", "pdf_url": "https://www.mdpi.com/2673-2688/6/9/226/pdf", "source": {"display_name": "AI"}},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.3390/ai6090226", "pdf_url": "https://www.mdpi.com/2673-2688/6/9/226/pdf"},
+      "locations": []
+    },
+    {
+      "id": "https://openalex.org/W4413114507",
+      "display_name": "Retrieval-Augmented Generation (RAG) in Healthcare: A Comprehensive Review",
+      "publication_year": 2025,
+      "publication_date": "2025-08-13",
+      "doi": "https://doi.org/10.20944/preprints202508.1022.v1",
+      "type": "preprint",
+      "authorships": [{"author": {"display_name": "Fnu Neha"}}, {"author": {"display_name": "Deepshikha Bhati"}}, {"author": {"display_name": "Deepak Kumar Shukla"}}],
+      "cited_by_count": 20,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.20944/preprints202508.1022.v1", "pdf_url": "https://www.preprints.org/frontend/manuscript/7cf07745f0b81c1891d1ede5913ec32e/download_pub", "source": {"display_name": "Preprints.org"}},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.20944/preprints202508.1022.v1", "pdf_url": "https://www.preprints.org/frontend/manuscript/7cf07745f0b81c1891d1ede5913ec32e/download_pub"},
+      "locations": []
+    },
+    {
+      "id": "https://openalex.org/W4401043010",
+      "display_name": "Optimizing LLM Based Retrieval Augmented Generation Pipelines in the Financial Domain",
+      "publication_year": 2024,
+      "publication_date": "2024-01-01",
+      "doi": "https://doi.org/10.18653/v1/2024.naacl-industry.23",
+      "type": "conference-paper",
+      "authorships": [{"author": {"display_name": "Yiyun Zhao"}}, {"author": {"display_name": "Prateek Singh"}}, {"author": {"display_name": "Hanoz Bhathena"}}, {"author": {"display_name": "Bernardo Faria Ramos"}}, {"author": {"display_name": "Aviral Joshi"}}, {"author": {"display_name": "Swaroop Gadiyaram"}}, {"author": {"display_name": "Saket Sharma"}}],
+      "cited_by_count": 20,
+      "primary_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.18653/v1/2024.naacl-industry.23", "pdf_url": "https://aclanthology.org/2024.naacl-industry.23.pdf", "source": null},
+      "best_oa_location": {"is_oa": true, "landing_page_url": "https://doi.org/10.18653/v1/2024.naacl-industry.23", "pdf_url": "https://aclanthology.org/2024.naacl-industry.23.pdf"},
+      "locations": []
+    }
+  ]
+}

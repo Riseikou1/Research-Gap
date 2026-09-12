@@ -28,13 +28,22 @@ def deduplicate_paper_models(papers: Iterable[Paper]) -> list[Paper]:
 
     # Strong identifiers known for each union-find cluster.
     cluster_openalex = [
-        {key} if (key := normalize_openalex_id(paper.openalex_id)) else set()
+        {
+            key
+            for value in [paper.openalex_id, *paper.openalex_aliases]
+            if (key := normalize_openalex_id(value))
+        }
         for paper in items
     ]
     cluster_dois = [
-        {key} if (key := normalize_doi(paper.doi)) else set()
+        {
+            key
+            for value in [paper.doi, *paper.doi_aliases]
+            if (key := normalize_doi(value))
+        }
         for paper in items
     ]
+    cluster_members = [{index} for index in range(len(items))]
 
     def find(index: int) -> int:
         while parents[index] != index:
@@ -55,6 +64,7 @@ def deduplicate_paper_models(papers: Iterable[Paper]) -> list[Paper]:
 
         cluster_openalex[root].update(cluster_openalex[child])
         cluster_dois[root].update(cluster_dois[child])
+        cluster_members[root].update(cluster_members[child])
 
         return root
 
@@ -68,7 +78,15 @@ def deduplicate_paper_models(papers: Iterable[Paper]) -> list[Paper]:
         right_dois = cluster_dois[right]
 
         if left_dois and right_dois and left_dois.isdisjoint(right_dois):
-            return False
+            # Distinct DOI strings are not always distinct scholarly works:
+            # preprints, conference presentations, and versions of record can
+            # each receive their own DOI. Only let exact/near bibliographic
+            # evidence override that conflict when the authorship is strong.
+            return any(
+                _strong_authorship_match(items[left_index], items[right_index])
+                for left_index in cluster_members[left]
+                for right_index in cluster_members[right]
+            )
 
         return True
 
@@ -80,16 +98,24 @@ def deduplicate_paper_models(papers: Iterable[Paper]) -> list[Paper]:
     doi_seen: dict[str, int] = {}
 
     for index, paper in enumerate(items):
-        openalex_key = normalize_openalex_id(paper.openalex_id)
-        doi_key = normalize_doi(paper.doi)
+        openalex_keys = {
+            key
+            for value in [paper.openalex_id, *paper.openalex_aliases]
+            if (key := normalize_openalex_id(value))
+        }
+        doi_keys = {
+            key
+            for value in [paper.doi, *paper.doi_aliases]
+            if (key := normalize_doi(value))
+        }
 
-        if openalex_key:
+        for openalex_key in openalex_keys:
             if openalex_key in openalex_seen:
                 union(index, openalex_seen[openalex_key])
             else:
                 openalex_seen[openalex_key] = index
 
-        if doi_key:
+        for doi_key in doi_keys:
             if doi_key in doi_seen:
                 union(index, doi_seen[doi_key])
             else:
@@ -168,6 +194,7 @@ def deduplicate_paper_models(papers: Iterable[Paper]) -> list[Paper]:
 
         paper.provenance = ordered_provenance
         _merge_openalex_aliases(paper)
+        _merge_doi_aliases(paper)
         _refresh_internal_id(paper)
         result.append(paper)
 
@@ -196,6 +223,7 @@ def canonicalize_against(
         if reference.openalex_id:
             merged.openalex_id = reference.openalex_id
         _merge_openalex_aliases(merged)
+        _merge_doi_aliases(merged)
         mapped.append(merged)
     return deduplicate_paper_models(mapped)
 
@@ -215,13 +243,21 @@ def papers_represent_same_work(left: Paper, right: Paper) -> bool:
     }
     if left_openalex & right_openalex:
         return True
-    left_doi = normalize_doi(left.doi)
-    right_doi = normalize_doi(right.doi)
-    if left_doi and right_doi:
-        return left_doi == right_doi
+    left_dois = {
+        normalize_doi(value)
+        for value in [left.doi, *left.doi_aliases]
+        if normalize_doi(value)
+    }
+    right_dois = {
+        normalize_doi(value)
+        for value in [right.doi, *right.doi_aliases]
+        if normalize_doi(value)
+    }
+    if left_dois & right_dois:
+        return True
     left_title_year = title_year_identity(left)
     if left_title_year and left_title_year == title_year_identity(right):
-        return True
+        return not (left_dois and right_dois) or _strong_authorship_match(left, right)
     return _guarded_near_title_match(left, right)
 
 
@@ -275,7 +311,7 @@ def _guarded_near_title_match(left: Paper, right: Paper) -> bool:
     if (
         left.publication_year is None
         or left.publication_year != right.publication_year
-        or not _authors_overlap(left.authors, right.authors)
+        or not _strong_authorship_match(left, right)
     ):
         return False
     left_title = normalize_title(left.title)
@@ -291,18 +327,74 @@ def _guarded_near_title_match(left: Paper, right: Paper) -> bool:
     return overlap >= 0.9 and similarity >= 0.96
 
 
-def _authors_overlap(left: list[str], right: list[str]) -> bool:
-    if not left or not right:
+def _strong_authorship_match(left: Paper, right: Paper) -> bool:
+    """Match versioned records despite accents, order, and abbreviated names.
+
+    A single author is sufficient only for two single-author records. For
+    multi-author works, two independently matching personal names are needed
+    before different DOI values can be treated as manifestation identifiers.
+    """
+
+    left_authors = [_author_tokens(value) for value in left.authors]
+    right_authors = [_author_tokens(value) for value in right.authors]
+    left_authors = [value for value in left_authors if value]
+    right_authors = [value for value in right_authors if value]
+    if not left_authors or not right_authors:
         return False
-    left_keys = {normalize_title(author) for author in left}
-    right_keys = {normalize_title(author) for author in right}
-    return bool((left_keys - {""}) & (right_keys - {""}))
+
+    matched_right: set[int] = set()
+    matches = 0
+    for left_tokens in left_authors:
+        for index, right_tokens in enumerate(right_authors):
+            if index in matched_right or not _author_names_match(left_tokens, right_tokens):
+                continue
+            matched_right.add(index)
+            matches += 1
+            break
+    return matches >= 2 or (
+        matches == 1 and len(left_authors) == len(right_authors) == 1
+    )
+
+
+_NON_PERSON_AUTHOR_TERMS = frozenset({
+    "association", "collaboration", "committee", "conference", "consortium",
+    "group", "institute", "society", "team", "university",
+})
+
+
+def _author_tokens(value: str) -> frozenset[str]:
+    decomposed = unicodedata.normalize("NFKD", value)
+    ascii_letters = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    tokens = re.findall(r"[^\W\d_]+", ascii_letters.casefold(), flags=re.UNICODE)
+    if (
+        len(tokens) < 2
+        or any(term in tokens for term in _NON_PERSON_AUTHOR_TERMS)
+        or any(character.isdigit() for character in value)
+    ):
+        return frozenset()
+    return frozenset(tokens)
+
+
+def _author_names_match(left: frozenset[str], right: frozenset[str]) -> bool:
+    common = left & right
+    if len(common) >= 2:
+        return len(common) / max(len(left), len(right)) >= 2 / 3
+    # Initials can safely supplement a shared family/given token, but never
+    # establish identity by themselves.
+    if len(common) != 1 or len(left) > 3 or len(right) > 3:
+        return False
+    left_initials = {token[0] for token in left - common}
+    right_initials = {token[0] for token in right - common}
+    return bool(left_initials & right_initials)
 
 
 def _paper_richness(paper: Paper) -> tuple[int, ...]:
     """Prefer the record with the most useful scientific/source metadata."""
 
     return (
+        _work_type_priority(paper.work_type),
         int(bool(paper.abstract)),
         len(paper.abstract or ""),
         int(bool(paper.doi)),
@@ -313,6 +405,15 @@ def _paper_richness(paper: Paper) -> tuple[int, ...]:
         int(bool(paper.url)),
         len(paper.title),
     )
+
+
+def _work_type_priority(value: str | None) -> int:
+    normalized = normalize_title(value or "")
+    if normalized == "preprint":
+        return 0
+    if normalized in {"", "other"}:
+        return 1
+    return 2
 
 
 def _merge_paper(target: Paper, incoming: Paper) -> None:
@@ -337,16 +438,35 @@ def _merge_paper(target: Paper, incoming: Paper) -> None:
 
     # Merge authors while preserving order.
     authors = list(target.authors)
-    seen_authors = {author.casefold() for author in authors}
 
     for author in incoming.authors:
-        key = author.casefold()
-
-        if key not in seen_authors:
+        author_tokens = _author_tokens(author)
+        matching_index = next(
+            (
+                index
+                for index, existing in enumerate(authors)
+                if existing.casefold() == author.casefold()
+                or (
+                    author_tokens
+                    and _author_names_match(_author_tokens(existing), author_tokens)
+                )
+            ),
+            None,
+        )
+        if matching_index is None:
             authors.append(author)
-            seen_authors.add(key)
+        elif _author_display_richness(author) > _author_display_richness(
+            authors[matching_index]
+        ):
+            authors[matching_index] = author
 
     target.authors = authors
+    target.doi_aliases = list(target.doi_aliases)
+    for alias in [incoming.doi, *incoming.doi_aliases]:
+        if alias and normalize_doi(alias) not in {
+            normalize_doi(value) for value in target.doi_aliases
+        }:
+            target.doi_aliases.append(alias)
     target.openalex_aliases = list(target.openalex_aliases)
     for alias in [incoming.openalex_id, *incoming.openalex_aliases]:
         if alias and alias.casefold().rstrip("/") not in {
@@ -367,6 +487,7 @@ def _merge_paper(target: Paper, incoming: Paper) -> None:
     for field_name in (
         "openalex_id",
         "doi",
+        "work_type",
         "publication_year",
         "publication_date",
         "source",
@@ -395,6 +516,25 @@ def _merge_openalex_aliases(paper: Paper) -> None:
             seen.add(key)
             aliases.append(f"https://openalex.org/{key.upper()}")
     paper.openalex_aliases = aliases
+
+
+def _merge_doi_aliases(paper: Paper) -> None:
+    aliases: list[str] = []
+    seen: set[str] = set()
+    for value in [paper.doi, *paper.doi_aliases]:
+        key = normalize_doi(value)
+        if key and key not in seen:
+            seen.add(key)
+            aliases.append(f"https://doi.org/{key}")
+    paper.doi_aliases = aliases
+
+
+def _author_display_richness(value: str) -> tuple[int, int, int]:
+    return (
+        len(_author_tokens(value)),
+        sum(ord(character) > 127 for character in value),
+        len(value),
+    )
 
 
 def _merge_provenance(

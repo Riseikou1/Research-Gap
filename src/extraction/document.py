@@ -49,12 +49,12 @@ _HEADING_RULES: tuple[tuple[SectionType, re.Pattern[str]], ...] = (
     ("abstract", re.compile(r"\babstract\b")),
     ("introduction", re.compile(r"\b(?:introduction|background)\b")),
     ("related_work", re.compile(r"\b(?:related work|literature review|prior work)\b")),
-    ("methods", re.compile(r"\b(?:methods?|methodology|approach)\b")),
+    ("methods", re.compile(r"\b(?:methods?|methodology|approach|models?|training details?)\b")),
     ("materials", re.compile(r"\bmaterials?\b")),
     ("dataset", re.compile(r"\b(?:data(?:set)?s?|corpus|cohort)\b")),
-    ("experimental_setup", re.compile(r"\b(?:experiments?|experimental setup|evaluation setup|implementation details)\b")),
+    ("experimental_setup", re.compile(r"\b(?:experiments?|experimental setup|evaluation setup|evaluation metrics?|metrics?|implementation details)\b")),
     ("results", re.compile(r"\bresults?\b")),
-    ("discussion", re.compile(r"\bdiscussion\b")),
+    ("discussion", re.compile(r"\b(?:discussion|error analysis)\b")),
     ("limitations", re.compile(r"\b(?:limitations?|weaknesses?)\b")),
     ("conclusion", re.compile(r"\b(?:conclusions?|concluding remarks|summary)\b")),
     ("future_work", re.compile(r"\b(?:future work|future directions?|outlook)\b")),
@@ -90,7 +90,7 @@ def build_extraction_context(
     document: PaperDocument,
     *,
     max_chars: int,
-    max_sections: int = 12,
+    max_sections: int = 16,
 ) -> tuple[str, list[PaperSection], bool]:
     """Choose relevant sections once, preserving deterministic document order."""
 

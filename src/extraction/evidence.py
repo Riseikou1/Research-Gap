@@ -71,6 +71,7 @@ class PaperCoverageRecord(BaseModel):
 
     paper_id: str = Field(min_length=1)
     title: str = Field(min_length=1)
+    aliases: list[str] = Field(default_factory=list)
     full_text_requested: bool
     full_text_attempted: bool
     final_evidence_level: Literal[

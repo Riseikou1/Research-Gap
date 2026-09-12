@@ -34,7 +34,7 @@ OPENALEX_SEMANTIC_MAX_RESULTS = 50
 
 SELECT_FIELDS = (
     "id,display_name,title,abstract_inverted_index,authorships,"
-    "publication_year,publication_date,doi,primary_location,best_oa_location,locations,"
+    "publication_year,publication_date,doi,type,primary_location,best_oa_location,locations,"
     "cited_by_count,relevance_score"
 )
 
@@ -369,7 +369,10 @@ def _parse_work(
         publication_year=year,
         publication_date=_optional_date(work.get("publication_date")),
         doi=doi,
+        doi_aliases=[doi] if doi else [],
         openalex_id=openalex_id,
+        openalex_aliases=[openalex_id] if openalex_id else [],
+        work_type=_optional_string(work.get("type")),
         citation_count=max(_optional_int(work.get("cited_by_count")) or 0, 0),
         source=_optional_string(source.get("display_name")),
         url=(_optional_string(location.get("landing_page_url")) or openalex_id),

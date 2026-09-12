@@ -88,4 +88,22 @@ describe("ResultView", () => {
     const {container} = render(<ResultView analysis={analysis}/>);
     expect(container.querySelectorAll(".paper-list .paper")).toHaveLength(2);
   });
+
+  it("does not expand strongly authored version aliases with different DOIs", () => {
+    const title="Reducing hallucination in structured outputs via Retrieval-Augmented Generation";
+    const base={
+      ...realisticAnalysis.result!.papers[0],title,publication_year:2024,
+      authors:["Patrice Béchard","Orlando Marquez Ayala"],
+    };
+    const papers=[
+      {...base,id:"https://openalex.org/W4394838812",openalex_id:"https://openalex.org/W4394838812",doi:"https://doi.org/10.48550/arxiv.2404.08189"},
+      {...base,id:"https://openalex.org/W6966460441",openalex_id:"https://openalex.org/W6966460441",doi:"https://doi.org/10.48448/p2d8-gv20",authors:["Bechard, Patrice","Marquez, Orlando"]},
+      {...base,id:"https://openalex.org/W4401042735",openalex_id:"https://openalex.org/W4401042735",doi:"https://doi.org/10.18653/v1/2024.naacl-industry.19",authors:["Orlando Ayala","Patrice Bechard"]},
+    ];
+    const analysis=analysisSchema.parse({...realisticAnalysis,result:{
+      ...realisticAnalysis.result,papers,
+    }});
+    const {container}=render(<ResultView analysis={analysis}/>);
+    expect(container.querySelectorAll(".paper-list .paper")).toHaveLength(1);
+  });
 });

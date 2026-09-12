@@ -77,8 +77,10 @@ class Paper(BaseModel):
     publication_date: date | None = None
 
     doi: str | None = None
+    doi_aliases: list[str] = Field(default_factory=list)
     openalex_id: str | None = None
     openalex_aliases: list[str] = Field(default_factory=list)
+    work_type: str | None = None
 
     citation_count: int = Field(default=0, ge=0)
 
@@ -120,6 +122,7 @@ class Paper(BaseModel):
         "abstract",
         "doi",
         "openalex_id",
+        "work_type",
         "source",
         "url",
         mode="before",
@@ -156,6 +159,23 @@ class Paper(BaseModel):
     @field_validator("openalex_aliases", mode="before")
     @classmethod
     def normalize_openalex_aliases(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        result: list[str] = []
+        seen: set[str] = set()
+        for alias in value:
+            if not isinstance(alias, str):
+                continue
+            normalized = " ".join(alias.split()).rstrip("/")
+            key = normalized.casefold()
+            if normalized and key not in seen:
+                seen.add(key)
+                result.append(normalized)
+        return result
+
+    @field_validator("doi_aliases", mode="before")
+    @classmethod
+    def normalize_doi_aliases(cls, value: object) -> object:
         if not isinstance(value, list):
             return value
         result: list[str] = []
@@ -249,6 +269,8 @@ class Paper(BaseModel):
             "authors": list(self.authors),
             "year": self.publication_year,
             "doi": self.doi,
+            "doi_aliases": list(self.doi_aliases),
+            "work_type": self.work_type,
             "url": self.url,
             "citation_count": self.citation_count,
             "full_text_locations": [

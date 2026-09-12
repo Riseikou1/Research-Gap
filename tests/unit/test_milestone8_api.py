@@ -99,7 +99,11 @@ class ApiTest(unittest.TestCase):
     def test_health_checks_database(self) -> None:
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
+        self.assertEqual(response.json(), {
+            "status": "ok",
+            "pipeline_version": "m9-v4",
+            "api_schema_version": "m9-v4",
+        })
 
 
 class FailedApiJobTest(unittest.TestCase):

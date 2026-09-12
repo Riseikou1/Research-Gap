@@ -118,9 +118,17 @@ class SequenceLoader:
 def article_html() -> bytes:
     return (
         "<html><main><h2>Methods</h2><p>We enrolled 120 participants and used Model A "
-        "for controlled evaluation in two clinical centers.</p><h2>Results and Discussion</h2>"
+        "for controlled evaluation in two clinical centers. The prespecified protocol "
+        "used held-out records, blinded assessment, and repeated measurements across "
+        "both sites to evaluate robustness under realistic operating conditions.</p>"
+        "<h2>Results and Discussion</h2>"
         "<p>Model A outperformed the baseline on accuracy while performance remained lower "
-        "for the external cohort.</p></main></html>"
+        "for the external cohort. Error analysis identified retrieval noise as the main "
+        "remaining limitation, and sensitivity analyses confirmed that the primary result "
+        "was stable across the planned evaluation settings.</p><h2>Conclusion</h2>"
+        "<p>The controlled study supports additional external validation before deployment "
+        "and reports all measured outcomes without inferring unsupported sample details.</p>"
+        "</main></html>"
     ).encode()
 
 
@@ -141,6 +149,50 @@ def text_pdf() -> bytes:
     stream.set_data(
         b"BT /F1 11 Tf 50 740 Td (Methods and results from a controlled study with one hundred twenty participants and reliable accuracy measurements.) Tj ET"
     )
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    output = io.BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def sectioned_pdf() -> bytes:
+    from pypdf import PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
+
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    font = DictionaryObject({
+        NameObject("/Type"): NameObject("/Font"),
+        NameObject("/Subtype"): NameObject("/Type1"),
+        NameObject("/BaseFont"): NameObject("/Helvetica"),
+    })
+    page[NameObject("/Resources")] = DictionaryObject({
+        NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})
+    })
+    lines = (
+        "Abstract",
+        "This paper studies a retrieval method for grounded structured generation.",
+        "1 Introduction",
+        "Prior systems can hallucinate when generating enterprise workflows.",
+        "2 Methodology",
+        "We train a retriever and language model using paired workflow examples.",
+        "3 Experiments",
+        "We compare the method with a no-retrieval baseline on held-out data.",
+        "3.1 Datasets",
+        "The evaluation uses five hundred workflow examples.",
+        "4 Results",
+        "The retrieval method reduces hallucinations and improves exact match.",
+        "5 Conclusion",
+        "The results support retrieval for structured generation.",
+    )
+    commands = [b"BT /F1 10 Tf 50 740 Td"]
+    for index, line in enumerate(lines):
+        if index:
+            commands.append(b"0 -18 Td")
+        commands.append(f"({line}) Tj".encode("ascii"))
+    commands.append(b"ET")
+    stream = DecodedStreamObject()
+    stream.set_data(b" ".join(commands))
     page[NameObject("/Contents")] = writer._add_object(stream)
     output = io.BytesIO()
     writer.write(output)
@@ -198,6 +250,46 @@ class FullTextTest(unittest.TestCase):
         self.assertEqual(document.source_format, "xml")
         self.assertEqual(attempted, ["https://example.org/article.xml"])
 
+    def test_merged_alias_locations_are_tried_as_one_workflow(self):
+        paper = Paper(
+            id="canonical", title="Canonical paper",
+            openalex_aliases=["W1", "W2", "W3"],
+            full_text_locations=[
+                FullTextLocation(url="https://example.org/version-one.pdf", source_format="pdf"),
+                FullTextLocation(url="https://example.org/version-two.pdf", source_format="pdf"),
+            ],
+        )
+        client = FullTextClient()
+        attempted = []
+
+        def load_location(paper_id, location):
+            attempted.append((paper_id, location.url))
+            if location.url.endswith("version-one.pdf"):
+                return PaperDocument(
+                    paper_id=paper_id, source_url=location.url,
+                    source_format="pdf", status="fetch_failed",
+                )
+            return PaperDocument(
+                paper_id=paper_id, source_url=location.url,
+                source_format="pdf", status="usable",
+                sections=[PaperSection(
+                    id="s", heading="Methods", section_types=["methods"],
+                    text="A sufficiently detailed methods passage for extraction.",
+                )],
+            )
+
+        with patch.object(client, "_load_location", side_effect=load_location):
+            document = client.load(paper)
+
+        self.assertEqual(document.status, "usable")
+        self.assertEqual(
+            attempted,
+            [
+                ("canonical", "https://example.org/version-one.pdf"),
+                ("canonical", "https://example.org/version-two.pdf"),
+            ],
+        )
+
     def test_safe_url_validation_rejects_private_and_non_http(self):
         validator = SafeURLValidator(public_resolver)
         validator.validate("https://example.org/a.pdf")
@@ -231,6 +323,35 @@ class FullTextTest(unittest.TestCase):
         self.assertEqual(pdf.status, "usable")
         self.assertFalse(pdf.structure_available)
         self.assertGreater(len(pdf.sections), 1)
+
+    def test_video_landing_page_is_not_accepted_as_article_full_text(self):
+        landing = (
+            b"<html><main><p>Transcript Disabled NAACL 2024. Please log in to leave "
+            b"a comment.</p><h2>Related videos</h2><p>Another conference presentation."
+            b"</p></main></html>"
+        )
+        with self.assertRaisesRegex(ValueError, "landing-page metadata"):
+            parse_document(
+                "p", "https://example.org/video", "html", landing,
+                max_document_chars=5000, max_section_chars=2000,
+                max_chunk_chars=500,
+            )
+
+    def test_pdf_headings_produce_semantic_sections_and_balanced_context(self):
+        pdf = parse_document(
+            "p", "https://example.org/sectioned.pdf", "pdf", sectioned_pdf(),
+            max_document_chars=5000, max_section_chars=2000, max_chunk_chars=500,
+        )
+        self.assertTrue(pdf.structure_available)
+        roles = {role for section in pdf.sections for role in section.section_types}
+        self.assertTrue({
+            "abstract", "introduction", "methods", "experimental_setup",
+            "dataset", "results", "conclusion",
+        }.issubset(roles))
+        context, sections, truncated = build_extraction_context(pdf, max_chars=5000)
+        self.assertFalse(truncated)
+        self.assertIn("3 Experiments / 3.1 Datasets", context)
+        self.assertIn("results", {role for section in sections for role in section.section_types})
 
     def test_heading_mapping_and_context_are_bounded_and_deterministic(self):
         self.assertEqual(normalize_heading("Results and Discussion"), ["results", "discussion"])
@@ -428,6 +549,34 @@ class FullTextTest(unittest.TestCase):
         # provider is called again for an identical request.
         extractor.extract(paper)
         self.assertEqual(len(responses.calls), 2)
+
+    def test_usable_document_with_only_abstract_evidence_is_not_full_text_success(self):
+        document = PaperDocument(
+            paper_id="p", source_url="https://example.org/paper.pdf",
+            source_format="pdf", status="usable", structure_available=True,
+            sections=[PaperSection(
+                id="s1", heading="Methods", section_types=["methods"],
+                text="A detailed method section was supplied for inspection.",
+            )],
+        )
+        payload = _ExtractionResult(
+            method_or_intervention=[{
+                "value": "Model A", "evidence_text": "Model A",
+                "source": "abstract", "confidence": 0.9, "role": "primary",
+            }],
+            extraction_confidence=0.8,
+        )
+        extractor = PaperExtractor(
+            client=OpenAI(payload), full_text_client=Loader({"p": document}),
+        )
+        result = extractor.extract_many([
+            Paper(id="p", title="Paper", abstract="We evaluate Model A.")
+        ])[0]
+
+        self.assertEqual(result.coverage.source_level, "abstract_fallback")
+        self.assertFalse(result.coverage.full_text_extraction_succeeded)
+        self.assertFalse(extractor.coverage_records[0].full_text_extraction_succeeded)
+        self.assertEqual(extractor.coverage_records[0].full_text_status, "usable")
 
     def test_no_abstract_and_failed_full_text_and_metadata_fallback_is_final_failure(self):
         document = PaperDocument(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
 
+from src.application.analysis_service import PIPELINE_VERSION
 from src.api.models import HealthResponse
 from src.persistence.database import DATABASE_ERRORS
 
@@ -19,4 +20,7 @@ def health(request: Request) -> HealthResponse:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database is unavailable.",
         )
-    return HealthResponse()
+    return HealthResponse(
+        pipeline_version=PIPELINE_VERSION,
+        api_schema_version=PIPELINE_VERSION,
+    )
