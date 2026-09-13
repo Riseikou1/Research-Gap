@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import sys
 import unittest
@@ -9,10 +10,49 @@ from src.models.idea import ResearchIdea
 from src.models.paper import Paper
 from src.models.query import SearchQuery
 from src.analysis.models import IdeaAssessment
+from src.extraction.evidence import ExtractionDiagnostic
 from src.pipeline import ResearchResult
 
 
 class CliTest(unittest.TestCase):
+    def test_cli_full_json_does_not_expose_internal_extraction_errors(self) -> None:
+        result = ResearchResult(
+            idea=ResearchIdea(original_text="safe output"),
+            queries=[],
+            candidate_count=0,
+            papers=[],
+            extraction_failures=["private provider traceback"],
+            extraction_diagnostics=[ExtractionDiagnostic(
+                paper_id="p",
+                attempt="full_text",
+                stage="provider_response",
+                category="token_truncation",
+                terminal=True,
+            )],
+        )
+
+        class FakePipeline:
+            def run(self, idea, *, top_k):
+                return result
+
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["main.py", "safe output", "--json", "--full-text"],
+            ),
+            patch.object(main, "build_pipeline", return_value=FakePipeline()),
+            patch("sys.stdout", stdout),
+            patch("sys.stderr", io.StringIO()),
+        ):
+            self.assertEqual(main.main(), 0)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertNotIn("extraction_failures", payload)
+        self.assertNotIn("extraction_diagnostics", payload)
+        self.assertNotIn("traceback", stdout.getvalue())
+
     def test_openai_mode_without_api_key_has_clear_error(self) -> None:
         stderr = io.StringIO()
         env = dict(os.environ)

@@ -14,6 +14,7 @@ from time import perf_counter
 from typing import Any, Iterator
 
 from src.analysis.gap_candidates import is_concrete_entity
+from src.api.safety import public_analysis_result
 from src.application.analysis_service import (
     PipelineOptions,
     build_decomposer as build_application_decomposer,
@@ -305,8 +306,12 @@ def print_evidence(result: ResearchResult) -> None:
             )
             for notice in coverage.notices:
                 print(f"    Notice: {notice}")
-    for failure in result.extraction_failures:
-        print(f"Warning: {failure}", file=sys.stderr)
+    if result.extraction_failures:
+        print(
+            "Warning: Structured extraction failed for "
+            f"{len(result.extraction_failures)} paper(s).",
+            file=sys.stderr,
+        )
 
 
 def print_gaps(result: ResearchResult) -> None:
@@ -508,9 +513,9 @@ def main() -> int:
             payload: Any
 
             if args.show_queries:
-                payload = result.to_dict()
+                payload = public_analysis_result(result.to_dict())
             elif args.show_evidence or args.show_gaps or args.show_landscape or args.full_text:
-                payload = result.to_dict()
+                payload = public_analysis_result(result.to_dict())
             else:
                 payload = [_paper_json(paper) for paper in result.papers]
 

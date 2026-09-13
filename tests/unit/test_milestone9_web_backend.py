@@ -616,6 +616,11 @@ def test_final_coverage_accounts_once_and_separates_attempt_failures():
         "evidence": [{"paper_id": item["paper_id"]} for item in records[:3]],
         "paper_coverage": records,
         "extraction_failures": ["private provider detail"],
+        "extraction_diagnostics": [{
+            "paper_id": "invalid", "attempt": "full_text",
+            "stage": "schema_validation", "category": "invalid_json_schema",
+            "count": 1, "terminal": True,
+        }],
     })
     coverage = public["extraction_coverage"]
     self_total = (
@@ -632,6 +637,7 @@ def test_final_coverage_accounts_once_and_separates_attempt_failures():
     assert public["full_text_attempt_summary"]["parse_failures"] == 1
     assert public["full_text_attempt_summary"]["model_schema_evidence_validation_failures"] == 1
     assert "extraction_failures" not in public
+    assert "extraction_diagnostics" not in public
 
 
 def test_markdown_renders_supported_scientific_sections_and_provenance_only():

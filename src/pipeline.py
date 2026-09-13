@@ -14,7 +14,7 @@ from src.analysis.gap_candidates import GapCandidateGenerator
 from src.analysis.models import GapCandidate, IdeaAssessment
 from src.analysis.verification import GapVerifier
 from src.models.landscape import LiteratureLandscape
-from src.extraction.evidence import PaperCoverageRecord, PaperEvidence
+from src.extraction.evidence import ExtractionDiagnostic, PaperCoverageRecord, PaperEvidence
 from src.extraction.paper_extractor import PaperExtractor
 from src.query.base import QueryDecomposer, QueryGenerator
 from src.query.generator import DeterministicQueryGenerator
@@ -40,6 +40,7 @@ class ResearchResult:
     ranking_mode: Literal["hybrid", "lexical_only"] = "lexical_only"
     evidence: list[PaperEvidence] = field(default_factory=list)
     extraction_failures: list[str] = field(default_factory=list)
+    extraction_diagnostics: list[ExtractionDiagnostic] = field(default_factory=list)
     paper_coverage: list[PaperCoverageRecord] = field(default_factory=list)
     gaps: list[GapCandidate] = field(default_factory=list)
     analysis_notices: list[str] = field(default_factory=list)
@@ -71,6 +72,9 @@ class ResearchResult:
             "ranking_mode": self.ranking_mode,
             "evidence": [item.model_dump(mode="json") for item in self.evidence],
             "extraction_failures": list(self.extraction_failures),
+            "extraction_diagnostics": [
+                item.model_dump(mode="json") for item in self.extraction_diagnostics
+            ],
             "paper_coverage": [item.model_dump(mode="json") for item in self.paper_coverage],
             "gaps": gap_payloads,
             "analysis_notices": list(self.analysis_notices),
@@ -172,6 +176,7 @@ class ResearchPipeline:
         selected = deduplicate_paper_models(ranking.papers)[:top_k]
         evidence: list[PaperEvidence] = []
         extraction_failures: list[str] = []
+        extraction_diagnostics: list[ExtractionDiagnostic] = []
         paper_coverage: list[PaperCoverageRecord] = []
         gaps: list[GapCandidate] = []
         analysis_notices: list[str] = []
@@ -201,6 +206,11 @@ class ResearchPipeline:
                 ),
             )
             extraction_failures = [str(error) for error in self.extractor.failures]
+            extraction_diagnostics = [
+                item.model_copy(deep=True)
+                for item in getattr(self.extractor, "diagnostics", [])
+                if isinstance(item, ExtractionDiagnostic)
+            ]
             paper_coverage = [
                 item.model_copy(deep=True)
                 for item in getattr(self.extractor, "coverage_records", [])
@@ -273,6 +283,7 @@ class ResearchPipeline:
             ranking_mode=ranking.mode,
             evidence=evidence,
             extraction_failures=extraction_failures,
+            extraction_diagnostics=extraction_diagnostics,
             paper_coverage=paper_coverage,
             gaps=gaps,
             analysis_notices=analysis_notices,

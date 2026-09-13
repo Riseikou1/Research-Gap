@@ -10,6 +10,7 @@ def public_analysis_result(result: dict[str, object]) -> dict[str, object]:
     public = deepcopy(result)
     retrieval = public.pop("retrieval_failures", [])
     extraction = public.pop("extraction_failures", [])
+    public.pop("extraction_diagnostics", None)
     retrieval_count = len(retrieval) if isinstance(retrieval, list) else 0
     extraction_count = len(extraction) if isinstance(extraction, list) else 0
     papers = public.get("papers")

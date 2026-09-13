@@ -20,6 +20,8 @@ from src.models.paper import Paper
 from .evidence import (
     EvidenceItem,
     EvidenceSource,
+    ExtractionDiagnostic,
+    ExtractionDiagnosticCategory,
     LimitationEvidence,
     PaperCoverageRecord,
     PaperEvidence,
@@ -37,11 +39,20 @@ LOGGER = logging.getLogger(__name__)
 
 # Increment when the structured extraction contract or its compatibility
 # assumptions change. Old cache rows remain harmless misses after a bump.
-EVIDENCE_SCHEMA_VERSION = 8
+EVIDENCE_SCHEMA_VERSION = 9
 
 
 class PaperExtractionError(RuntimeError):
     """Raised when a paper cannot be converted into structured evidence."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: ExtractionDiagnosticCategory = "provider_failure",
+    ) -> None:
+        super().__init__(message)
+        self.category = category
 
 
 class _LimitationClaim(EvidenceItem):
@@ -422,6 +433,11 @@ Full-text blocks are explicitly labeled with a stable section id, semantic types
 and original heading. For full-text claims, section_id and section_heading must be
 copied exactly and section_type must be one of that block's listed types. Do not
 claim that an unextracted field is absent from the paper.
+
+Keep the response bounded: return at most four claims in each list-valued field.
+Use the shortest contiguous verbatim evidence span that fully supports each claim.
+Prioritize explicit datasets, sample sizes, comparisons or baselines, and named
+evaluation metrics over redundant descriptions.
 """
 
 
@@ -495,6 +511,7 @@ class PaperExtractor:
         api_key: str | None = None,
         model: str | None = None,
         max_output_tokens: int = 2400,
+        max_full_text_output_tokens: int = 6000,
         evidence_limit: int = 10,
         max_workers: int = max(1, (os.cpu_count() or 2) // 2),
         cache_path: str | Path | None = None,
@@ -506,6 +523,7 @@ class PaperExtractor:
     ) -> None:
         if (
             max_output_tokens <= 0
+            or max_full_text_output_tokens <= 0
             or evidence_limit < 0
             or max_workers <= 0
             or batch_size <= 0
@@ -513,12 +531,13 @@ class PaperExtractor:
             or max_full_text_context_chars <= 0
         ):
             raise ValueError(
-                "max_output_tokens must be positive, evidence_limit non-negative, "
+                "output token limits must be positive, evidence_limit non-negative, "
                 "max_workers and batch limits must be positive"
             )
 
         self.model = model or openai_extraction_model()
         self.max_output_tokens = max_output_tokens
+        self.max_full_text_output_tokens = max_full_text_output_tokens
         self.evidence_limit = evidence_limit
         self.max_workers = max_workers
         self.batch_size = batch_size
@@ -526,6 +545,7 @@ class PaperExtractor:
         self.full_text_client = full_text_client
         self.max_full_text_context_chars = max_full_text_context_chars
         self.failures: list[PaperExtractionError] = []
+        self.diagnostics: list[ExtractionDiagnostic] = []
         self.coverage_records: list[PaperCoverageRecord] = []
         self._attempt_documents: dict[str, PaperDocument] = {}
         self._cache_lock = RLock()
@@ -605,6 +625,35 @@ class PaperExtractor:
         with self._cache_lock:
             return dict(self._timings)
 
+    def diagnostics_snapshot(self) -> list[ExtractionDiagnostic]:
+        """Return safe internal diagnostics without provider text or exceptions."""
+
+        with self._cache_lock:
+            return [item.model_copy(deep=True) for item in self.diagnostics]
+
+    def _record_diagnostic(
+        self,
+        paper_id: str,
+        *,
+        attempt: Literal["standard", "full_text", "fallback"],
+        stage: Literal[
+            "provider_response", "schema_validation", "evidence_validation"
+        ],
+        category: ExtractionDiagnosticCategory,
+        count: int = 1,
+        terminal: bool = False,
+    ) -> None:
+        diagnostic = ExtractionDiagnostic(
+            paper_id=paper_id,
+            attempt=attempt,
+            stage=stage,
+            category=category,
+            count=count,
+            terminal=terminal,
+        )
+        with self._cache_lock:
+            self.diagnostics.append(diagnostic)
+
     def get_or_extract(self, paper: Paper) -> PaperEvidence:
         """Shared evidence access point for every pipeline stage."""
 
@@ -669,30 +718,64 @@ class PaperExtractor:
                 source += f"\n\n{context}"
                 instructions = _FULL_TEXT_INSTRUCTIONS
 
+        attempt: Literal["standard", "full_text", "fallback"] = (
+            "full_text"
+            if inspected_sections
+            else "fallback"
+            if not use_full_text and document.status == "usable"
+            else "standard"
+        )
+        stage: Literal[
+            "provider_response", "schema_validation", "evidence_validation"
+        ] = "provider_response"
+        response: object | None = None
+
         try:
             with self._cache_lock:
                 self._metrics["openai_extraction_requests"] += 1
             started = perf_counter()
-            response = self.client.responses.parse(
-                # Count provider requests, rather than papers, for work
-                # accounting. The existing one-paper request contract stays
-                # unchanged and remains the reliable fallback.
-                model=self.model,
-                reasoning={"effort": "low"},
-                store=False,
-                max_output_tokens=self.max_output_tokens,
-                instructions=instructions,
-                input=source,
-                text_format=_ExtractionTransportResult,
-            )
-            with self._cache_lock:
-                self._timings["initial_evidence_extraction_api_wait"] += (
-                    perf_counter() - started
+            try:
+                response = self.client.responses.parse(
+                    # Count provider requests, rather than papers, for work
+                    # accounting. The existing one-paper request contract stays
+                    # unchanged and remains the reliable fallback.
+                    model=self.model,
+                    reasoning={"effort": "low"},
+                    store=False,
+                    max_output_tokens=(
+                        self.max_full_text_output_tokens
+                        if inspected_sections
+                        else self.max_output_tokens
+                    ),
+                    instructions=instructions,
+                    input=source,
+                    text_format=_ExtractionTransportResult,
                 )
+            finally:
+                with self._cache_lock:
+                    self._timings["initial_evidence_extraction_api_wait"] += (
+                        perf_counter() - started
+                    )
 
+            stage = "schema_validation"
             payload = getattr(response, "output_parsed", None)
             if not isinstance(payload, (_ExtractionTransportResult, _ExtractionResult)):
-                raise PaperExtractionError("OpenAI returned no parsed evidence payload.")
+                category: ExtractionDiagnosticCategory = (
+                    "token_truncation"
+                    if _response_is_token_truncated(response)
+                    else "invalid_json_schema"
+                )
+                self._record_diagnostic(
+                    paper.id,
+                    attempt=attempt,
+                    stage=stage,
+                    category=category,
+                    terminal=True,
+                )
+                raise PaperExtractionError(
+                    "OpenAI returned no parsed evidence payload.",
+                    category=category,
+                )
 
             strict_payload, repaired = _normalize_extraction_payload(
                 payload,
@@ -709,7 +792,14 @@ class PaperExtractor:
                     repaired,
                 )
 
-            return _to_evidence(
+            stage = "evidence_validation"
+            rejection_counts = _evidence_rejection_counts(
+                strict_payload,
+                paper,
+                document=document,
+                inspected_sections=inspected_sections,
+            )
+            result = _to_evidence(
                 paper, strict_payload, document=document,
                 inspected_sections=inspected_sections,
                 context_truncated=context_truncated,
@@ -720,25 +810,85 @@ class PaperExtractor:
                     or _fallback_explanation(document, paper)
                 ),
             )
+            for category, count in rejection_counts.items():
+                self._record_diagnostic(
+                    paper.id,
+                    attempt=attempt,
+                    stage=stage,
+                    category=category,
+                    count=count,
+                )
+            if (
+                inspected_sections
+                and result.coverage is not None
+                and not result.coverage.full_text_extraction_succeeded
+                and not rejection_counts
+            ):
+                self._record_diagnostic(
+                    paper.id,
+                    attempt=attempt,
+                    stage=stage,
+                    category="other_validation_failure",
+                )
+            return result
 
         except PaperExtractionError:
             raise
-        except (ValidationError, TypeError, ValueError) as exc:
+        except ValidationError as exc:
+            category = _validation_error_category(exc, stage=stage)
+            self._record_diagnostic(
+                paper.id,
+                attempt=attempt,
+                stage=stage,
+                category=category,
+                terminal=True,
+            )
             LOGGER.warning(
                 "invalid structured evidence response paper=%s error_type=%s error=%s",
                 paper.id,
                 type(exc).__name__,
                 exc,
             )
-            raise PaperExtractionError(f"Invalid evidence response: {exc}") from exc
+            raise PaperExtractionError(
+                f"Invalid evidence response: {exc}",
+                category=category,
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            self._record_diagnostic(
+                paper.id,
+                attempt=attempt,
+                stage=stage,
+                category="other_validation_failure",
+                terminal=True,
+            )
+            LOGGER.warning(
+                "invalid structured evidence response paper=%s error_type=%s error=%s",
+                paper.id,
+                type(exc).__name__,
+                exc,
+            )
+            raise PaperExtractionError(
+                f"Invalid evidence response: {exc}",
+                category="other_validation_failure",
+            ) from exc
         except Exception as exc:
+            self._record_diagnostic(
+                paper.id,
+                attempt=attempt,
+                stage="provider_response",
+                category="provider_failure",
+                terminal=True,
+            )
             LOGGER.warning(
                 "evidence provider request failed paper=%s error_type=%s error=%s",
                 paper.id,
                 type(exc).__name__,
                 exc,
             )
-            raise PaperExtractionError(f"Evidence extraction failed: {exc}") from exc
+            raise PaperExtractionError(
+                f"Evidence extraction failed: {exc}",
+                category="provider_failure",
+            ) from exc
 
     def _extract_uncached_batch(
         self,
@@ -762,6 +912,7 @@ class PaperExtractor:
             inputs.append(source)
             request_ids[request_id] = (cache_key[1], paper)
 
+        response: object | None = None
         try:
             with self._cache_lock:
                 self._metrics["openai_extraction_requests"] += 1
@@ -783,27 +934,82 @@ class PaperExtractor:
                 )
             payload = getattr(response, "output_parsed", None)
             if not isinstance(payload, _BatchExtractionResult):
+                category: ExtractionDiagnosticCategory = (
+                    "token_truncation"
+                    if _response_is_token_truncated(response)
+                    else "invalid_json_schema"
+                )
+                for paper in papers:
+                    self._record_diagnostic(
+                        paper.id,
+                        attempt="standard",
+                        stage="schema_validation",
+                        category=category,
+                        terminal=True,
+                    )
                 raise PaperExtractionError(
-                    "OpenAI returned no parsed batch evidence payload."
+                    "OpenAI returned no parsed batch evidence payload.",
+                    category=category,
                 )
         except PaperExtractionError:
             raise
-        except (ValidationError, TypeError, ValueError) as exc:
+        except ValidationError as exc:
+            category = _validation_error_category(exc, stage="provider_response")
+            for paper in papers:
+                self._record_diagnostic(
+                    paper.id,
+                    attempt="standard",
+                    stage="provider_response",
+                    category=category,
+                    terminal=True,
+                )
             LOGGER.warning(
                 "invalid structured evidence batch members=%d error_type=%s error=%s",
                 len(papers),
                 type(exc).__name__,
                 exc,
             )
-            raise PaperExtractionError(f"Invalid batch evidence response: {exc}") from exc
+            raise PaperExtractionError(
+                f"Invalid batch evidence response: {exc}", category=category
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            for paper in papers:
+                self._record_diagnostic(
+                    paper.id,
+                    attempt="standard",
+                    stage="schema_validation",
+                    category="other_validation_failure",
+                    terminal=True,
+                )
+            LOGGER.warning(
+                "invalid structured evidence batch members=%d error_type=%s error=%s",
+                len(papers),
+                type(exc).__name__,
+                exc,
+            )
+            raise PaperExtractionError(
+                f"Invalid batch evidence response: {exc}",
+                category="other_validation_failure",
+            ) from exc
         except Exception as exc:
+            for paper in papers:
+                self._record_diagnostic(
+                    paper.id,
+                    attempt="standard",
+                    stage="provider_response",
+                    category="provider_failure",
+                    terminal=True,
+                )
             LOGGER.warning(
                 "evidence batch provider request failed members=%d error_type=%s error=%s",
                 len(papers),
                 type(exc).__name__,
                 exc,
             )
-            raise PaperExtractionError(f"Batch evidence extraction failed: {exc}") from exc
+            raise PaperExtractionError(
+                f"Batch evidence extraction failed: {exc}",
+                category="provider_failure",
+            ) from exc
 
         result: dict[str, PaperEvidence] = {}
         seen_request_ids: set[str] = set()
@@ -834,6 +1040,18 @@ class PaperExtractor:
                 # eligible for completion and caching.
                 with self._cache_lock:
                     self._metrics["extraction_failed_members"] += 1
+                category = (
+                    _validation_error_category(exc, stage="schema_validation")
+                    if isinstance(exc, ValidationError)
+                    else getattr(exc, "category", "other_validation_failure")
+                )
+                self._record_diagnostic(
+                    paper.id,
+                    attempt="standard",
+                    stage="schema_validation",
+                    category=category,
+                    terminal=True,
+                )
                 LOGGER.warning(
                     "invalid structured evidence batch member paper=%s error_type=%s error=%s",
                     paper.id,
@@ -1003,6 +1221,7 @@ class PaperExtractor:
         limit: int | None = None,
     ) -> list[PaperEvidence]:
         self.failures = []
+        self.diagnostics = []
         self.coverage_records = []
         with self._cache_lock:
             self._attempt_documents = {}
@@ -1029,7 +1248,10 @@ class PaperExtractor:
                 try:
                     results.append(future.result())
                 except PaperExtractionError as exc:
-                    self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
+                    self.failures.append(PaperExtractionError(
+                        f"{paper.id}: {exc}",
+                        category=exc.category,
+                    ))
 
         self._finalize_coverage_records(selected, results)
         return results
@@ -1144,7 +1366,10 @@ class PaperExtractor:
                 result = entry.result() if isinstance(entry, Future) else entry
                 results.append(result)
             except PaperExtractionError as exc:
-                self.failures.append(PaperExtractionError(f"{paper.id}: {exc}"))
+                self.failures.append(PaperExtractionError(
+                    f"{paper.id}: {exc}",
+                    category=exc.category,
+                ))
         return results
 
     def _run_batch(
@@ -1259,6 +1484,105 @@ def _normalize(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
+def _response_is_token_truncated(response: object) -> bool:
+    if getattr(response, "status", None) != "incomplete":
+        return False
+    details = getattr(response, "incomplete_details", None)
+    reason = (
+        details.get("reason")
+        if isinstance(details, dict)
+        else getattr(details, "reason", None)
+    )
+    return reason in {"max_output_tokens", "max_tokens"}
+
+
+def _validation_error_category(
+    error: ValidationError,
+    *,
+    stage: Literal[
+        "provider_response", "schema_validation", "evidence_validation"
+    ],
+) -> ExtractionDiagnosticCategory:
+    """Classify Pydantic failures without retaining generated text."""
+
+    details = error.errors(include_url=False, include_input=False)
+    messages = " ".join(
+        " ".join((str(item.get("msg", "")), str(item.get("ctx", ""))))
+        for item in details
+    ).casefold()
+    kinds = {str(item.get("type", "")) for item in details}
+    if "json_invalid" in kinds and any(
+        marker in messages
+        for marker in ("eof while parsing", "unexpected end", "unterminated string")
+    ):
+        # The Responses parser validates the provider's output text directly.
+        # An unfinished JSON string/object is the observable SDK symptom when
+        # the response stops at max_output_tokens before it can be parsed.
+        return "token_truncation"
+    if "section provenance" in messages or "full_text evidence requires" in messages:
+        return "incorrect_section_provenance"
+    if stage in {"provider_response", "schema_validation"}:
+        return "invalid_json_schema"
+    return "other_validation_failure"
+
+
+def _support_failure(
+    item: EvidenceItem,
+    paper: Paper,
+    document: PaperDocument | None = None,
+    inspected_section_ids: set[str] | None = None,
+) -> ExtractionDiagnosticCategory | None:
+    """Return why exact evidence support failed, without returning source text."""
+
+    if item.source == "title":
+        source_text = paper.title
+    elif item.source == "abstract":
+        source_text = paper.abstract or ""
+    else:
+        section = document.section(item.section_id or "") if document else None
+        if (
+            section is None
+            or inspected_section_ids is not None
+            and section.id not in inspected_section_ids
+            or item.section_heading != section.heading
+            or item.section_type not in section.section_types
+        ):
+            return "incorrect_section_provenance"
+        source_text = section.text
+    if _normalize(item.evidence_text) not in _normalize(source_text):
+        return "unsupported_quotation"
+    return None
+
+
+def _evidence_rejection_counts(
+    payload: _ExtractionResult,
+    paper: Paper,
+    *,
+    document: PaperDocument | None,
+    inspected_sections: Sequence[PaperSection],
+) -> dict[ExtractionDiagnosticCategory, int]:
+    inspected_section_ids = {section.id for section in inspected_sections}
+    claims: list[EvidenceItem] = []
+    for field_name in _LIST_CLAIM_FIELDS:
+        claims.extend(getattr(payload, field_name))
+    for field_name in ("research_objective", "sample_size"):
+        claim = getattr(payload, field_name)
+        if claim is not None:
+            claims.append(claim)
+
+    counts: dict[ExtractionDiagnosticCategory, int] = {}
+    for claim in claims:
+        category = _support_failure(
+            claim,
+            paper,
+            document,
+            inspected_section_ids,
+        )
+        if category is not None:
+            counts[category] = counts.get(category, 0) + 1
+    return counts
+
+
 def _is_supported(
     item: EvidenceItem,
     paper: Paper,
@@ -1267,22 +1591,12 @@ def _is_supported(
 ) -> bool:
     """Require evidence_text to exist verbatim in its declared source."""
 
-    if item.source == "title":
-        source_text = paper.title
-    elif item.source == "abstract":
-        source_text = paper.abstract or ""
-    else:
-        section = document.section(item.section_id or "") if document else None
-        source_text = section.text if section is not None else ""
-        if (
-            section is None
-            or inspected_section_ids is not None
-            and section.id not in inspected_section_ids
-            or item.section_heading != section.heading
-            or item.section_type not in section.section_types
-        ):
-            source_text = ""
-    supported = _normalize(item.evidence_text) in _normalize(source_text)
+    supported = _support_failure(
+        item,
+        paper,
+        document,
+        inspected_section_ids,
+    ) is None
 
     if not supported:
         LOGGER.debug(
@@ -1707,6 +2021,11 @@ def _final_failure_explanation(status: str, has_abstract: bool) -> str:
 
 
 def _failure_category(error: object | None) -> str:
+    category = getattr(error, "category", None)
+    if category == "provider_failure":
+        return "provider_failure"
+    if category is not None:
+        return "model_schema_evidence_validation"
     message = str(error or "").casefold()
     if (
         "invalid evidence response" in message

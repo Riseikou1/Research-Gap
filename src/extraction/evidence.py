@@ -12,6 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 EvidenceSource = Literal["title", "abstract", "full_text"]
 StudyType = Literal["empirical", "review", "survey", "methodological", "other"]
+ExtractionDiagnosticCategory = Literal[
+    "provider_failure",
+    "invalid_json_schema",
+    "unsupported_quotation",
+    "incorrect_section_provenance",
+    "token_truncation",
+    "other_validation_failure",
+]
 
 
 def canonical_evidence_key(value: str) -> str:
@@ -110,6 +118,25 @@ class PaperCoverageRecord(BaseModel):
         if self.final_evidence_level == "abstract_fallback" and not self.full_text_requested:
             raise ValueError("abstract fallback requires full text to have been requested")
         return self
+
+
+class ExtractionDiagnostic(BaseModel):
+    """Safe internal classification for one extraction-stage failure.
+
+    Diagnostics intentionally contain neither provider messages nor generated
+    text. They are persisted for operators and removed from public results.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+    paper_id: str = Field(min_length=1)
+    attempt: Literal["standard", "full_text", "fallback"]
+    stage: Literal[
+        "provider_response", "schema_validation", "evidence_validation"
+    ]
+    category: ExtractionDiagnosticCategory
+    count: int = Field(default=1, ge=1)
+    terminal: bool = False
 
 
 class LimitationEvidence(EvidenceItem):

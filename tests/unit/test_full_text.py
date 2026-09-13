@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from copy import deepcopy
 from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
@@ -470,6 +471,164 @@ class FullTextTest(unittest.TestCase):
         self.assertIsNone(abstract_only.sample_size)
         self.assertEqual(abstract_only.comparison_or_baseline, [])
         self.assertEqual(abstract_only.evaluation_metrics, [])
+
+    def test_naacl_full_text_fixture_requires_exact_quotes_and_section_provenance(self):
+        fixture = json.loads(
+            (Path(__file__).parents[1] / "fixtures" / "naacl_2024_rag_full_text.json")
+            .read_text(encoding="utf-8")
+        )
+        paper = Paper.model_validate(fixture["paper"])
+        document = PaperDocument.model_validate(fixture["document"])
+
+        class FixtureResponses:
+            def __init__(self, extraction):
+                self.extraction = extraction
+                self.calls = []
+
+            def parse(self, **kwargs):
+                self.calls.append(kwargs)
+                return type("Parsed", (), {
+                    "output_parsed": kwargs["text_format"].model_validate(
+                        self.extraction
+                    ),
+                })()
+
+        supported_responses = FixtureResponses(fixture["extraction"])
+        supported_extractor = PaperExtractor(
+            client=type("Client", (), {"responses": supported_responses})(),
+            full_text_client=Loader({paper.id: document}),
+        )
+        supported = supported_extractor.extract_many([paper])[0]
+
+        call = supported_responses.calls[0]
+        self.assertEqual(call["max_output_tokens"], 6000)
+        self.assertIn(
+            "[Full text section id=section-0009; types=dataset,experimental_setup; "
+            "heading=4 Experiments / 4.1 Datasets]",
+            call["input"],
+        )
+        self.assertIn("return at most four claims", call["instructions"])
+        self.assertEqual([item.value for item in supported.datasets], ["Human Eval split"])
+        self.assertEqual(supported.sample_size.value, "around 1,000 samples")
+        self.assertEqual(
+            [item.value for item in supported.comparison_or_baseline],
+            ["off-the-shelf GTR-T5 models"],
+        )
+        self.assertEqual(
+            [item.value for item in supported.evaluation_metrics],
+            ["Trigger Exact Match (EM)", "Hallucinated Tables (HT)", "Recall@15 for steps"],
+        )
+        detailed = [
+            *supported.datasets,
+            supported.sample_size,
+            *supported.comparison_or_baseline,
+            *supported.evaluation_metrics,
+        ]
+        for item in detailed:
+            section = document.section(item.section_id)
+            self.assertIsNotNone(section)
+            self.assertEqual(item.source, "full_text")
+            self.assertEqual(item.section_heading, section.heading)
+            self.assertIn(item.section_type, section.section_types)
+            self.assertIn(
+                " ".join(item.evidence_text.casefold().split()),
+                " ".join(section.text.casefold().split()),
+            )
+
+        invalid = deepcopy(fixture["extraction"])
+        invalid["datasets"][0]["evidence_text"] = "EnterpriseFlow-500"
+        invalid["evaluation_metrics"][0]["section_id"] = "section-does-not-exist"
+        invalid_responses = FixtureResponses(invalid)
+        invalid_extractor = PaperExtractor(
+            client=type("Client", (), {"responses": invalid_responses})(),
+            full_text_client=Loader({paper.id: document}),
+        )
+        filtered = invalid_extractor.extract_many([paper])[0]
+
+        self.assertEqual(filtered.datasets, [])
+        self.assertNotIn(
+            "Trigger Exact Match (EM)",
+            [item.value for item in filtered.evaluation_metrics],
+        )
+        categories = {item.category for item in invalid_extractor.diagnostics}
+        self.assertIn("unsupported_quotation", categories)
+        self.assertIn("incorrect_section_provenance", categories)
+
+    def test_safe_diagnostics_distinguish_provider_schema_truncation_and_other(self):
+        section = PaperSection(
+            id="s1", heading="Methods", section_types=["methods"],
+            text="The study evaluates Model A.",
+        )
+        document = PaperDocument(
+            paper_id="p", source_url="https://example.org/paper.pdf",
+            source_format="pdf", status="usable", structure_available=True,
+            sections=[section],
+        )
+        abstract_payload = _ExtractionResult(
+            method_or_intervention=[{
+                "value": "Model A", "evidence_text": "Model A",
+                "source": "abstract", "confidence": 0.9, "role": "primary",
+            }],
+            extraction_confidence=0.8,
+        )
+
+        class TruncatedThenValid:
+            def __init__(self):
+                self.calls = 0
+
+            def parse(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    kwargs["text_format"].model_validate_json(
+                        '{"research_objective":{"value":"unfinished'
+                    )
+                return type("Parsed", (), {"output_parsed": abstract_payload})()
+
+        truncated = PaperExtractor(
+            client=type("Client", (), {"responses": TruncatedThenValid()})(),
+            full_text_client=Loader({"p": document}),
+        )
+        evidence = truncated.extract_many([
+            Paper(id="p", title="Paper", abstract="We evaluate Model A.")
+        ])
+        self.assertEqual(evidence[0].coverage.source_level, "abstract_fallback")
+        self.assertIn(
+            ("full_text", "provider_response", "token_truncation", True),
+            [
+                (item.attempt, item.stage, item.category, item.terminal)
+                for item in truncated.diagnostics
+            ],
+        )
+
+        class InvalidSchema:
+            def parse(self, **kwargs):
+                kwargs["text_format"].model_validate_json("{}")
+
+        invalid_schema = PaperExtractor(
+            client=type("Client", (), {"responses": InvalidSchema()})(),
+        )
+        self.assertEqual(
+            invalid_schema.extract_many([Paper(id="schema", title="Paper")]),
+            [],
+        )
+        self.assertEqual(invalid_schema.diagnostics[0].category, "invalid_json_schema")
+
+        class OtherValidation:
+            def parse(self, **kwargs):
+                raise ValueError("private generated value")
+
+        other = PaperExtractor(
+            client=type("Client", (), {"responses": OtherValidation()})(),
+        )
+        self.assertEqual(other.extract_many([Paper(id="other", title="Paper")]), [])
+        self.assertEqual(other.diagnostics[0].category, "other_validation_failure")
+
+        provider = PaperExtractor(
+            client=type("Client", (), {"responses": AlwaysFailResponses()})(),
+        )
+        self.assertEqual(provider.extract_many([Paper(id="provider", title="Paper")]), [])
+        self.assertEqual(provider.diagnostics[0].category, "provider_failure")
+        self.assertNotIn("private", provider.diagnostics[0].model_dump_json())
 
     def test_unavailable_fetch_and_parse_statuses_use_abstract_fallback(self):
         abstract = "This study evaluates Model A on a clinical cohort."

@@ -2,6 +2,8 @@
 
 from .evidence import (
     EvidenceItem,
+    ExtractionDiagnostic,
+    ExtractionDiagnosticCategory,
     ExtractionCoverage,
     PaperCoverageRecord,
     LimitationEvidence,
@@ -16,6 +18,8 @@ from .store import EvidenceStore
 
 __all__ = [
     "EvidenceItem",
+    "ExtractionDiagnostic",
+    "ExtractionDiagnosticCategory",
     "ExtractionCoverage",
     "PaperCoverageRecord",
     "PaperDocument",

@@ -1,0 +1,106 @@
+{
+  "paper": {
+    "id": "https://openalex.org/W4401042735",
+    "title": "Reducing hallucination in structured outputs via Retrieval-Augmented Generation",
+    "abstract": "A current limitation of Generative AI (GenAI) is its propensity to hallucinate. While Large Language Models (LLM) have taken the world by storm, without eliminating or at least reducing hallucination, real-world GenAI systems will likely continue to face challenges in user adoption. In the process of deploying an enterprise application that produces workflows from natural language requirements, we devised a system leveraging Retrieval-Augmented Generation (RAG) to improve the quality of the structured output that represents such workflows. Thanks to our implementation of RAG, our proposed system significantly reduces hallucination and allows the generalization of our LLM to out-of-domain settings. In addition, we show that using a small, well-trained retriever can reduce the size of the accompanying LLM at no loss in performance, thereby making deployments of LLM-based systems less resource-intensive.",
+    "doi": "10.18653/v1/2024.naacl-industry.19",
+    "url": "https://aclanthology.org/2024.naacl-industry.19/"
+  },
+  "document": {
+    "paper_id": "https://openalex.org/W4401042735",
+    "source_url": "https://aclanthology.org/2024.naacl-industry.19.pdf",
+    "source_format": "pdf",
+    "status": "usable",
+    "structure_available": true,
+    "sections": [
+      {
+        "id": "section-0009",
+        "heading": "4 Experiments / 4.1 Datasets",
+        "section_types": ["dataset", "experimental_setup"],
+        "text": "From internal deployments of our enterprise platform, we extracted around 4,000 examples of deployed workflows and asked annotators to write natural language requirements for them. In addition, using deterministic rules, we created around 1,000 samples having simple and few steps in order to teach the model to handle input where the user is incrementally building their workflow. We used these interactions and the expected JSON documents to create an additional dataset split, named \"Human Eval.\" Our final metrics are based on this split instead of the \"Test\" split, due to its higher quality and more realistic input."
+      },
+      {
+        "id": "section-0010",
+        "heading": "4 Experiments / 4.2 Metrics",
+        "section_types": ["experimental_setup"],
+        "text": "We evaluate the entire RAG system using three metrics, which can all range from 0 to 1: Trigger Exact Match (EM) verifies whether the generated JSON trigger is exactly the same as the ground-truth. Bag of Steps (BofS) measures the overlap between the generated JSON steps and the ground-truth steps. Hallucinated Tables (HT) and Hallucinated Steps (HS) measure the % of generated tables/steps that do not exist per workflow. To evaluate the retriever, we use Recall@15 for steps and Recall@10 for tables."
+      },
+      {
+        "id": "section-0011",
+        "heading": "4 Experiments / 4.3 Models",
+        "section_types": ["methods", "experimental_setup"],
+        "text": "We use all-mpnet-base-v2 as the base retriever model. We compare our fine-tuned model against different sizes of off-the-shelf GTR-T5 models to see whether larger encoders impact the performance."
+      }
+    ]
+  },
+  "extraction": {
+    "comparison_or_baseline": [
+      {
+        "value": "off-the-shelf GTR-T5 models",
+        "canonical_value": "GTR-T5",
+        "evidence_text": "compare our fine-tuned model against different sizes of off-the-shelf GTR-T5 models",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "methods",
+        "section_heading": "4 Experiments / 4.3 Models",
+        "section_id": "section-0011"
+      }
+    ],
+    "datasets": [
+      {
+        "value": "Human Eval split",
+        "canonical_value": "Human Eval",
+        "evidence_text": "an additional dataset split, named \"Human Eval.\"",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "dataset",
+        "section_heading": "4 Experiments / 4.1 Datasets",
+        "section_id": "section-0009"
+      }
+    ],
+    "sample_size": {
+      "value": "around 1,000 samples",
+      "canonical_value": "1,000 samples",
+      "evidence_text": "using deterministic rules, we created around 1,000 samples having simple and few steps",
+      "source": "full_text",
+      "confidence": 0.99,
+      "section_type": "dataset",
+      "section_heading": "4 Experiments / 4.1 Datasets",
+      "section_id": "section-0009"
+    },
+    "evaluation_metrics": [
+      {
+        "value": "Trigger Exact Match (EM)",
+        "canonical_value": "trigger exact match",
+        "evidence_text": "Trigger Exact Match (EM)",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "experimental_setup",
+        "section_heading": "4 Experiments / 4.2 Metrics",
+        "section_id": "section-0010"
+      },
+      {
+        "value": "Hallucinated Tables (HT)",
+        "canonical_value": "hallucinated tables",
+        "evidence_text": "Hallucinated Tables (HT)",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "experimental_setup",
+        "section_heading": "4 Experiments / 4.2 Metrics",
+        "section_id": "section-0010"
+      },
+      {
+        "value": "Recall@15 for steps",
+        "canonical_value": "step recall at 15",
+        "evidence_text": "Recall@15 for steps",
+        "source": "full_text",
+        "confidence": 0.99,
+        "section_type": "experimental_setup",
+        "section_heading": "4 Experiments / 4.2 Metrics",
+        "section_id": "section-0010"
+      }
+    ],
+    "study_type": "empirical",
+    "extraction_confidence": 0.99
+  }
+}
