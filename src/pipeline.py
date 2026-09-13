@@ -22,6 +22,9 @@ from src.query.planner import QueryPlanner
 from src.ranking.reranker import HybridReranker
 from src.retrieval.multi_query import MultiQueryRetriever, RetrievalFailure
 from src.retrieval.deduplication import deduplicate_paper_models
+from src.analysis.citation_graph import build_citation_graph
+from src.models.citation_graph import CitationGraph
+from src.operations.usage import ProviderUsage
 
 
 class PipelineError(RuntimeError):
@@ -49,6 +52,8 @@ class ResearchResult:
     work_metrics: dict[str, int] = field(default_factory=dict)
     stage_timings: dict[str, float] = field(default_factory=dict)
     duration_seconds: float | None = None
+    citation_graph: CitationGraph = field(default_factory=CitationGraph.unavailable)
+    provider_usage: list[ProviderUsage] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         gap_payloads = []
@@ -83,6 +88,8 @@ class ResearchResult:
             "work_metrics": dict(self.work_metrics),
             "stage_timings": dict(self.stage_timings),
             "duration_seconds": self.duration_seconds,
+            "citation_graph": self.citation_graph.model_dump(mode="json"),
+            "provider_usage": [item.model_dump(mode="json") for item in self.provider_usage],
         }
 
 
@@ -103,6 +110,7 @@ class ResearchPipeline:
         gap_verifier: GapVerifier | None = None,
         landscape_analyzer: LandscapeAnalyzer | None = None,
         evidence_limit: int = 10,
+        include_citation_graph: bool = True,
     ) -> None:
         self.decomposer = decomposer
         self.retriever = retriever
@@ -117,6 +125,7 @@ class ResearchPipeline:
         self.gap_verifier = gap_verifier
         self.landscape_analyzer = landscape_analyzer or LandscapeAnalyzer()
         self.evidence_limit = evidence_limit
+        self.include_citation_graph = include_citation_graph
 
     def run(self, idea_text: str, *, top_k: int = 20,
             progress: Callable[[str, dict[str, object] | None], object] | None = None) -> ResearchResult:
@@ -174,6 +183,14 @@ class ResearchPipeline:
         # already canonicalizes route results, but cached/custom rerankers must
         # not be able to reintroduce duplicate scholarly works before reading.
         selected = deduplicate_paper_models(ranking.papers)[:top_k]
+        citation_graph = (
+            build_citation_graph(
+                ranking.papers,
+                selected_paper_ids={paper.id for paper in selected},
+            )
+            if self.include_citation_graph
+            else CitationGraph.unavailable()
+        )
         evidence: list[PaperEvidence] = []
         extraction_failures: list[str] = []
         extraction_diagnostics: list[ExtractionDiagnostic] = []
@@ -292,6 +309,10 @@ class ResearchPipeline:
             work_metrics=work_metrics,
             stage_timings=stage_timings,
             duration_seconds=perf_counter() - wall_started,
+            citation_graph=citation_graph,
+            provider_usage=_collect_usage(
+                self.decomposer, self.llm_generator, embedding_provider, self.extractor,
+            ),
         )
 
 
@@ -306,6 +327,20 @@ def _component_metrics(component) -> dict[str, int]:
     except Exception:
         return {}
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _collect_usage(*components: object) -> list[ProviderUsage]:
+    result: list[ProviderUsage] = []
+    for component in components:
+        snapshot = getattr(component, "usage_snapshot", None)
+        if snapshot is None:
+            continue
+        try:
+            records = snapshot()
+        except Exception:
+            continue
+        result.extend(item for item in records if isinstance(item, ProviderUsage))
+    return result
 
 
 def _component_timings(component) -> dict[str, float]:

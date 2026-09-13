@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from src.config import DEFAULT_EMBEDDING_MODEL, cache_dir, openai_api_key
 from src.models.paper import Paper
+from src.operations.usage import ProviderUsage, usage_from_response
 from src.persistence.cache import PersistentCache
 
 
@@ -73,6 +74,7 @@ class OpenAIEmbeddingProvider:
             "persistent_embedding_cache_hits": 0,
             "new_embeddings": 0,
         }
+        self._usage_records: list[ProviderUsage] = []
         self._embedding_cache_path = (
             Path(cache_path)
             if cache_path is not None
@@ -137,6 +139,10 @@ class OpenAIEmbeddingProvider:
 
         with self._cache_lock:
             return dict(self._metrics)
+
+    def usage_snapshot(self) -> list[ProviderUsage]:
+        with self._cache_lock:
+            return [item.model_copy(deep=True) for item in self._usage_records]
 
     @staticmethod
     def _text_hash(text: str) -> str:
@@ -273,6 +279,11 @@ class OpenAIEmbeddingProvider:
                     model=self.model,
                     input=batch,
                 )
+                with self._cache_lock:
+                    self._usage_records.append(usage_from_response(
+                        response, provider="openai", model=self.model,
+                        stage="ranking_embeddings",
+                    ))
             except Exception as exc:
                 raise SemanticScoringError(
                     f"embedding request failed: {exc}"

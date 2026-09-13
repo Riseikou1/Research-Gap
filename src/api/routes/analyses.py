@@ -12,6 +12,7 @@ from src.api.models import AnalysisCreated, AnalysisDetail, AnalysisSummary, Cre
 from src.auth import network_rate_key
 from src.persistence.models import CreditBillingDecision, NewAnalysis
 from src.persistence.security import QuotaError, SecurityRepository
+from src.operations import ProviderBudgetExceeded
 from src.api.safety import public_analysis_result
 from src.extraction.evidence import canonical_evidence_key
 from src.retrieval.deduplication import normalize_doi, normalize_title
@@ -45,8 +46,23 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
         for key in keys:
             if not components.security.record_rate_event(key, "quick_search", limit=limit):
                 raise HTTPException(status_code=429, detail="Quick Search limit reached. Try again after the rolling 24-hour window.")
+    elif principal.kind == "user":
+        if not components.security.record_rate_event(
+            f"user:{principal.principal_id}", "full_analysis",
+            limit=settings.user_full_daily_limit,
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Full Analysis limit reached. Try again after the rolling 24-hour window.",
+            )
 
     analysis_id = str(uuid4())
+    budget_reservation_id = None
+    if mode == "full":
+        try:
+            budget_reservation_id = components.operations.reserve_budget(analysis_id)
+        except ProviderBudgetExceeded as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
     reservation_id = None
     billing_decision = _credit_billing_decision(
         mode,
@@ -58,6 +74,8 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
         try:
             reservation_id = components.security.reserve_credit(principal.principal_id, analysis_id)
         except QuotaError as exc:
+            if budget_reservation_id:
+                components.operations.release_budget(analysis_id)
             raise HTTPException(status_code=402, detail=str(exc))
     configuration = components.service.configuration_snapshot(
         decomposer="deterministic" if mode == "quick" else payload.decomposer,
@@ -77,6 +95,8 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
     except Exception:
         if reservation_id:
             components.security.release_credit(analysis_id)
+        if budget_reservation_id:
+            components.operations.release_budget(analysis_id)
         raise
     try:
         components.runner.submit(analysis_id)
@@ -84,6 +104,8 @@ def create_analysis(payload: CreateAnalysisRequest, request: Request) -> Analysi
         components.repository.mark_failed(analysis_id, "Analysis worker is unavailable.")
         if reservation_id:
             components.security.release_credit(analysis_id)
+        if budget_reservation_id:
+            components.operations.release_budget(analysis_id)
         raise HTTPException(status_code=503, detail="Analysis worker is unavailable.")
     return AnalysisCreated(analysis_id=record.analysis_id, status=record.status)
 
@@ -120,7 +142,7 @@ def export_analysis(analysis_id: str, request: Request,
     ):
         raise HTTPException(status_code=429, detail="Export rate limit reached. Try again later.")
     if format == "json":
-        return Response(json.dumps(public_analysis_result(record.result), ensure_ascii=False, indent=2), media_type="application/json",
+        return Response(json.dumps(public_analysis_result(record.result, mode=record.mode), ensure_ascii=False, indent=2), media_type="application/json",
                         headers={"Content-Disposition": f'attachment; filename="research-gap-{analysis_id}.json"'})
     return Response(_markdown_report(record.research_idea, record.mode, record.result),
                     media_type="text/markdown; charset=utf-8", headers={
@@ -135,6 +157,7 @@ def delete_analysis(analysis_id: str, request: Request) -> None:
         raise HTTPException(status_code=409, detail="A running analysis cannot be deleted until it finishes.")
     if record.status == "pending":
         components.repository.mark_failed(analysis_id, "Analysis cancelled before it started.")
+        components.operations.release_budget(analysis_id)
         if record.reservation_id:
             components.security.release_credit(analysis_id)
     if not components.repository.delete_for_owner(analysis_id, principal.kind, principal.principal_id):
@@ -159,7 +182,7 @@ def _credit_billing_decision(
 
 
 def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
-    public = public_analysis_result(result)
+    public = public_analysis_result(result, mode=mode)
     assessment = public.get("idea_assessment") or {}
     label = assessment.get("label", "not performed") if isinstance(assessment, dict) else "not performed"
     rationale = assessment.get("rationale") if isinstance(assessment, dict) else None
@@ -189,6 +212,32 @@ def _markdown_report(idea: str, mode: str, result: dict[str, object]) -> str:
             _markdown_evidence_section(lines, heading, evidence, paper_titles, *fields)
 
     provenance_index = _evidence_provenance_index(evidence)
+
+    graph = public.get("citation_graph") or {}
+    if mode == "full" and isinstance(graph, dict) and graph.get("status") == "available":
+        lines.extend(["", "## Citation context", ""])
+        lines.append(
+            "Bounded retrieved-pool graph — nodes: " + str(graph.get("node_count", 0))
+            + "; internal citation relationships: " + str(graph.get("edge_count", 0))
+            + "; weakly connected components: " + str(graph.get("component_count", 0))
+            + "; isolated papers: " + str(graph.get("isolated_node_count", 0))
+            + "; external references counted: " + str(graph.get("external_reference_count", 0)) + "."
+        )
+        nodes = graph.get("nodes") or []
+        node_titles = {
+            str(node.get("paper_id")): str(node.get("title") or "Paper record")
+            for node in nodes if isinstance(node, dict)
+        } if isinstance(nodes, list) else {}
+        edges = graph.get("edges") or []
+        if isinstance(edges, list) and edges:
+            lines.extend(["", "Internal relationships:"])
+            for edge in edges[:50]:
+                if not isinstance(edge, dict):
+                    continue
+                citing = str(edge.get("citing_paper_id") or "")
+                cited = str(edge.get("cited_paper_id") or "")
+                lines.append(f"- {node_titles.get(citing, citing)} cites {node_titles.get(cited, cited)}")
+        lines.extend(["", str(graph.get("limitation") or "")])
 
     gaps = public.get("gaps", [])
     if mode == "full" and isinstance(gaps, list) and gaps:

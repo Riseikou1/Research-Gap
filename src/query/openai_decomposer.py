@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.config import cache_dir, openai_api_key, openai_model
 from src.models.idea import ResearchIdea
+from src.operations.usage import ProviderUsage, usage_from_response
 from src.query.deterministic import clean_idea_text
 from src.query.openai_support import (
     find_refusal,
@@ -177,7 +178,7 @@ class OpenAIDecomposer:
         api_key: str | None = None,
         model: str | None = None,
         timeout_seconds: float = 30.0,
-        max_retries: int = 2,
+        max_retries: int = 0,
         max_output_tokens: int = 1600,
         cache_path: str | Path | None = None,
         cache_database_url: str | None = None,
@@ -198,6 +199,7 @@ class OpenAIDecomposer:
             "decomposition_cache_hits": 0,
             "planning_cache_hits": 0,
         }
+        self._usage_records: list[ProviderUsage] = []
 
         # Dependency injection keeps unit tests free of network/API usage.
         if client is not None:
@@ -265,6 +267,9 @@ class OpenAIDecomposer:
                 input=cleaned,
                 text_format=_OpenAIResearchIdeaPayload,
             )
+            self._usage_records.append(usage_from_response(
+                response, provider="openai", model=self.model, stage="decomposition",
+            ))
 
         except ValidationError as exc:
             raise OpenAIDecompositionError(
@@ -325,6 +330,9 @@ class OpenAIDecomposer:
 
     def metrics_snapshot(self) -> dict[str, int]:
         return dict(self._metrics)
+
+    def usage_snapshot(self) -> list[ProviderUsage]:
+        return [item.model_copy(deep=True) for item in self._usage_records]
 
 
 # ---------------------------------------------------------------------------

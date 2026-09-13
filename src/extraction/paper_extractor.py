@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.config import cache_dir, openai_api_key, openai_extraction_model
 from src.models.paper import Paper
+from src.operations.usage import ProviderUsage, usage_from_response
 
 from .evidence import (
     EvidenceItem,
@@ -569,6 +570,7 @@ class PaperExtractor:
         self._timings: dict[str, float] = {
             "initial_evidence_extraction_api_wait": 0.0,
         }
+        self._usage_records: list[ProviderUsage] = []
 
         if client is not None:
             self.client = client
@@ -586,7 +588,9 @@ class PaperExtractor:
         except ImportError as exc:
             raise PaperExtractionError("The OpenAI package is required for evidence extraction.") from exc
 
-        self.client = OpenAI(api_key=key)
+        # Structured generation is billable and is not retried implicitly;
+        # callers can safely rerun a failed analysis after credit/budget release.
+        self.client = OpenAI(api_key=key, max_retries=0)
         self.evidence_store = EvidenceStore(
             cache_path if cache_path is not None else cache_dir() / "research_gap.sqlite3",
             database_url=cache_database_url,
@@ -624,6 +628,10 @@ class PaperExtractor:
     def timings_snapshot(self) -> dict[str, float]:
         with self._cache_lock:
             return dict(self._timings)
+
+    def usage_snapshot(self) -> list[ProviderUsage]:
+        with self._cache_lock:
+            return [item.model_copy(deep=True) for item in self._usage_records]
 
     def diagnostics_snapshot(self) -> list[ExtractionDiagnostic]:
         """Return safe internal diagnostics without provider text or exceptions."""
@@ -679,7 +687,7 @@ class PaperExtractor:
         try:
             document = self.full_text_client.load(paper)
         except Exception as exc:
-            LOGGER.info("full-text enrichment failed paper=%s error=%s", paper.id, exc)
+            LOGGER.info("full-text enrichment failed paper=%s error_type=%s", paper.id, type(exc).__name__)
             document = PaperDocument(
                 paper_id=paper.id, status="fetch_failed",
                 notices=[f"full-text enrichment failed: {str(exc)[:240]}"],
@@ -751,6 +759,11 @@ class PaperExtractor:
                     input=source,
                     text_format=_ExtractionTransportResult,
                 )
+                with self._cache_lock:
+                    self._usage_records.append(usage_from_response(
+                        response, provider="openai", model=self.model,
+                        stage="full_text_extraction" if inspected_sections else "evidence_extraction",
+                    ))
             finally:
                 with self._cache_lock:
                     self._timings["initial_evidence_extraction_api_wait"] += (
@@ -844,10 +857,9 @@ class PaperExtractor:
                 terminal=True,
             )
             LOGGER.warning(
-                "invalid structured evidence response paper=%s error_type=%s error=%s",
+                "invalid structured evidence response paper=%s error_type=%s",
                 paper.id,
                 type(exc).__name__,
-                exc,
             )
             raise PaperExtractionError(
                 f"Invalid evidence response: {exc}",
@@ -862,10 +874,9 @@ class PaperExtractor:
                 terminal=True,
             )
             LOGGER.warning(
-                "invalid structured evidence response paper=%s error_type=%s error=%s",
+                "invalid structured evidence response paper=%s error_type=%s",
                 paper.id,
                 type(exc).__name__,
-                exc,
             )
             raise PaperExtractionError(
                 f"Invalid evidence response: {exc}",
@@ -880,10 +891,9 @@ class PaperExtractor:
                 terminal=True,
             )
             LOGGER.warning(
-                "evidence provider request failed paper=%s error_type=%s error=%s",
+                "evidence provider request failed paper=%s error_type=%s",
                 paper.id,
                 type(exc).__name__,
-                exc,
             )
             raise PaperExtractionError(
                 f"Evidence extraction failed: {exc}",
@@ -929,6 +939,11 @@ class PaperExtractor:
                 text_format=_BatchExtractionResult,
             )
             with self._cache_lock:
+                self._usage_records.append(usage_from_response(
+                    response, provider="openai", model=self.model,
+                    stage="evidence_extraction_batch",
+                ))
+            with self._cache_lock:
                 self._timings["initial_evidence_extraction_api_wait"] += (
                     perf_counter() - started
                 )
@@ -964,10 +979,9 @@ class PaperExtractor:
                     terminal=True,
                 )
             LOGGER.warning(
-                "invalid structured evidence batch members=%d error_type=%s error=%s",
+                "invalid structured evidence batch members=%d error_type=%s",
                 len(papers),
                 type(exc).__name__,
-                exc,
             )
             raise PaperExtractionError(
                 f"Invalid batch evidence response: {exc}", category=category
@@ -982,10 +996,9 @@ class PaperExtractor:
                     terminal=True,
                 )
             LOGGER.warning(
-                "invalid structured evidence batch members=%d error_type=%s error=%s",
+                "invalid structured evidence batch members=%d error_type=%s",
                 len(papers),
                 type(exc).__name__,
-                exc,
             )
             raise PaperExtractionError(
                 f"Invalid batch evidence response: {exc}",
@@ -1001,10 +1014,9 @@ class PaperExtractor:
                     terminal=True,
                 )
             LOGGER.warning(
-                "evidence batch provider request failed members=%d error_type=%s error=%s",
+                "evidence batch provider request failed members=%d error_type=%s",
                 len(papers),
                 type(exc).__name__,
-                exc,
             )
             raise PaperExtractionError(
                 f"Batch evidence extraction failed: {exc}",
@@ -1053,10 +1065,9 @@ class PaperExtractor:
                     terminal=True,
                 )
                 LOGGER.warning(
-                    "invalid structured evidence batch member paper=%s error_type=%s error=%s",
+                    "invalid structured evidence batch member paper=%s error_type=%s",
                     paper.id,
                     type(exc).__name__,
-                    exc,
                 )
                 continue
         return result
@@ -1150,9 +1161,9 @@ class PaperExtractor:
                 )
             except Exception as exc:
                 LOGGER.warning(
-                    "evidence cache write failed paper=%s error=%s",
+                    "evidence cache write failed paper=%s error_type=%s",
                     result.paper_id,
-                    exc,
+                    type(exc).__name__,
                 )
             self._inflight.pop(cache_key, None)
         pending.set_result(result)

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from src.config import cache_dir, openai_api_key, openai_model
 from src.models.idea import ResearchIdea
 from src.models.query import SearchQuery
+from src.operations.usage import ProviderUsage, usage_from_response
 from src.query.openai_support import (
     find_refusal,
     format_provider_error,
@@ -86,7 +87,7 @@ class OpenAIQueryGenerator:
         api_key: str | None = None,
         model: str | None = None,
         timeout_seconds: float = 30.0,
-        max_retries: int = 2,
+        max_retries: int = 0,
         max_output_tokens: int = 800,
         cache_path: str | Path | None = None,
         cache_database_url: str | None = None,
@@ -107,6 +108,7 @@ class OpenAIQueryGenerator:
             "query_generation_cache_hits": 0,
             "planning_cache_hits": 0,
         }
+        self._usage_records: list[ProviderUsage] = []
 
         # Dependency injection keeps tests independent of real API calls.
         if client is not None:
@@ -176,6 +178,9 @@ class OpenAIQueryGenerator:
                 ),
                 text_format=_OpenAIQueryPayload,
             )
+            self._usage_records.append(usage_from_response(
+                response, provider="openai", model=self.model, stage="query_generation",
+            ))
 
         except ValidationError as exc:
             raise OpenAIQueryGenerationError(
@@ -242,6 +247,9 @@ class OpenAIQueryGenerator:
 
     def metrics_snapshot(self) -> dict[str, int]:
         return dict(self._metrics)
+
+    def usage_snapshot(self) -> list[ProviderUsage]:
+        return [item.model_copy(deep=True) for item in self._usage_records]
 
 
 def _normalize_generated_queries(

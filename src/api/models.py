@@ -73,7 +73,7 @@ class AnalysisDetail(AnalysisSummary):
             query_generator=record.query_generator,
             paper_limit=record.paper_limit,
             configuration=record.configuration,
-            result=public_analysis_result(record.result) if record.result else None,
+            result=public_analysis_result(record.result, mode=record.mode) if record.result else None,
             error_message=(
                 public_job_error(
                     record.error_message,
@@ -92,3 +92,4 @@ class HealthResponse(StrictApiModel):
     status: Literal["ok"] = "ok"
     pipeline_version: str
     api_schema_version: str
+    build_version: str = "development"

@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  offline-tests:
+  verify:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -20,5 +20,26 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.txt
-      - run: python -m unittest discover -s tests -v
+      - run: python -m pip install -r requirements.lock
+      - run: python -m pytest
+      - run: python -m compileall -q main.py src tests
+      - run: python scripts/check_committed_secrets.py
+      - run: python -m src.persistence.migrate --database /tmp/research-gap-ci.sqlite3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci
+      - working-directory: web
+        run: npm test
+      - working-directory: web
+        run: npm run lint
+      - working-directory: web
+        run: npm run typecheck
+      - working-directory: web
+        run: npm run build
+      - if: matrix.python-version == '3.12'
+        run: docker build -t research-gap-api:test .
+      - run: git diff --check

@@ -42,6 +42,7 @@ def test_postgres_migrations_crud_and_credit_concurrency() -> None:
             "0003_unique_lifetime_credit",
             "0004_lifetime_credit_identity_registry",
             "0005_provider_cache",
+            "0006_operations",
         ]
         assert database.migrate() == []
 

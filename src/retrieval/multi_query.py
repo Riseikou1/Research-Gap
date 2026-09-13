@@ -371,12 +371,10 @@ class MultiQueryRetriever:
                     failures[index] = failure
 
                     LOGGER.error(
-                        "retrieval failed provider=%s "
-                        "mode=%s query=%r error=%s",
+                        "retrieval failed provider=%s mode=%s error_type=%s",
                         failure.provider,
                         failure.mode,
-                        failure.query,
-                        failure.error,
+                        type(exc).__name__,
                     )
 
         papers = _interleave_route_results(
@@ -436,9 +434,9 @@ class MultiQueryRetriever:
                     self.retrieval_store.put(cache_key, papers)
                 except Exception as exc:
                     LOGGER.warning(
-                        "retrieval cache write failed provider=%s error=%s",
+                        "retrieval cache write failed provider=%s error_type=%s",
                         getattr(self.client, "provider_name", type(self.client).__name__),
-                        exc,
+                        type(exc).__name__,
                     )
             pending.set_result(papers)
             return papers

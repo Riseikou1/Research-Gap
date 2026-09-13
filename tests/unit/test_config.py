@@ -82,6 +82,15 @@ class ConfigurationTest(unittest.TestCase):
                 with self.assertRaises(ConfigurationError):
                     Settings.from_env()
 
+    def test_enabled_provider_budget_requires_explicit_pricing(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_GAP_DAILY_PROVIDER_BUDGET_USD": "5"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ConfigurationError, "explicit positive"):
+                Settings.from_env()
+
 
 if __name__ == "__main__":
     unittest.main()

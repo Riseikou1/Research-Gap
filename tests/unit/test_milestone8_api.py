@@ -101,9 +101,28 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
             "status": "ok",
-            "pipeline_version": "m9-v4",
-            "api_schema_version": "m9-v4",
+            "pipeline_version": "m10-v1",
+            "api_schema_version": "m10-v1",
+            "build_version": "development",
         })
+        self.assertEqual(self.client.get("/health/live").status_code, 200)
+        self.assertEqual(self.client.get("/health/ready").status_code, 200)
+
+    def test_unexpected_errors_return_only_a_safe_request_id(self) -> None:
+        application = self.client.app
+
+        @application.get("/test-unexpected-error")
+        def explode():
+            raise RuntimeError("sk-do-not-leak https://private.invalid owner@example.test")
+
+        with TestClient(application, raise_server_exceptions=False) as client:
+            response = client.get("/test-unexpected-error", headers={"X-Request-ID": "safe-id-1"})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json(), {
+            "detail": "An unexpected error occurred.", "request_id": "safe-id-1",
+        })
+        self.assertEqual(response.headers["X-Request-ID"], "safe-id-1")
+        self.assertNotIn("do-not-leak", response.text)
 
 
 class FailedApiJobTest(unittest.TestCase):

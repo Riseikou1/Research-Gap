@@ -7,9 +7,11 @@ import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Lock
 from typing import Callable
+from time import perf_counter
 
 from src.persistence.models import AnalysisRecord
 from src.persistence.repositories import AnalysisRepository
+from src.operations.logging import analysis_id_context, safe_category
 
 LOGGER = logging.getLogger(__name__)
 AnalysisExecutor = Callable[[AnalysisRecord], dict[str, object]]
@@ -81,7 +83,14 @@ class AnalysisJobRunner:
             self._closed = True
         self._pool.shutdown(wait=True, cancel_futures=False)
 
+    def diagnostics(self) -> dict[str, object]:
+        with self._lock:
+            active = sum(not future.done() for future in self._futures.values())
+            return {"available": not self._closed, "active_or_queued": active}
+
     def _execute(self, analysis_id: str) -> None:
+        token = analysis_id_context.set(analysis_id)
+        started = perf_counter()
         try:
             if not self.repository.mark_running(analysis_id):
                 return
@@ -94,9 +103,18 @@ class AnalysisJobRunner:
             if self.on_success:
                 self.on_success(analysis_id)
             self.repository.mark_completed(analysis_id, result)
+            LOGGER.info(
+                "analysis completed",
+                extra={"stage": "analysis_job", "outcome": "completed",
+                       "duration_ms": round((perf_counter() - started) * 1000, 1)},
+            )
         except Exception as exc:
             message = safe_error_message(exc)
-            LOGGER.exception("analysis failed id=%s error=%s", analysis_id, message)
+            LOGGER.error(
+                "analysis failed category=%s", safe_category(exc),
+                extra={"stage": "analysis_job", "outcome": "failed",
+                       "duration_ms": round((perf_counter() - started) * 1000, 1)},
+            )
             try:
                 if self.on_failure:
                     self.on_failure(analysis_id)
@@ -107,6 +125,8 @@ class AnalysisJobRunner:
                     analysis_id,
                     type(persistence_error).__name__,
                 )
+        finally:
+            analysis_id_context.reset(token)
 
     def _forget(self, analysis_id: str, future: Future[None]) -> None:
         with self._lock:

@@ -9,10 +9,14 @@ from .landscape import (
     PaperFeatures,
 )
 from .paper import FullTextLocation, Paper, RetrievalProvenance
+from .citation_graph import CitationGraph, CitationGraphEdge, CitationGraphNode
 from .query import QueryOrigin, RetrievalMode, SearchQuery
 
 __all__ = [
     "Paper",
+    "CitationGraph",
+    "CitationGraphEdge",
+    "CitationGraphNode",
     "FullTextLocation",
     "PaperFeatures",
     "FeatureFrequency",

@@ -111,6 +111,13 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_DATABASE_PATH` | `data/research_gap.sqlite3` | Durable analysis-history database |
 | `DATABASE_URL` | unset | PostgreSQL URL for durable application data and provider caches; overrides local SQLite |
 | `RESEARCH_GAP_MAX_ANALYSIS_WORKERS` | `2` | Maximum concurrent API analysis jobs |
+| `RESEARCH_GAP_USER_FULL_DAILY_LIMIT` | `20` | Rolling per-user Full Analysis request limit, including administrators |
+| `RESEARCH_GAP_DAILY_PROVIDER_BUDGET_USD` | `0` | Persistent daily provider budget; zero disables enforcement |
+| `RESEARCH_GAP_PROVIDER_BUDGET_RESERVATION_USD` | `0.25` | Conservative amount reserved before each Full Analysis is queued |
+| `RESEARCH_GAP_OPENAI_INPUT_PER_MILLION_USD` | `0` | Explicit operator-maintained input-token price for accounting |
+| `RESEARCH_GAP_OPENAI_OUTPUT_PER_MILLION_USD` | `0` | Explicit operator-maintained output-token price for accounting |
+| `RESEARCH_GAP_BUILD_VERSION` | `development` | Release or commit identifier exposed by health/admin diagnostics |
+| `RESEARCH_GAP_AUTO_MIGRATE` | local `true`; production `false` | Local convenience; production migrations run once as a release step |
 | `RESEARCH_GAP_FULL_TEXT_TIMEOUT_SECONDS` | `12` | Per-document request timeout |
 | `RESEARCH_GAP_FULL_TEXT_MAX_BYTES` | `8000000` | Maximum streamed response bytes |
 | `RESEARCH_GAP_FULL_TEXT_MAX_DOCUMENT_CHARS` | `120000` | Maximum normalized document characters |
@@ -131,6 +138,14 @@ idea -> decomposition -> typed query plan -> bounded OpenAlex routes
 Every result retains matched queries, query-generator origins, retrieval modes, provider rank and
 score where available, and lexical/semantic/final relevance scores. Citation count is retained as
 metadata but does not affect Milestone 3 relevance.
+
+Full analyses also retain a deterministic citation-context graph induced over the bounded,
+canonical retrieved candidate pool. OpenAlex `referenced_works` are resolved through canonical
+aliases into `citing -> cited` edges; malformed identifiers and self-links are ignored, duplicate
+edges collapse, and references outside the pool are counted without recursive retrieval. The graph
+is descriptive only and never changes ranking, evidence validation, gap generation, confidence, or
+verification. Quick Search does not construct it, and historical results without graph data render
+an unavailable citation context.
 
 ## Milestone 8 local API and persistence
 
@@ -168,6 +183,8 @@ curl http://127.0.0.1:8000/analyses/<analysis_id>
 curl 'http://127.0.0.1:8000/analyses?limit=20'
 curl -X DELETE http://127.0.0.1:8000/analyses/<analysis_id>
 curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/live
+curl http://127.0.0.1:8000/health/ready
 ```
 
 The service runs the complete evidence, landscape, gap-generation, and verification path, so a real
@@ -249,7 +266,10 @@ default treats unauthenticated web requests as isolated guests.
 ## Test
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pytest
+cd web && npm test && npm run lint && npm run typecheck && npm run build
+docker build -t research-gap:m10 .
+git diff --check
 ```
 
 The suite uses fakes for OpenAlex, OpenAI Structured Outputs, and embeddings; it makes no network or

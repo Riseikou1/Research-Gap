@@ -31,6 +31,8 @@ export function ResultView({analysis}: {analysis: Analysis}) {
   const fullTextRequested = result.full_text_requested || analysis.configuration?.full_text === true;
   const papers = new Map(result.papers.map(paper => [paper.id, paper]));
   const duration = reportDuration(result);
+  const citationGraph = result.citation_graph;
+  const hasCitationContext = !isQuick && citationGraph.status === "available" && citationGraph.node_count > 0;
 
   const hasExisting = hasEvidence(evidence, ["research_objective"])
     || Boolean(dimensions.problem?.length || dimensions.study_type?.length);
@@ -47,6 +49,7 @@ export function ResultView({analysis}: {analysis: Analysis}) {
     ? [["summary", "Summary"], ["papers", "Relevant papers"], ["methodology", "Methodology"]]
     : [
         ["summary", "Verdict"],
+        ...(hasCitationContext ? [["citations", "Citation context"]] : []),
         ...(hasExisting ? [["existing", "Existing literature"]] : []),
         ...(hasMethods ? [["methods", "Methods"]] : []),
         ...(hasContexts ? [["contexts", "Contexts & data"]] : []),
@@ -72,6 +75,22 @@ export function ResultView({analysis}: {analysis: Analysis}) {
         {!isQuick && assessment && <AssessmentDetails assessment={assessment} papers={papers}/>}
         <p className="coverage-caveat">This is a bounded, evidence-backed investigation—not proof of global novelty and not a systematic review.</p>
       </ReportSection>
+
+      {hasCitationContext && <ReportSection id="citations" eyebrow="Bounded retrieved-pool structure" title="Citation context">
+        <div className="metrics citation-metrics">
+          <Metric value={citationGraph.node_count} label="canonical papers"/>
+          <Metric value={citationGraph.edge_count} label="internal citation relationships"/>
+          <Metric value={citationGraph.component_count} label="connected components"/>
+          <Metric value={citationGraph.isolated_node_count} label="isolated papers"/>
+        </div>
+        {citationGraph.edges.length > 0 ? <ul className="citation-relationships">{citationGraph.edges.slice(0,50).map(edge => {
+          const citing = citationGraph.nodes.find(node => node.paper_id === edge.citing_paper_id);
+          const cited = citationGraph.nodes.find(node => node.paper_id === edge.cited_paper_id);
+          return <li key={`${edge.citing_paper_id}-${edge.cited_paper_id}`}><strong>{citing?.title ?? edge.citing_paper_id}</strong> <span>cites</span> <strong>{cited?.title ?? edge.cited_paper_id}</strong></li>;
+        })}</ul> : <p>No citation relationships were observed between papers inside this retrieved pool.</p>}
+        {citationGraph.isolated_node_count > 0 && <details><summary>Isolated papers</summary><ul>{citationGraph.nodes.filter(node => node.in_degree + node.out_degree === 0).map(node => <li key={node.paper_id}>{node.title}</li>)}</ul></details>}
+        <p className="coverage-caveat">{citationGraph.limitation} Citation context is descriptive only and does not affect relevance, gap labels, confidence, or evidence support.</p>
+      </ReportSection>}
 
       {!isQuick && hasExisting && <ReportSection id="existing" eyebrow="Executive landscape" title="What the literature already studies well">
         <FrequencyList values={dedupeFrequencyRows([...(dimensions.problem??[]), ...(dimensions.study_type??[])])} papers={papers}/>

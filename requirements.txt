@@ -25,3 +25,6 @@ openai>=2.0.0,<4
 
 # Postgres client
 psycopg[binary]>=3.2.0,<4
+
+# Deterministic descriptive citation-graph construction.
+networkx>=3.2.0,<4

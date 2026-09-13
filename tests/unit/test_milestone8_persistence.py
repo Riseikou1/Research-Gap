@@ -46,6 +46,7 @@ class PersistenceTest(unittest.TestCase):
                 "0003_unique_lifetime_credit",
                 "0004_lifetime_credit_identity_registry",
                 "0005_provider_cache",
+                "0006_operations",
             ],
         )
 

@@ -247,3 +247,5 @@ class Database:
     def check(self) -> None:
         with self.connect() as connection:
             connection.execute("SELECT 1 FROM analyses LIMIT 1").fetchone()
+            connection.execute("SELECT 1 FROM provider_cache LIMIT 1").fetchone()
+            connection.execute("SELECT 1 FROM provider_usage LIMIT 1").fetchone()

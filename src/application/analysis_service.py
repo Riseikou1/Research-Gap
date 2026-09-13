@@ -20,7 +20,7 @@ from src.ranking.semantic import OpenAIEmbeddingProvider, SemanticScorer
 from src.retrieval.multi_query import MultiQueryRetriever
 from src.retrieval.openalex import OpenAlexRetriever
 
-PIPELINE_VERSION = "m9-v4"
+PIPELINE_VERSION = "m10-v1"
 DecomposerName = Literal["deterministic", "openai"]
 QueryGeneratorName = Literal["deterministic", "openai"]
 
@@ -58,6 +58,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
             mailto=openalex.mailto,
             api_key=openalex.api_key,
             max_retries=openalex.max_retries,
+            include_references=not options.quick,
         ),
         max_candidates=openalex.max_candidates,
         per_route_limit=openalex.per_route_limit,
@@ -137,6 +138,7 @@ def build_pipeline(options: PipelineOptions, settings: Settings) -> ResearchPipe
         gap_generator=gap_generator,
         gap_verifier=gap_verifier,
         evidence_limit=settings.evidence_limit,
+        include_citation_graph=not options.quick,
     )
 
 
@@ -153,7 +155,7 @@ class AnalysisService:
         settings = self.settings
         return {
             "pipeline_version": PIPELINE_VERSION,
-            "api_schema_version": "m9-v4",
+            "api_schema_version": PIPELINE_VERSION,
             "mode": mode,
             "decomposer": decomposer,
             "query_generator": query_generator,

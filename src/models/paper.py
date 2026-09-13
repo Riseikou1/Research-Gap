@@ -80,6 +80,7 @@ class Paper(BaseModel):
     doi_aliases: list[str] = Field(default_factory=list)
     openalex_id: str | None = None
     openalex_aliases: list[str] = Field(default_factory=list)
+    referenced_work_ids: list[str] = Field(default_factory=list)
     work_type: str | None = None
 
     citation_count: int = Field(default=0, ge=0)
@@ -156,7 +157,7 @@ class Paper(BaseModel):
 
         return result
 
-    @field_validator("openalex_aliases", mode="before")
+    @field_validator("openalex_aliases", "referenced_work_ids", mode="before")
     @classmethod
     def normalize_openalex_aliases(cls, value: object) -> object:
         if not isinstance(value, list):
@@ -264,6 +265,7 @@ class Paper(BaseModel):
         return {
             "openalex_id": self.openalex_id,
             "openalex_aliases": list(self.openalex_aliases),
+            "referenced_work_ids": list(self.referenced_work_ids),
             "title": self.title,
             "abstract": self.abstract,
             "authors": list(self.authors),

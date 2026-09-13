@@ -26,7 +26,31 @@ class StatusChange(BaseModel):
 @router.get("/summary")
 def summary(request: Request) -> dict[str, object]:
     require_admin(request)
-    return request.app.state.components.security.admin_summary()
+    result = request.app.state.components.security.admin_summary()
+    operations = request.app.state.components.operations.diagnostics()
+    result["operations"] = operations
+    usage = operations.get("provider_usage_today", {})
+    if isinstance(usage, dict):
+        result["provider_cost_usd"] = usage.get("cost_usd")
+        result["provider_cost_note"] = (
+            "Daily estimate from explicit operator pricing; records with unavailable token metadata are excluded."
+        )
+    return result
+
+
+@router.get("/diagnostics")
+def diagnostics(request: Request) -> dict[str, object]:
+    require_admin(request)
+    components = request.app.state.components
+    scientific = components.security.admin_summary()
+    return {
+        "build_version": components.settings.operations.build_version,
+        "pipeline_version": "m10-v1",
+        "worker": components.runner.diagnostics(),
+        "aggregate_work_metrics": scientific.get("aggregate_work_metrics", {}),
+        "aggregate_stage_seconds": scientific.get("aggregate_stage_seconds", {}),
+        **components.operations.diagnostics(),
+    }
 
 
 @router.get("/users")

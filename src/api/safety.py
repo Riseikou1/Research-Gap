@@ -5,12 +5,35 @@ from __future__ import annotations
 from copy import deepcopy
 
 
-def public_analysis_result(result: dict[str, object]) -> dict[str, object]:
+def public_analysis_result(
+    result: dict[str, object], *, mode: str | None = None,
+) -> dict[str, object]:
     """Remove provider exception strings while retaining useful coverage counts."""
     public = deepcopy(result)
+    public.setdefault("citation_graph", {
+        "status": "unavailable", "scope": "canonical_retrieved_pool",
+        "nodes": [], "edges": [], "node_count": 0, "edge_count": 0,
+        "component_count": 0, "isolated_node_count": 0,
+        "external_reference_count": 0,
+        "limitation": "Citation context was not recorded for this analysis.",
+    })
     retrieval = public.pop("retrieval_failures", [])
     extraction = public.pop("extraction_failures", [])
     public.pop("extraction_diagnostics", None)
+    public.pop("provider_usage", None)
+    if (mode or public.get("mode")) == "quick":
+        public["citation_graph"] = {
+            "status": "unavailable", "scope": "canonical_retrieved_pool",
+            "nodes": [], "edges": [], "node_count": 0, "edge_count": 0,
+            "component_count": 0, "isolated_node_count": 0,
+            "external_reference_count": 0,
+            "limitation": "Citation context is available only for Full Analysis.",
+        }
+        quick_papers = public.get("papers")
+        if isinstance(quick_papers, list):
+            for paper in quick_papers:
+                if isinstance(paper, dict):
+                    paper.pop("referenced_work_ids", None)
     retrieval_count = len(retrieval) if isinstance(retrieval, list) else 0
     extraction_count = len(extraction) if isinstance(extraction, list) else 0
     papers = public.get("papers")

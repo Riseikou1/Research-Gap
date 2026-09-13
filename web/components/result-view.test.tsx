@@ -34,6 +34,51 @@ describe("ResultView", () => {
     expect(screen.getByText(/did not extract structured evidence/i)).toBeInTheDocument();
     expect(screen.queryByRole("heading", {name:"Candidate research gaps"})).not.toBeInTheDocument();
     expect(screen.queryByText("Not extracted")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", {name:"Citation context"})).not.toBeInTheDocument();
+  });
+
+  it("renders bounded citation relationships and loads legacy graph-less results", () => {
+    const legacy = analysisSchema.parse({...realisticAnalysis, result:{...realisticAnalysis.result}});
+    expect(legacy.result?.citation_graph.status).toBe("unavailable");
+    const withGraph = analysisSchema.parse({...realisticAnalysis, result:{...realisticAnalysis.result,
+      citation_graph:{status:"available",scope:"canonical_retrieved_pool",node_count:2,edge_count:1,
+        component_count:1,isolated_node_count:0,external_reference_count:4,
+        limitation:"Only the bounded pool is shown.",
+        nodes:[
+          {paper_id:"W1",aliases:["https://openalex.org/W1"],title:"Multilingual clinical retrieval",publication_year:2025,citation_count:3,relevance_score:.91,selected_for_analysis:true,in_degree:0,out_degree:1,external_reference_count:3},
+          {paper_id:"W2",aliases:["https://openalex.org/W2"],title:"A counterexample study",publication_year:2024,citation_count:1,relevance_score:.72,selected_for_analysis:true,in_degree:1,out_degree:0,external_reference_count:1},
+        ],edges:[{citing_paper_id:"W1",cited_paper_id:"W2"}]}
+    }});
+    render(<ResultView analysis={withGraph}/>);
+    expect(screen.getByRole("heading", {name:"Citation context"})).toBeInTheDocument();
+    expect(screen.getByText("internal citation relationships")).toBeInTheDocument();
+    expect(screen.getByText("cites")).toBeInTheDocument();
+    expect(screen.getByText(/descriptive only/)).toBeInTheDocument();
+  });
+
+  it("suppresses an empty graph view and bounds the accessible relationship list", () => {
+    const empty = analysisSchema.parse({...realisticAnalysis, result:{...realisticAnalysis.result,
+      citation_graph:{status:"available",scope:"canonical_retrieved_pool",nodes:[],edges:[],node_count:0,
+        edge_count:0,component_count:0,isolated_node_count:0,external_reference_count:0,limitation:"Bounded."}
+    }});
+    const emptyRender = render(<ResultView analysis={empty}/>);
+    expect(screen.queryByRole("heading", {name:"Citation context"})).not.toBeInTheDocument();
+    emptyRender.unmount();
+
+    const nodes = Array.from({length:52}, (_,index) => ({
+      paper_id:`G${index}`,aliases:[],title:`Graph paper ${index}`,publication_year:2025,
+      citation_count:0,relevance_score:.5,selected_for_analysis:index<10,in_degree:index?1:0,
+      out_degree:index<51?1:0,external_reference_count:0,
+    }));
+    const edges = Array.from({length:51}, (_,index) => ({
+      citing_paper_id:`G${index}`,cited_paper_id:`G${index+1}`,
+    }));
+    const bounded = analysisSchema.parse({...realisticAnalysis, result:{...realisticAnalysis.result,
+      citation_graph:{status:"available",scope:"canonical_retrieved_pool",nodes,edges,node_count:52,
+        edge_count:51,component_count:1,isolated_node_count:0,external_reference_count:0,limitation:"Bounded."}
+    }});
+    const {container} = render(<ResultView analysis={bounded}/>);
+    expect(container.querySelectorAll(".citation-relationships li")).toHaveLength(50);
   });
 
   it("never displays raw provider errors", () => {

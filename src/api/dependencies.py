@@ -7,8 +7,14 @@ from uuid import uuid4
 from fastapi import HTTPException, Request, status
 
 from src.auth import AuthenticationError, Principal, network_rate_key, verify_guest_cookie
+from src.operations.logging import safe_user_id
 
 GUEST_COOKIE = "research_gap_guest"
+
+
+def _mark(request: Request, principal: Principal) -> Principal:
+    request.state.safe_user_id = safe_user_id(principal.principal_id)
+    return principal
 
 
 def principal_for(request: Request, *, force_guest: bool = False) -> Principal:
@@ -32,23 +38,23 @@ def principal_for(request: Request, *, force_guest: bool = False) -> Principal:
                 else "This account is suspended."
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
-        return Principal(
+        return _mark(request, Principal(
             "user", identity.user_id, identity.email, bool(account["email_verified"]),
             str(account["role"]), str(account["status"]),
-        )
+        ))
     settings = components.settings.web
     cookie = request.cookies.get(GUEST_COOKIE)
     guest_id = verify_guest_cookie(cookie, settings.guest_cookie_secret) if settings else None
     if guest_id and components.security.guest_active(guest_id):
-        return Principal("guest", guest_id)
+        return _mark(request, Principal("guest", guest_id))
     if components.trusted_local_mode and not force_guest:
-        return Principal("local", "local-development", email_verified=True)
+        return _mark(request, Principal("local", "local-development", email_verified=True))
     guest_id = str(uuid4())
     request.state.new_guest_id = guest_id
     address = request.client.host if request.client else "unknown"
     network = network_rate_key(address, settings.guest_cookie_secret)
     components.security.touch_guest(guest_id, network, retention_hours=settings.guest_retention_hours)
-    return Principal("guest", guest_id)
+    return _mark(request, Principal("guest", guest_id))
 
 
 def require_user(request: Request) -> Principal:

@@ -220,7 +220,7 @@ class FullTextClient:
             try:
                 cached = self.store.get(paper.id, location.url, negative_ttl=self.negative_ttl_seconds)
             except Exception as exc:
-                LOGGER.info("full-text cache read failed paper=%s error=%s", paper.id, exc)
+                LOGGER.info("full-text cache read failed paper=%s error_type=%s", paper.id, type(exc).__name__)
                 cached = None
             if cached is not None:
                 if cached.status == "usable":
@@ -231,7 +231,7 @@ class FullTextClient:
             try:
                 self.store.put(document)
             except Exception as exc:
-                LOGGER.info("full-text cache write failed paper=%s error=%s", paper.id, exc)
+                LOGGER.info("full-text cache write failed paper=%s error_type=%s", paper.id, type(exc).__name__)
             if document.status == "usable":
                 return document
             failures.append(document)
@@ -268,10 +268,10 @@ class FullTextClient:
             )
             return document
         except (FullTextSafetyError, HTTPError, URLError, TimeoutError, OSError) as exc:
-            LOGGER.info("full-text fetch failed paper=%s url=%s error=%s", paper_id, location.url, exc)
+            LOGGER.info("full-text fetch failed paper=%s error_type=%s", paper_id, type(exc).__name__)
             return self._failure(paper_id, location.url, "fetch_failed", location.source_format, str(exc))
         except Exception as exc:
-            LOGGER.info("full-text parse failed paper=%s url=%s error=%s", paper_id, location.url, exc)
+            LOGGER.info("full-text parse failed paper=%s error_type=%s", paper_id, type(exc).__name__)
             return self._failure(paper_id, location.url, "parse_failed", location.source_format, str(exc))
 
     def _read_bounded(self, response: BinaryIO) -> bytes:

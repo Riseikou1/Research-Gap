@@ -71,7 +71,8 @@ export const paperSchema = z.object({
   authors: stringList, publication_year: z.number().nullable().default(null),
   publication_date: z.string().nullable().optional(), doi: z.string().nullable().default(null),
   doi_aliases: stringList, openalex_id: z.string().nullable().optional(),
-  openalex_aliases: stringList, work_type: z.string().nullable().optional(),
+  openalex_aliases: stringList, referenced_work_ids: stringList,
+  work_type: z.string().nullable().optional(),
   citation_count: z.number().default(0),
   source: z.string().nullable().optional(), url: z.string().nullable().default(null),
   full_text_locations: z.array(z.object({url: z.string(), source_format: z.string(), is_open_access: z.boolean()})).default([]),
@@ -98,6 +99,23 @@ const verificationSchema = z.object({
   evidence: z.array(gapEvidenceSchema).default([]), coverage_notes: stringList,
   label: z.enum(["well_studied", "uncertain", "promising_gap"]), reason: z.string(),
 }).nullable().default(null);
+
+const citationGraphSchema = z.object({
+  status: z.enum(["available", "unavailable"]).default("unavailable"),
+  scope: z.literal("canonical_retrieved_pool").default("canonical_retrieved_pool"),
+  nodes: z.array(z.object({
+    paper_id: z.string(), aliases: stringList, title: z.string(),
+    publication_year: z.number().nullable().default(null), citation_count: z.number().default(0),
+    relevance_score: z.number().nullable().default(null), selected_for_analysis: z.boolean().default(false),
+    in_degree: z.number().default(0), out_degree: z.number().default(0),
+    external_reference_count: z.number().default(0),
+  })).default([]),
+  edges: z.array(z.object({citing_paper_id: z.string(), cited_paper_id: z.string()})).default([]),
+  node_count: z.number().default(0), edge_count: z.number().default(0),
+  component_count: z.number().default(0), isolated_node_count: z.number().default(0),
+  external_reference_count: z.number().default(0),
+  limitation: z.string().default("Citation context was not recorded for this analysis."),
+}).default({status:"unavailable",scope:"canonical_retrieved_pool",nodes:[],edges:[],node_count:0,edge_count:0,component_count:0,isolated_node_count:0,external_reference_count:0,limitation:"Citation context was not recorded for this analysis."});
 
 export const gapSchema = z.object({
   id: z.string(), title: z.string(), description: z.string(), category: z.string(), rationale: z.string(),
@@ -142,7 +160,8 @@ export const analysisResultSchema = z.object({
   papers: z.array(paperSchema).default([]), evidence: z.array(paperEvidenceSchema).default([]),
   paper_coverage: z.array(paperCoverageSchema).default([]),
   gaps: z.array(gapSchema).default([]), idea_assessment: ideaAssessmentSchema.nullable().default(null),
-  landscape: landscapeSchema, notices: stringList, analysis_notices: stringList,
+  landscape: landscapeSchema, citation_graph: citationGraphSchema,
+  notices: stringList, analysis_notices: stringList,
   coverage_messages: stringList,
   failure_summary: z.object({retrieval: z.number().default(0), extraction: z.number().default(0)}).default({retrieval: 0, extraction: 0}),
   extraction_coverage: z.object({

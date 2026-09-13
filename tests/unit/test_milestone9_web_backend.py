@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from src.api.app import create_app
 from src.auth import AuthenticationError, AuthIdentity, StaticAuthProvider, SupabaseAuthProvider
 from src.billing import BillingError
-from src.config import Settings
+from src.config import OperationsSettings, Settings
 from src.persistence.database import Database
 from src.persistence.security import QuotaError, SecurityRepository
 from src.persistence.models import NewAnalysis
@@ -150,6 +150,61 @@ def test_zero_credit_admin_full_analysis_is_exempt_owned_and_persisted_without_l
             assert client.post("/analyses", headers=headers, json={
                 "research_idea": "", "mode": "full",
             }).status_code == 422
+
+
+def test_admin_credit_exemption_cannot_bypass_provider_budget():
+    auth = StaticAuthProvider({"admin-token": AuthIdentity("budget-admin", "admin@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        settings = settings_for(Path(directory) / "admin-budget.sqlite")
+        settings = replace(settings, operations=OperationsSettings(
+            daily_provider_budget_usd=0.10,
+            provider_budget_reservation_usd=0.25,
+            openai_input_per_million_usd=1,
+            openai_output_per_million_usd=1,
+        ))
+        with TestClient(create_app(
+            settings=settings, analysis_executor=result_for, auth_provider=auth,
+        )) as client:
+            headers = {"Authorization": "Bearer admin-token"}
+            client.get("/me", headers=headers)
+            client.app.state.components.security.set_role("budget-admin", "admin")
+            response = client.post("/analyses", headers=headers, json={
+                "research_idea": "administrator still pays provider costs", "mode": "full",
+            })
+            assert response.status_code == 503
+            assert client.app.state.components.security.balance("budget-admin") == 2
+            assert client.app.state.components.repository.list_recent() == []
+
+
+def test_provider_failure_releases_budget_and_refunds_reserved_credit():
+    auth = StaticAuthProvider({"verified": AuthIdentity("budget-user", "user@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        settings = settings_for(Path(directory) / "failure-budget.sqlite")
+        settings = replace(settings, operations=OperationsSettings(
+            daily_provider_budget_usd=1,
+            provider_budget_reservation_usd=0.25,
+            openai_input_per_million_usd=1,
+            openai_output_per_million_usd=1,
+        ))
+
+        def fail(_record):
+            raise RuntimeError("provider failed")
+
+        with TestClient(create_app(settings=settings, analysis_executor=fail, auth_provider=auth)) as client:
+            headers = {"Authorization": "Bearer verified"}
+            client.get("/me", headers=headers)
+            created = client.post("/analyses", headers=headers, json={
+                "research_idea": "provider failure after reservation", "mode": "full",
+            })
+            failed = wait(client, created.json()["analysis_id"], "verified")
+            assert failed["status"] == "failed"
+            assert client.app.state.components.security.balance("budget-user") == 2
+            with client.app.state.components.database.connect() as connection:
+                budget = connection.execute(
+                    "SELECT status FROM provider_budget_reservations WHERE analysis_id=?",
+                    (created.json()["analysis_id"],),
+                ).fetchone()
+            assert budget["status"] == "released"
 
 
 def test_failed_admin_analysis_has_no_refund_or_refund_wording():

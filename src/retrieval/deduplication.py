@@ -473,6 +473,12 @@ def _merge_paper(target: Paper, incoming: Paper) -> None:
             value.casefold().rstrip("/") for value in target.openalex_aliases
         }:
             target.openalex_aliases.append(alias)
+    referenced = {normalize_openalex_id(value) for value in target.referenced_work_ids}
+    for value in incoming.referenced_work_ids:
+        key = normalize_openalex_id(value)
+        if key and key not in referenced:
+            target.referenced_work_ids.append(f"https://openalex.org/{key.upper()}")
+            referenced.add(key)
 
     location_urls = {
         item.url.casefold().rstrip("/") for item in target.full_text_locations

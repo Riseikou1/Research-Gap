@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import time
+import random
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from datetime import date, datetime, timezone
@@ -15,6 +16,7 @@ import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from email.utils import parsedate_to_datetime
 
 from src.models.paper import FullTextLocation, Paper, RetrievalProvenance
 from src.models.query import RetrievalMode
@@ -32,11 +34,12 @@ OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 # OpenAlex semantic search currently returns at most 50 results.
 OPENALEX_SEMANTIC_MAX_RESULTS = 50
 
-SELECT_FIELDS = (
+SELECT_FIELDS_NO_REFERENCES = (
     "id,display_name,title,abstract_inverted_index,authorships,"
     "publication_year,publication_date,doi,type,primary_location,best_oa_location,locations,"
     "cited_by_count,relevance_score"
 )
+SELECT_FIELDS = SELECT_FIELDS_NO_REFERENCES + ",referenced_works"
 
 
 class OpenAlexError(RetrievalError):
@@ -60,6 +63,8 @@ class OpenAlexRetriever:
         sleeper: Callable[[float], None] = time.sleep,
         clock: Callable[[], datetime] | None = None,
         enable_memory_cache: bool = True,
+        jitter: Callable[[float, float], float] = random.uniform,
+        include_references: bool = True,
     ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
@@ -79,6 +84,8 @@ class OpenAlexRetriever:
         self._opener = opener or urlopen
         self._sleeper = sleeper
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._jitter = jitter
+        self.include_references = include_references
 
         self._enable_memory_cache = enable_memory_cache
         self._cache: dict[
@@ -136,9 +143,8 @@ class OpenAlexRetriever:
             if not isinstance(raw_work, Mapping):
                 LOGGER.warning(
                     "openalex malformed work skipped "
-                    "mode=%s query=%r",
+                    "mode=%s",
                     request.mode.value,
-                    request.query.text,
                 )
                 continue
 
@@ -162,10 +168,9 @@ class OpenAlexRetriever:
             papers.append(paper)
 
         LOGGER.info(
-            "retrieval provider=openalex mode=%s query=%r "
+            "retrieval provider=openalex mode=%s "
             "result_count=%d latency_ms=%.1f",
             request.mode.value,
-            request.query.text,
             len(papers),
             (time.monotonic() - started) * 1000,
         )
@@ -188,7 +193,7 @@ class OpenAlexRetriever:
         params: dict[str, str | int] = {
             "page": 1,
             "per_page": per_page,
-            "select": SELECT_FIELDS,
+            "select": SELECT_FIELDS if self.include_references else SELECT_FIELDS_NO_REFERENCES,
         }
 
         if request.mode is RetrievalMode.BROAD_LEXICAL:
@@ -258,7 +263,10 @@ class OpenAlexRetriever:
                 retryable = (exc.code == 429 or 500 <= exc.code < 600)
 
                 if (retryable and attempt < self.max_retries):
-                    delay = _retry_delay(exc, self.backoff_seconds * (2**attempt))
+                    delay = _retry_delay(
+                        exc, self._jitter(0.75, 1.25) * self.backoff_seconds * (2**attempt),
+                        now=self._clock(),
+                    )
 
                     LOGGER.warning(
                         "openalex retry status=%d "
@@ -275,7 +283,7 @@ class OpenAlexRetriever:
 
             except (URLError, TimeoutError, OSError) as exc:
                 if attempt < self.max_retries:
-                    delay = (self.backoff_seconds * (2**attempt))
+                    delay = self._jitter(0.75, 1.25) * self.backoff_seconds * (2**attempt)
 
                     LOGGER.warning(
                         "openalex network retry "
@@ -372,12 +380,35 @@ def _parse_work(
         doi_aliases=[doi] if doi else [],
         openalex_id=openalex_id,
         openalex_aliases=[openalex_id] if openalex_id else [],
+        referenced_work_ids=_referenced_works(work),
         work_type=_optional_string(work.get("type")),
         citation_count=max(_optional_int(work.get("cited_by_count")) or 0, 0),
         source=_optional_string(source.get("display_name")),
         url=(_optional_string(location.get("landing_page_url")) or openalex_id),
         full_text_locations=_full_text_locations(work),
     )
+
+
+def _referenced_works(work: Mapping[str, Any]) -> list[str]:
+    """Retain only bounded, well-formed OpenAlex work identifiers."""
+
+    values = work.get("referenced_works")
+    if not isinstance(values, list):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        normalized = value.strip().rstrip("/")
+        match = re.search(r"(?:^|/)(W[1-9][0-9]*)$", normalized, re.IGNORECASE)
+        if not match:
+            continue
+        canonical = f"https://openalex.org/{match.group(1).upper()}"
+        if canonical.casefold() not in seen:
+            seen.add(canonical.casefold())
+            result.append(canonical)
+    return result
 
 
 def _full_text_locations(work: Mapping[str, Any]) -> list[FullTextLocation]:
@@ -525,6 +556,8 @@ def _optional_date(value: object) -> date | None:
 def _retry_delay(
     exc: HTTPError,
     fallback: float,
+    *,
+    now: datetime | None = None,
 ) -> float:
     """Use Retry-After when available, otherwise use exponential backoff."""
 
@@ -534,4 +567,16 @@ def _retry_delay(
         else None
     )
 
-    return max(0.0, float(retry_after)) if retry_after else fallback
+    if not retry_after:
+        return fallback
+    try:
+        return max(0.0, float(retry_after))
+    except (TypeError, ValueError):
+        try:
+            target = parsedate_to_datetime(retry_after)
+            current = now or datetime.now(timezone.utc)
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=timezone.utc)
+            return max(0.0, (target - current).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return fallback

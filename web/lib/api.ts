@@ -30,13 +30,15 @@ async function call(path: string, token?: string | null, init?: RequestInit): Pr
   }});
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new ApiError(response.status, safeApiMessage(response.status, typeof body.detail === "string" ? body.detail : ""));
+    const requestId = typeof body.request_id === "string" ? body.request_id : response.headers.get("X-Request-ID");
+    const message = safeApiMessage(response.status, typeof body.detail === "string" ? body.detail : "");
+    throw new ApiError(response.status, requestId ? `${message} Reference: ${requestId}` : message, requestId ?? undefined);
   }
   if (response.status === 204) return null;
   return response.json();
 }
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) { super(message); this.name = "ApiError"; }
+  constructor(public readonly status: number, message: string, public readonly requestId?: string) { super(message); this.name = "ApiError"; }
 }
 export function safeApiMessage(statusCode: number, detail = "") {
   const value = detail.toLowerCase();

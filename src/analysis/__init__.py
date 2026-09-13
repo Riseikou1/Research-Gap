@@ -27,6 +27,7 @@ from .verification import (
     build_idea_verification_queries,
     build_verification_queries,
 )
+from .citation_graph import build_citation_graph
 
 
 __all__ = [
@@ -46,6 +47,7 @@ __all__ = [
     "VerificationQuery",
     "build_idea_verification_queries",
     "build_verification_queries",
+    "build_citation_graph",
     "consolidate_candidates",
     "is_concrete_entity",
     "method_family",

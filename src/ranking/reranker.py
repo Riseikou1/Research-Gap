@@ -77,7 +77,7 @@ class HybridReranker:
                 if self.semantic_fallback == "error":
                     raise
                 notice = "Semantic scoring failed; using lexical-only ranking."
-                LOGGER.warning("%s error=%s", notice, exc)
+                LOGGER.warning("%s error_type=%s", notice, type(exc).__name__)
 
         elif self.semantic_weight > 0:
             if self.semantic_fallback == "error":

@@ -101,6 +101,7 @@ class WebSettings:
     guest_retention_hours: int
     guest_quick_limit: int
     user_quick_daily_limit: int
+    user_full_daily_limit: int
     max_active_analyses_per_principal: int
     free_lifetime_credits: int
     paid_cycle_credits: int
@@ -111,6 +112,16 @@ class WebSettings:
     stripe_test_mode: bool
     acknowledge_live_pricing: bool
     trusted_local_mode: bool
+
+
+@dataclass(frozen=True)
+class OperationsSettings:
+    daily_provider_budget_usd: float = 0.0
+    provider_budget_reservation_usd: float = 0.25
+    openai_input_per_million_usd: float = 0.0
+    openai_output_per_million_usd: float = 0.0
+    build_version: str = "development"
+    auto_migrate: bool = True
 
 
 @dataclass(frozen=True)
@@ -129,6 +140,7 @@ class Settings:
     analysis_database_path: Path = field(default_factory=database_path)
     max_analysis_workers: int = 2
     web: WebSettings | None = None
+    operations: OperationsSettings = field(default_factory=OperationsSettings)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -201,6 +213,37 @@ class Settings:
         )
         if secure_cookies and guest_secret == "local-development-only-change-me":
             raise ConfigurationError("Set a strong RESEARCH_GAP_GUEST_COOKIE_SECRET before secure production use")
+        production = app_url.startswith("https://")
+        if production:
+            if not secure_cookies:
+                raise ConfigurationError("HTTPS production requires RESEARCH_GAP_SECURE_COOKIES=true")
+            if (
+                len(guest_secret) < 32 or len(lifetime_secret) < 32
+                or guest_secret.startswith("replace-with")
+                or lifetime_secret.startswith("replace-with")
+            ):
+                raise ConfigurationError("Production cookie and lifetime-credit secrets must be at least 32 characters")
+            if not database_url():
+                raise ConfigurationError("HTTPS production requires durable DATABASE_URL storage")
+            if any(not origin.startswith("https://") for origin in origins):
+                raise ConfigurationError("Production allowed origins must use HTTPS")
+            required_names = (
+                "OPENAI_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY",
+                "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_ISSUER",
+                "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID",
+            )
+            missing = [name for name in required_names if not os.getenv(name, "").strip()]
+            if missing:
+                raise ConfigurationError(
+                    "Production configuration is incomplete; missing: " + ", ".join(missing)
+                )
+        daily_budget = number("RESEARCH_GAP_DAILY_PROVIDER_BUDGET_USD", 0.0)
+        input_price = number("RESEARCH_GAP_OPENAI_INPUT_PER_MILLION_USD", 0.0)
+        output_price = number("RESEARCH_GAP_OPENAI_OUTPUT_PER_MILLION_USD", 0.0)
+        if daily_budget > 0 and (input_price <= 0 or output_price <= 0):
+            raise ConfigurationError(
+                "Enabled provider budgets require explicit positive OpenAI input/output pricing"
+            )
         web = WebSettings(
             app_url=app_url,
             allowed_origins=origins,
@@ -215,6 +258,7 @@ class Settings:
             guest_retention_hours=integer("RESEARCH_GAP_GUEST_RETENTION_HOURS", 72),
             guest_quick_limit=integer("RESEARCH_GAP_GUEST_QUICK_LIMIT", 1),
             user_quick_daily_limit=integer("RESEARCH_GAP_USER_QUICK_DAILY_LIMIT", 10),
+            user_full_daily_limit=integer("RESEARCH_GAP_USER_FULL_DAILY_LIMIT", 20),
             max_active_analyses_per_principal=integer("RESEARCH_GAP_MAX_ACTIVE_PER_PRINCIPAL", 2),
             free_lifetime_credits=2,
             paid_cycle_credits=integer("RESEARCH_GAP_PAID_CYCLE_CREDITS", 5),
@@ -271,4 +315,16 @@ class Settings:
             analysis_database_path=database_path(),
             max_analysis_workers=integer("RESEARCH_GAP_MAX_ANALYSIS_WORKERS", 2, maximum=8),
             web=web,
+            operations=OperationsSettings(
+                daily_provider_budget_usd=daily_budget,
+                provider_budget_reservation_usd=number(
+                    "RESEARCH_GAP_PROVIDER_BUDGET_RESERVATION_USD", 0.25, positive=True,
+                ),
+                openai_input_per_million_usd=input_price,
+                openai_output_per_million_usd=output_price,
+                build_version=os.getenv("RESEARCH_GAP_BUILD_VERSION", "development").strip() or "development",
+                auto_migrate=os.getenv(
+                    "RESEARCH_GAP_AUTO_MIGRATE", "false" if production else "true",
+                ).lower() in {"1", "true", "yes"},
+            ),
         )
