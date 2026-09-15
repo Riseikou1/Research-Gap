@@ -46,7 +46,14 @@ def settings_for(path: Path) -> Settings:
         settings = Settings.from_env()
     return replace(settings, analysis_database_path=path, max_analysis_workers=2,
                    web=replace(settings.web, stripe_price_id="price_test_placeholder",
-                               stripe_secret_key="sk_test_fake", stripe_webhook_secret="whsec_fake"))
+                               stripe_secret_key="sk_test_fake", stripe_webhook_secret="whsec_fake",
+                               billing_enabled=True))
+
+
+def disabled_settings_for(path: Path) -> Settings:
+    with patch.dict(os.environ, {}, clear=True):
+        settings = Settings.from_env()
+    return replace(settings, analysis_database_path=path, max_analysis_workers=2)
 
 
 def wait(client: TestClient, analysis_id: str, token: str | None = None):
@@ -503,6 +510,66 @@ def test_signed_billing_webhook_grants_once_and_checkout_return_grants_nothing()
             assert subscription["status"]=="canceled"  # older failed-payment delivery cannot overwrite cancellation
 
 
+def test_disabled_billing_is_reported_and_all_mutating_endpoints_fail_safely():
+    auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        settings = disabled_settings_for(Path(directory) / "billing-disabled.sqlite")
+        assert settings.web.stripe_secret_key is None
+        provider = FakeBilling()
+        with TestClient(create_app(
+            settings=settings, analysis_executor=result_for, auth_provider=auth,
+            billing_provider=provider,
+        )) as client:
+            plan = client.get("/billing/plan").json()
+            assert plan["billing_enabled"] is False
+            assert plan["configured"] is False
+            for path in ("/billing/checkout", "/billing/portal", "/billing/webhook"):
+                response = client.post(path)
+                assert response.status_code == 503
+                assert response.json()["detail"] == "Billing is temporarily unavailable."
+            assert client.app.state.components.billing_provider is None
+
+
+def test_disabled_billing_preserves_free_analysis_history_and_refunds():
+    auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
+    with tempfile.TemporaryDirectory() as directory:
+        settings = disabled_settings_for(Path(directory) / "billing-disabled-analysis.sqlite")
+        with TestClient(create_app(
+            settings=settings, analysis_executor=result_for, auth_provider=auth,
+        )) as client:
+            headers = {"Authorization": "Bearer u"}
+            assert client.get("/me", headers=headers).json()["credits"] == 2
+            failed = client.post(
+                "/analyses", headers=headers,
+                json={"research_idea": "this fails safely", "mode": "full"},
+            )
+            record = wait(client, failed.json()["analysis_id"], "u")
+            assert record["status"] == "failed"
+            assert client.get("/me", headers=headers).json()["credits"] == 2
+            client.app.state.components.security.set_role("u", "admin")
+            admin_run = client.post(
+                "/analyses", headers=headers,
+                json={"research_idea": "admin analysis still runs", "mode": "full"},
+            )
+            assert admin_run.status_code == 201
+            admin_record = client.app.state.components.repository.get(
+                admin_run.json()["analysis_id"],
+            )
+            assert admin_record.configuration[
+                "credit_billing_decision"
+            ] == "administrator_credit_exempt"
+            assert wait(client, admin_run.json()["analysis_id"], "u")["status"] == "completed"
+            assert client.get("/me", headers=headers).json()["credits"] == 2
+            history_ids = {
+                item["analysis_id"] for item in client.get(
+                    "/analyses", headers=headers,
+                ).json()
+            }
+            assert history_ids == {
+                failed.json()["analysis_id"], admin_run.json()["analysis_id"],
+            }
+
+
 def test_avatar_signature_and_size_validation():
     assert validate_avatar(b"\x89PNG\r\n\x1a\nbody")=="image/png"
     try: validate_avatar(b"not an image")
@@ -564,7 +631,8 @@ def test_account_deletion_removes_auth_identity_and_reregistration_gets_no_free_
 def test_active_subscription_blocks_account_deletion():
     auth = StaticAuthProvider({"u": AuthIdentity("u", "u@example.test", True)})
     with tempfile.TemporaryDirectory() as directory:
-        with TestClient(create_app(settings=settings_for(Path(directory)/"active-sub.sqlite"), analysis_executor=result_for, auth_provider=auth)) as client:
+        settings = disabled_settings_for(Path(directory) / "active-sub.sqlite")
+        with TestClient(create_app(settings=settings, analysis_executor=result_for, auth_provider=auth)) as client:
             headers = {"Authorization":"Bearer u"}; client.get("/me", headers=headers)
             with client.app.state.components.database.connect() as connection:
                 connection.execute(

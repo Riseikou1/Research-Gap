@@ -9,12 +9,20 @@ from src.billing import BillingError
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
+BILLING_UNAVAILABLE = "Billing is temporarily unavailable."
+
+
+def require_billing_enabled(request: Request) -> None:
+    if not request.app.state.components.settings.web.billing_enabled:
+        raise HTTPException(status_code=503, detail=BILLING_UNAVAILABLE)
+
 
 @router.get("/plan")
 def plan(request: Request) -> dict[str, object]:
     web = request.app.state.components.settings.web
     return {"price_usd": web.paid_price_usd, "interval": "month", "credits_per_cycle": web.paid_cycle_credits,
-            "test_mode": web.stripe_test_mode, "configured": bool(web.stripe_price_id),
+            "test_mode": web.stripe_test_mode, "configured": bool(web.billing_enabled and web.stripe_price_id),
+            "billing_enabled": web.billing_enabled,
             "guest_quick_limit": web.guest_quick_limit,
             "user_quick_daily_limit": web.user_quick_daily_limit,
             "free_lifetime_credits": web.free_lifetime_credits}
@@ -22,11 +30,12 @@ def plan(request: Request) -> dict[str, object]:
 
 @router.post("/checkout")
 def checkout(request: Request) -> dict[str, str]:
+    require_billing_enabled(request)
     principal = require_user(request)
     components = request.app.state.components
     provider, web = components.billing_provider, components.settings.web
     if not provider or not web.stripe_price_id:
-        raise HTTPException(status_code=503, detail="Stripe test Checkout is not configured.")
+        raise HTTPException(status_code=503, detail=BILLING_UNAVAILABLE)
     if not components.security.record_rate_event(f"user:{principal.principal_id}", "checkout", limit=5):
         raise HTTPException(status_code=429, detail="Checkout rate limit reached.")
     account = components.security.account(principal.principal_id) or {}
@@ -43,6 +52,7 @@ def checkout(request: Request) -> dict[str, str]:
 
 @router.post("/portal")
 def portal(request: Request) -> dict[str, str]:
+    require_billing_enabled(request)
     principal = require_user(request)
     components = request.app.state.components
     account = components.security.account(principal.principal_id) or {}
@@ -59,9 +69,10 @@ def portal(request: Request) -> dict[str, str]:
 
 @router.post("/webhook")
 async def webhook(request: Request) -> dict[str, str]:
+    require_billing_enabled(request)
     components = request.app.state.components
     if not components.billing_provider:
-        raise HTTPException(status_code=503, detail="Stripe webhooks are not configured.")
+        raise HTTPException(status_code=503, detail=BILLING_UNAVAILABLE)
     declared = request.headers.get("content-length")
     if declared and (not declared.isdigit() or int(declared) > 1_000_000):
         raise HTTPException(status_code=413, detail="Webhook payload is too large.")

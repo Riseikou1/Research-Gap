@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from src.config import Settings
+from src.config import database_path, database_url
 
 from .database import Database
 
@@ -14,11 +14,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Apply Research GAP database migrations")
     parser.add_argument("--database", type=Path, help="Override RESEARCH_GAP_DATABASE_PATH")
     args = parser.parse_args()
-    settings = Settings.from_env()
     database = (
         Database(args.database)
         if args.database is not None
-        else Database(settings.analysis_database_path, url=settings.database_url)
+        else Database(database_path(), url=database_url())
     )
     applied = database.migrate()
     if applied:

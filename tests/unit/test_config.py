@@ -17,6 +17,8 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(settings.cache_directory.name, "cache")
         self.assertEqual(settings.analysis_database_path.name, "research_gap.sqlite3")
         self.assertEqual(settings.max_analysis_workers, 2)
+        self.assertFalse(settings.web.billing_enabled)
+        self.assertIsNone(settings.web.stripe_secret_key)
 
     def test_environment_overrides_are_validated(self) -> None:
         with patch.dict(
@@ -90,6 +92,50 @@ class ConfigurationTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ConfigurationError, "explicit positive"):
                 Settings.from_env()
+
+    def test_billing_enabled_requires_every_stripe_setting(self) -> None:
+        stripe_values = {
+            "STRIPE_SECRET_KEY": "sk_test_configured",
+            "STRIPE_WEBHOOK_SECRET": "whsec_configured",
+            "STRIPE_PRICE_ID": "price_configured",
+        }
+        for missing_name in stripe_values:
+            environment = {"RESEARCH_GAP_BILLING_ENABLED": "true", **stripe_values}
+            del environment[missing_name]
+            with self.subTest(missing_name=missing_name), patch.dict(
+                os.environ, environment, clear=True,
+            ):
+                with self.assertRaisesRegex(ConfigurationError, missing_name):
+                    Settings.from_env()
+
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_GAP_BILLING_ENABLED": "true", **stripe_values},
+            clear=True,
+        ):
+            settings = Settings.from_env()
+        self.assertTrue(settings.web.billing_enabled)
+
+    def test_production_configuration_does_not_require_stripe_when_billing_is_disabled(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "RESEARCH_GAP_APP_URL": "https://research-gap.example",
+                "RESEARCH_GAP_ALLOWED_ORIGINS": "https://research-gap.example",
+                "RESEARCH_GAP_SECURE_COOKIES": "true",
+                "RESEARCH_GAP_GUEST_COOKIE_SECRET": "g" * 32,
+                "RESEARCH_GAP_LIFETIME_CREDIT_HMAC_SECRET": "h" * 32,
+                "DATABASE_URL": "postgresql://example.invalid/research_gap",
+                "OPENAI_API_KEY": "configured",
+                "SUPABASE_URL": "https://supabase.example",
+                "SUPABASE_ANON_KEY": "configured",
+                "SUPABASE_SERVICE_ROLE_KEY": "configured",
+                "SUPABASE_JWT_ISSUER": "https://supabase.example/auth/v1",
+            },
+            clear=True,
+        ):
+            settings = Settings.from_env()
+        self.assertFalse(settings.web.billing_enabled)
 
 
 if __name__ == "__main__":

@@ -90,7 +90,11 @@ def create_app(
             service_role_key=web_settings.auth_service_role_key,
         )
     configured_billing = billing_provider
-    if configured_billing is None and web_settings.stripe_secret_key:
+    if (
+        configured_billing is None
+        and web_settings.billing_enabled
+        and web_settings.stripe_secret_key
+    ):
         configured_billing = StripeProvider(
             web_settings.stripe_secret_key, web_settings.stripe_webhook_secret,
         )
@@ -157,7 +161,9 @@ def create_app(
     runner.on_failure = release_reserved_credit
     components = ApiComponents(
         runtime_settings, database, repository, service, runner, security,
-        configured_auth, configured_billing, configured_storage,
+        configured_auth,
+        configured_billing if web_settings.billing_enabled else None,
+        configured_storage,
         web_settings.trusted_local_mode or (analysis_executor is not None and auth_provider is None),
         operations,
     )

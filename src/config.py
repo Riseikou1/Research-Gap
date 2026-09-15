@@ -112,6 +112,7 @@ class WebSettings:
     stripe_test_mode: bool
     acknowledge_live_pricing: bool
     trusted_local_mode: bool
+    billing_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -197,11 +198,27 @@ class Settings:
         if "*" in origins:
             raise ConfigurationError("RESEARCH_GAP_ALLOWED_ORIGINS cannot contain '*' with credentials")
         secure_cookies = os.getenv("RESEARCH_GAP_SECURE_COOKIES", "false").lower() in {"1", "true", "yes"}
+        billing_enabled = os.getenv(
+            "RESEARCH_GAP_BILLING_ENABLED", "false",
+        ).lower() in {"1", "true", "yes"}
         stripe_secret = os.getenv("STRIPE_SECRET_KEY", "").strip() or None
+        stripe_webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip() or None
         stripe_test_mode = not bool(stripe_secret and stripe_secret.startswith("sk_live_"))
         acknowledge_live = os.getenv("RESEARCH_GAP_ACKNOWLEDGE_LIVE_PRICING", "false").lower() in {"1", "true", "yes"}
         price_id = os.getenv("STRIPE_PRICE_ID", "").strip() or None
-        if not stripe_test_mode and not acknowledge_live:
+        if billing_enabled:
+            stripe_values = {
+                "STRIPE_SECRET_KEY": stripe_secret,
+                "STRIPE_WEBHOOK_SECRET": stripe_webhook_secret,
+                "STRIPE_PRICE_ID": price_id,
+            }
+            missing_stripe = [name for name, value in stripe_values.items() if not value]
+            if missing_stripe:
+                raise ConfigurationError(
+                    "Billing is enabled but Stripe configuration is incomplete; missing: "
+                    + ", ".join(missing_stripe)
+                )
+        if billing_enabled and not stripe_test_mode and not acknowledge_live:
             raise ConfigurationError(
                 "Live Stripe keys require RESEARCH_GAP_ACKNOWLEDGE_LIVE_PRICING=true; "
                 "the $1/5-credit plan is test placeholder pricing"
@@ -230,7 +247,6 @@ class Settings:
             required_names = (
                 "OPENAI_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY",
                 "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_ISSUER",
-                "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID",
             )
             missing = [name for name in required_names if not os.getenv(name, "").strip()]
             if missing:
@@ -264,11 +280,12 @@ class Settings:
             paid_cycle_credits=integer("RESEARCH_GAP_PAID_CYCLE_CREDITS", 5),
             paid_price_usd=number("RESEARCH_GAP_PAID_PRICE_DISPLAY_USD", 1.0, positive=True),
             stripe_secret_key=stripe_secret,
-            stripe_webhook_secret=os.getenv("STRIPE_WEBHOOK_SECRET", "").strip() or None,
+            stripe_webhook_secret=stripe_webhook_secret,
             stripe_price_id=price_id,
             stripe_test_mode=stripe_test_mode,
             acknowledge_live_pricing=acknowledge_live,
             trusted_local_mode=os.getenv("RESEARCH_GAP_TRUSTED_LOCAL_MODE", "false").lower() in {"1", "true", "yes"},
+            billing_enabled=billing_enabled,
         )
         return cls(
             openai_api_key=openai_api_key(), openai_model=openai_model(),

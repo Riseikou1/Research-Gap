@@ -97,34 +97,36 @@ def test_postgres_transactions_use_advisory_locks_not_sqlite_write_lock():
 
 
 def test_migration_cli_uses_configured_url_without_printing_it(tmp_path: Path, capsys):
-    settings = replace(
-        clean_settings(tmp_path / "fallback.sqlite"),
-        database_url="postgresql://example.invalid/private_database",
-    )
+    sqlite_path = tmp_path / "fallback.sqlite"
+    configured_url = "postgresql://example.invalid/private_database"
     database = MagicMock()
     database.migrate.return_value = []
-    with patch.object(migrate.Settings, "from_env", return_value=settings), patch.object(
-        migrate, "Database", return_value=database
+    with patch.dict(os.environ, {
+        "RESEARCH_GAP_DATABASE_PATH": str(sqlite_path),
+        "DATABASE_URL": configured_url,
+        "RESEARCH_GAP_BILLING_ENABLED": "true",
+        "RESEARCH_GAP_RETRIEVAL_WORKERS": "not-an-integer",
+    }, clear=True), patch.object(
+        migrate, "Database", return_value=database,
     ) as database_type, patch("sys.argv", ["migrate"]):
         assert migrate.main() == 0
 
     database_type.assert_called_once_with(
-        settings.analysis_database_path,
-        url=settings.database_url,
+        sqlite_path,
+        url=configured_url,
     )
-    assert settings.database_url not in capsys.readouterr().out
+    assert configured_url not in capsys.readouterr().out
 
 
 def test_migration_cli_database_override_explicitly_selects_sqlite(tmp_path: Path):
-    settings = replace(
-        clean_settings(tmp_path / "configured.sqlite"),
-        database_url="postgresql://example.invalid/private_database",
-    )
     override = tmp_path / "override.sqlite"
     database = MagicMock()
     database.migrate.return_value = []
-    with patch.object(migrate.Settings, "from_env", return_value=settings), patch.object(
-        migrate, "Database", return_value=database
+    with patch.dict(os.environ, {
+        "DATABASE_URL": "postgresql://example.invalid/private_database",
+        "RESEARCH_GAP_BILLING_ENABLED": "true",
+    }, clear=True), patch.object(
+        migrate, "Database", return_value=database,
     ) as database_type, patch("sys.argv", ["migrate", "--database", str(override)]):
         assert migrate.main() == 0
 

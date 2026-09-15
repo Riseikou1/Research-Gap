@@ -118,6 +118,7 @@ Safe defaults are documented in [`.env.example`](.env.example). The main tuning 
 | `RESEARCH_GAP_OPENAI_OUTPUT_PER_MILLION_USD` | `0` | Explicit operator-maintained output-token price for accounting |
 | `RESEARCH_GAP_BUILD_VERSION` | `development` | Release or commit identifier exposed by health/admin diagnostics |
 | `RESEARCH_GAP_AUTO_MIGRATE` | local `true`; production `false` | Local convenience; production migrations run once as a release step |
+| `RESEARCH_GAP_BILLING_ENABLED` | `false` | Enables Stripe checkout, portal, and webhooks; all three Stripe variables are required when true |
 | `RESEARCH_GAP_FULL_TEXT_TIMEOUT_SECONDS` | `12` | Per-document request timeout |
 | `RESEARCH_GAP_FULL_TEXT_MAX_BYTES` | `8000000` | Maximum streamed response bytes |
 | `RESEARCH_GAP_FULL_TEXT_MAX_DOCUMENT_CHARS` | `120000` | Maximum normalized document characters |
@@ -161,6 +162,9 @@ Apply the ordered SQLite/PostgreSQL migrations (selected by `DATABASE_URL`):
 ```bash
 python -m src.persistence.migrate
 ```
+
+The migration command reads only `DATABASE_URL` and `RESEARCH_GAP_DATABASE_PATH`; it does not
+require Stripe or other application/provider configuration.
 
 Start the local service:
 
@@ -216,10 +220,14 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Authentication, email, avatar uploads, payments, and the administrator
-require owner-managed Supabase/Stripe test configuration; they are not represented as externally
-complete. Every manual action, environment value, webhook URL, payout warning, cost worksheet,
-deployment step, and pre-launch check is in
+Open `http://localhost:3000`. Billing defaults to disabled: checkout, the billing portal, and Stripe
+webhooks return a safe unavailable response, while free accounts, credits, analysis, refunds,
+history, administrators, and active-subscription deletion protection continue to operate. To use
+payments, set `RESEARCH_GAP_BILLING_ENABLED=true` and configure `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, and `STRIPE_PRICE_ID`; begin with Stripe test configuration. Authentication,
+email, avatar uploads, payments, and the administrator require owner-managed provider configuration
+and are not represented as externally complete. Every manual action, environment value, webhook
+URL, payout warning, cost worksheet, deployment step, and pre-launch check is in
 [`docs/MILESTONE_10_OWNER_SETUP.md`](docs/MILESTONE_10_OWNER_SETUP.md).
 
 The report UI uses the provider-independent Pydantic serialization through strict Zod contracts and

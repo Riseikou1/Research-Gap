@@ -38,10 +38,10 @@ Production must use unique random cookie/HMAC secrets, HTTPS secure cookies, exa
 4. Start with `uvicorn src.api.app:app --host 0.0.0.0 --port $PORT`.
 5. Configure `/health/live` for process liveness and `/health/ready` for readiness.
 6. Set `RESEARCH_GAP_BUILD_VERSION` to the release/commit identifier.
-7. Add the server-only variables above and set `RESEARCH_GAP_APP_URL` plus exact `RESEARCH_GAP_ALLOWED_ORIGINS`.
+7. Add the required server-only variables above and set `RESEARCH_GAP_APP_URL` plus exact `RESEARCH_GAP_ALLOWED_ORIGINS`. Stripe secrets are required only if billing is enabled.
 8. Set `RESEARCH_GAP_AUTO_MIGRATE=false`; production workers must not race migrations during startup.
 
-Migrations are deliberately separate from process startup so multiple instances cannot all treat schema work as application boot work.
+Migrations are deliberately separate from process startup so multiple instances cannot all treat schema work as application boot work. The migration command reads only `DATABASE_URL` and `RESEARCH_GAP_DATABASE_PATH`, so missing Stripe/provider configuration does not block a release migration.
 
 ## Optional Docker backend
 
@@ -59,6 +59,14 @@ The image runs as an unprivileged user, contains no repository `.env`, database,
 Set `RESEARCH_GAP_BACKEND_URL` as a server-only variable. Set only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as browser-visible values. Point the backend allowed origin and app URL at the final HTTPS Vercel domain. Verify CSP and same-origin proxy behavior after deployment.
 
 ## Supabase, Stripe, email, and domain actions
+
+Billing is disabled by default with `RESEARCH_GAP_BILLING_ENABLED=false`. In this mode, do not set
+dummy Stripe credentials: the application starts without them, paid purchase controls are disabled,
+and billing endpoints return HTTP 503. Free/lifetime credits, analysis refunds and history, admin
+access, and the deletion block for accounts with a recorded active subscription remain in force.
+To enable billing, set `RESEARCH_GAP_BILLING_ENABLED=true` and provide all of
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_PRICE_ID`; startup fails if any is absent.
+Live Stripe keys retain the additional `RESEARCH_GAP_ACKNOWLEDGE_LIVE_PRICING=true` safeguard.
 
 - Create the Supabase project, configure the production site URL and exact redirect URLs, enable email verification, and set JWT issuer/audience values on the backend.
 - Keep the Supabase service-role key backend-only. Create the private avatar bucket and its owner-scoped policies before enabling uploads.
@@ -90,5 +98,6 @@ Rollback application images independently from the database. Migrations are addi
 - Full Analysis persists citation context, and an old graph-less result still renders.
 - Admin jobs remain subject to rate, concurrency, paper, evidence, full-text, and provider-budget limits.
 - Credit reservation/refund and budget reservation/release behavior are independently verified.
+- Billing-disabled deployments show no purchase path and return safe 503 responses; billing-enabled deployments have all three Stripe variables and a signed webhook smoke test.
 - The NAACL smoke check preserves exact evidence/provenance rules.
 - Privacy/terms/contact pages and retention claims match actual configuration.
